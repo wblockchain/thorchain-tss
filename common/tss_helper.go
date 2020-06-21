@@ -2,21 +2,16 @@ package common
 
 import (
 	"bytes"
-	"crypto/elliptic"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"math"
-	"math/big"
 	"os"
 	"sort"
 	"strconv"
 
 	btss "github.com/binance-chain/tss-lib/tss"
-	"github.com/btcsuite/btcd/btcec"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -42,37 +37,6 @@ func GetThreshold(value int) (int, error) {
 	}
 	threshold := int(math.Ceil(float64(value)*2.0/3.0)) - 1
 	return threshold, nil
-}
-
-func MsgToHashInt(msg []byte) (*big.Int, error) {
-	return hashToInt(msg, btcec.S256()), nil
-}
-
-func MsgToHashString(msg []byte) (string, error) {
-	if len(msg) == 0 {
-		return "", errors.New("empty message")
-	}
-	h := sha256.New()
-	_, err := h.Write(msg)
-	if err != nil {
-		return "", fmt.Errorf("fail to caculate sha256 hash: %w", err)
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
-}
-
-func hashToInt(hash []byte, c elliptic.Curve) *big.Int {
-	orderBits := c.Params().N.BitLen()
-	orderBytes := (orderBits + 7) / 8
-	if len(hash) > orderBytes {
-		hash = hash[:orderBytes]
-	}
-
-	ret := new(big.Int).SetBytes(hash)
-	excess := len(hash)*8 - orderBits
-	if excess > 0 {
-		ret.Rsh(ret, uint(excess))
-	}
-	return ret
 }
 
 func InitLog(level string, pretty bool, serviceValue string) {

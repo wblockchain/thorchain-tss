@@ -4,6 +4,9 @@ import (
 	"errors"
 	"time"
 
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	atypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+
 	"gitlab.com/thorchain/tss/go-tss/blame"
 	"gitlab.com/thorchain/tss/go-tss/common"
 	"gitlab.com/thorchain/tss/go-tss/conversion"
@@ -31,11 +34,18 @@ func (mts *MockTssServer) GetLocalPeerID() string {
 	return conversion.GetRandomPeerID().String()
 }
 
+// GetRandomPubKey for test
+func getRandomPubKey() string {
+	_, pubKey, _ := atypes.KeyTestPubAddr()
+	bech32PubKey, _ := sdk.Bech32ifyPubKey(sdk.Bech32PubKeyTypeAccPub, pubKey)
+	return bech32PubKey
+}
+
 func (mts *MockTssServer) Keygen(req keygen.Request) (keygen.Response, error) {
 	if mts.failToKeyGen {
 		return keygen.Response{}, errors.New("you ask for it")
 	}
-	return keygen.NewResponse(conversion.GetRandomPubKey(), "whatever", common.Success, blame.Blame{}), nil
+	return keygen.NewResponse(getRandomPubKey(), "whatever", common.Success, blame.Blame{}), nil
 }
 
 func (mts *MockTssServer) KeySign(req keysign.Request) (keysign.Response, error) {

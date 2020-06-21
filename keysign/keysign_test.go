@@ -169,7 +169,7 @@ func (s *TssKeysisgnTestSuite) TestSignMessage(c *C) {
 	}
 	sort.Strings(testPubKeys)
 	req := NewRequest("thorpub1addwnpepqv6xp3fmm47dfuzglywqvpv8fdjv55zxte4a26tslcezns5czv586u2fw33", "helloworld-test111", testPubKeys)
-	messageID, err := common.MsgToHashString([]byte(req.Message))
+	messageID, err := conversion.MsgToHashString([]byte(req.Message))
 	c.Assert(err, IsNil)
 	wg := sync.WaitGroup{}
 	lock := &sync.Mutex{}
@@ -253,7 +253,7 @@ func (s *TssKeysisgnTestSuite) TestSignMessageWithStop(c *C) {
 	}
 	sort.Strings(testPubKeys)
 	req := NewRequest("thorpub1addwnpepqv6xp3fmm47dfuzglywqvpv8fdjv55zxte4a26tslcezns5czv586u2fw33", "helloworld-test111", testPubKeys)
-	messageID, err := common.MsgToHashString([]byte(req.Message))
+	messageID, err := conversion.MsgToHashString([]byte(req.Message))
 	c.Assert(err, IsNil)
 	wg := sync.WaitGroup{}
 	conf := common.TssConfig{
@@ -336,7 +336,7 @@ func (s *TssKeysisgnTestSuite) TestSignMessageRejectOnePeer(c *C) {
 	}
 	sort.Strings(testPubKeys)
 	req := NewRequest("thorpub1addwnpepqv6xp3fmm47dfuzglywqvpv8fdjv55zxte4a26tslcezns5czv586u2fw33", "helloworld-test111", testPubKeys)
-	messageID, err := common.MsgToHashString([]byte(req.Message))
+	messageID, err := conversion.MsgToHashString([]byte(req.Message))
 	c.Assert(err, IsNil)
 	wg := sync.WaitGroup{}
 	conf := common.TssConfig{

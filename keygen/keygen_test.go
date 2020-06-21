@@ -122,7 +122,7 @@ func (s *TssKeygenTestSuite) SetUpTest(c *C) {
 
 	for i := 0; i < s.partyNum; i++ {
 		baseHome := path.Join(os.TempDir(), strconv.Itoa(i))
-		fMgr, err := storage.NewFileStateMgr(baseHome)
+		fMgr, err := storage.NewFileStateMgr(baseHome, nil)
 		c.Assert(err, IsNil)
 		s.stateMgrs[i] = fMgr
 	}
@@ -157,7 +157,7 @@ func getPreparams(c *C) []*btsskeygen.LocalPreParams {
 func (s *TssKeygenTestSuite) TestGenerateNewKey(c *C) {
 	sort.Strings(testPubKeys)
 	req := NewRequest(testPubKeys)
-	messageID, err := common.MsgToHashString([]byte(strings.Join(req.Keys, "")))
+	messageID, err := conversion.MsgToHashString([]byte(strings.Join(req.Keys, "")))
 	c.Assert(err, IsNil)
 	conf := common.TssConfig{
 		KeyGenTimeout:   60 * time.Second,
@@ -210,7 +210,7 @@ func (s *TssKeygenTestSuite) TestGenerateNewKey(c *C) {
 func (s *TssKeygenTestSuite) TestGenerateNewKeyWithStop(c *C) {
 	sort.Strings(testPubKeys)
 	req := NewRequest(testPubKeys)
-	messageID, err := common.MsgToHashString([]byte(strings.Join(req.Keys, "")))
+	messageID, err := conversion.MsgToHashString([]byte(strings.Join(req.Keys, "")))
 	c.Assert(err, IsNil)
 	conf := common.TssConfig{
 		KeyGenTimeout:   10 * time.Second,

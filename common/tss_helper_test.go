@@ -45,10 +45,10 @@ func (t *tssHelpSuite) TestMsgSignAndVerification(c *C) {
 }
 
 func (t *tssHelpSuite) TestMsgToHashString(c *C) {
-	out, err := MsgToHashString([]byte("hello"))
+	out, err := conversion.MsgToHashString([]byte("hello"))
 	c.Assert(err, IsNil)
 	c.Assert(out, Equals, "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824")
-	_, err = MsgToHashString(nil)
+	_, err = conversion.MsgToHashString(nil)
 	c.Assert(err, NotNil)
 }
 

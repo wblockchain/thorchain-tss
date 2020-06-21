@@ -51,7 +51,8 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 
 	localStateItem, err := t.stateManager.GetLocalState(req.PoolPubKey)
 	if err != nil {
-		return emptyResp, fmt.Errorf("fail to get local keygen state: %w", err)
+		t.logger.Error().Err(err).Msg("fail to get local keygen share broken file")
+		return emptyResp, errors.New("fail to get local keygen share broken file")
 	}
 	msgToSign, err := base64.StdEncoding.DecodeString(req.Message)
 	if err != nil {

@@ -6,9 +6,10 @@ import (
 	"io/ioutil"
 
 	bc "github.com/binance-chain/tss-lib/common"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	atypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	. "gopkg.in/check.v1"
 
-	"gitlab.com/thorchain/tss/go-tss/common"
 	"gitlab.com/thorchain/tss/go-tss/conversion"
 )
 
@@ -20,8 +21,15 @@ func (*NotifierTestSuite) SetUpSuite(c *C) {
 	conversion.SetupBech32Prefix()
 }
 
+// GetRandomPubKey for test
+func getRandomPubKey() string {
+	_, pubKey, _ := atypes.KeyTestPubAddr()
+	bech32PubKey, _ := sdk.Bech32ifyPubKey(sdk.Bech32PubKeyTypeAccPub, pubKey)
+	return bech32PubKey
+}
+
 func (NotifierTestSuite) TestNewNotifier(c *C) {
-	poolPubKey := conversion.GetRandomPubKey()
+	poolPubKey := getRandomPubKey()
 	n, err := NewNotifier("", []byte("hello"), poolPubKey)
 	c.Assert(err, NotNil)
 	c.Assert(n, IsNil)
@@ -44,7 +52,7 @@ func (NotifierTestSuite) TestNotifierHappyPath(c *C) {
 	messageToSign := "yhEwrxWuNBGnPT/L7PNnVWg7gFWNzCYTV+GuX3tKRH8="
 	buf, err := base64.StdEncoding.DecodeString(messageToSign)
 	c.Assert(err, IsNil)
-	messageID, err := common.MsgToHashString(buf)
+	messageID, err := conversion.MsgToHashString(buf)
 	c.Assert(err, IsNil)
 	poolPubKey := `thorpub1addwnpepq0ul3xt882a6nm6m7uhxj4tk2n82zyu647dyevcs5yumuadn4uamqx7neak`
 	n, err := NewNotifier(messageID, buf, poolPubKey)

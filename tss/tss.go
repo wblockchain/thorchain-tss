@@ -58,7 +58,11 @@ func NewTss(
 		return nil, fmt.Errorf("fail to genearte the key: %w", err)
 	}
 
-	stateManager, err := storage.NewFileStateMgr(baseFolder)
+	var encKey tcrypto.PrivKey
+	if conf.ShareEncryption {
+		encKey = priKey
+	}
+	stateManager, err := storage.NewFileStateMgr(baseFolder, encKey)
 	if err != nil {
 		return nil, fmt.Errorf("fail to create file state manager")
 	}
@@ -166,7 +170,7 @@ func (t *TssServer) requestToMsgId(request interface{}) (string, error) {
 		t.logger.Error().Msg("unknown request type")
 		return "", errors.New("unknown request type")
 	}
-	return common.MsgToHashString(dat)
+	return conversion.MsgToHashString(dat)
 }
 
 func (t *TssServer) joinParty(msgID string, keys []string) ([]peer.ID, error) {

@@ -13,6 +13,8 @@ type TssConfig struct {
 	KeySignTimeout time.Duration
 	// Pre-parameter define the pre-parameter generations timeout
 	PreParamTimeout time.Duration
+	// shareEncryption define whether we encrypt the generated key file from keygen
+	ShareEncryption bool
 }
 
 type TssStatus struct {

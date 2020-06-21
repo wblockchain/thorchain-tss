@@ -13,9 +13,25 @@ import (
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/assert"
 
-	"gitlab.com/thorchain/tss/go-tss/conversion"
 	"gitlab.com/thorchain/tss/go-tss/messages"
 )
+
+const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+const (
+	letterIdxBits = 6                    // 6 bits to represent a letter index
+	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
+)
+
+func randStringBytesMask(n int) string {
+	b := make([]byte, n)
+	for i := 0; i < n; {
+		if idx := int(rand.Int63() & letterIdxMask); idx < len(letterBytes) {
+			b[i] = letterBytes[idx]
+			i++
+		}
+	}
+	return string(b)
+}
 
 func setupHosts(t *testing.T, n int) []host.Host {
 	mn := mocknet.New(context.Background())
@@ -58,7 +74,7 @@ func TestNewPartyCoordinator(t *testing.T) {
 		}
 	}()
 
-	msgID := conversion.RandStringBytesMask(64)
+	msgID := randStringBytesMask(64)
 	joinPartyReq := messages.JoinPartyRequest{
 		ID: msgID,
 	}
@@ -105,7 +121,7 @@ func TestNewPartyCoordinatorTimeOut(t *testing.T) {
 		}
 	}()
 
-	msgID := conversion.RandStringBytesMask(64)
+	msgID := randStringBytesMask(64)
 
 	joinPartyReq := messages.JoinPartyRequest{
 		ID: msgID,

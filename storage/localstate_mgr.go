@@ -11,12 +11,13 @@ import (
 	"strings"
 	"sync"
 
+	"gitlab.com/thorchain/tss/go-tss/conversion"
+
 	"github.com/binance-chain/tss-lib/ecdsa/keygen"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-peerstore/addr"
 	ma "github.com/multiformats/go-multiaddr"
-
-	"gitlab.com/thorchain/tss/go-tss/conversion"
+	tcrypto "github.com/tendermint/tendermint/crypto"
 )
 
 // KeygenLocalState is a structure used to represent the data we saved locally for different keygen
@@ -39,11 +40,12 @@ type LocalStateManager interface {
 // FileStateMgr save the local state to file
 type FileStateMgr struct {
 	folder    string
+	encKey    tcrypto.PrivKey
 	writeLock *sync.RWMutex
 }
 
 // NewFileStateMgr create a new instance of the FileStateMgr which implements LocalStateManager
-func NewFileStateMgr(folder string) (*FileStateMgr, error) {
+func NewFileStateMgr(folder string, encKey tcrypto.PrivKey) (*FileStateMgr, error) {
 	if len(folder) > 0 {
 		_, err := os.Stat(folder)
 		if err != nil && os.IsNotExist(err) {
@@ -54,6 +56,7 @@ func NewFileStateMgr(folder string) (*FileStateMgr, error) {
 	}
 	return &FileStateMgr{
 		folder:    folder,
+		encKey:    encKey,
 		writeLock: &sync.RWMutex{},
 	}, nil
 }
@@ -77,6 +80,16 @@ func (fsm *FileStateMgr) getFilePathName(pubKey string) (string, error) {
 // SaveLocalState save the local state to file
 func (fsm *FileStateMgr) SaveLocalState(state KeygenLocalState) error {
 	buf, err := json.Marshal(state)
+	if fsm.encKey != nil {
+		aesKey, err := conversion.GetAesKey(fsm.encKey)
+		if err != nil {
+			return err
+		}
+		buf, err = conversion.AesEncryption(aesKey, buf)
+		if err != nil {
+			return err
+		}
+	}
 	if err != nil {
 		return fmt.Errorf("fail to marshal KeygenLocalState to json: %w", err)
 	}
@@ -103,6 +116,16 @@ func (fsm *FileStateMgr) GetLocalState(pubKey string) (KeygenLocalState, error) 
 	buf, err := ioutil.ReadFile(filePathName)
 	if err != nil {
 		return KeygenLocalState{}, fmt.Errorf("file to read from file(%s): %w", filePathName, err)
+	}
+	if fsm.encKey != nil {
+		aesKey, err := conversion.GetAesKey(fsm.encKey)
+		if err != nil {
+			return KeygenLocalState{}, err
+		}
+		buf, err = conversion.AesDecryption(aesKey, buf)
+		if err != nil {
+			return KeygenLocalState{}, err
+		}
 	}
 	var localState KeygenLocalState
 	if err := json.Unmarshal(buf, &localState); nil != err {

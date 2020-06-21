@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"gitlab.com/thorchain/tss/go-tss/storage"
+
 	btsskeygen "github.com/binance-chain/tss-lib/ecdsa/keygen"
 	maddr "github.com/multiformats/go-multiaddr"
 	. "gopkg.in/check.v1"
@@ -74,6 +76,7 @@ func (s *FourNodeTestSuite) SetUpTest(c *C) {
 		KeyGenTimeout:   60 * time.Second,
 		KeySignTimeout:  60 * time.Second,
 		PreParamTimeout: 5 * time.Second,
+		ShareEncryption: true,
 	}
 
 	var wg sync.WaitGroup
@@ -185,7 +188,16 @@ func (s *FourNodeTestSuite) TestKeygenAndKeySign(c *C) {
 		}
 		c.Assert(signature, Equals, item.S+item.R)
 	}
-	// make sure we sign
+
+	// now we use the wrong key to decrypt the tss share on node2
+	wrongPriKey, err := conversion.GetPriKey(testPriKeyArr[3])
+	c.Assert(err, IsNil)
+	baseHome := path.Join(os.TempDir(), strconv.Itoa(1))
+	stateManager, err := storage.NewFileStateMgr(baseHome, wrongPriKey)
+	c.Assert(err, IsNil)
+	s.servers[1].stateManager = stateManager
+	_, err = s.servers[1].KeySign(keysignReq)
+	c.Assert(err, ErrorMatches, "fail to get local keygen share broken file")
 }
 
 func (s *FourNodeTestSuite) TestFailJoinParty(c *C) {

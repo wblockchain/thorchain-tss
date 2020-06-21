@@ -9,13 +9,14 @@ import (
 	"testing"
 	"time"
 
+	"gitlab.com/thorchain/tss/go-tss/conversion"
+
 	bc "github.com/binance-chain/tss-lib/common"
 	"github.com/libp2p/go-libp2p-core/peer"
 	tnet "github.com/libp2p/go-libp2p-testing/net"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/assert"
 
-	"gitlab.com/thorchain/tss/go-tss/common"
 	"gitlab.com/thorchain/tss/go-tss/p2p"
 )
 
@@ -24,7 +25,7 @@ func TestSignatureNotifierHappyPath(t *testing.T) {
 	messageToSign := "yhEwrxWuNBGnPT/L7PNnVWg7gFWNzCYTV+GuX3tKRH8="
 	buf, err := base64.StdEncoding.DecodeString(messageToSign)
 	assert.Nil(t, err)
-	messageID, err := common.MsgToHashString(buf)
+	messageID, err := conversion.MsgToHashString(buf)
 	assert.Nil(t, err)
 	p2p.ApplyDeadline = false
 	id1 := tnet.RandIdentityOrFatal(t)

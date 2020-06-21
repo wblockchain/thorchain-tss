@@ -79,7 +79,7 @@ func (tKeySign *TssKeySign) SignMessage(msgToSign []byte, localStateItem storage
 	outCh := make(chan btss.Message, len(partiesID))
 	endCh := make(chan bc.SignatureData, len(partiesID))
 	errCh := make(chan struct{})
-	m, err := common.MsgToHashInt(msgToSign)
+	m, err := conversion.MsgToHashInt(msgToSign)
 	if err != nil {
 		return nil, fmt.Errorf("fail to convert msg to hash int: %w", err)
 	}

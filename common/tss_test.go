@@ -71,7 +71,7 @@ func (t *TssTestSuite) TestGetThreshold(c *C) {
 
 func (t *TssTestSuite) TestMsgToHashInt(c *C) {
 	input := []byte("whatever")
-	result, err := MsgToHashInt(input)
+	result, err := conversion.MsgToHashInt(input)
 	c.Assert(err, IsNil)
 	c.Assert(result, NotNil)
 }
@@ -398,7 +398,7 @@ func (t *TssTestSuite) TestTssCommon(c *C) {
 	go func() {
 		tssCommon.ProcessInboundMessages(stopchan, &wg)
 	}()
-	bi, err := MsgToHashInt([]byte("whatever"))
+	bi, err := conversion.MsgToHashInt([]byte("whatever"))
 	c.Assert(err, IsNil)
 	wrapMsg := fabricateTssMsg(c, sk, btss.NewPartyID("1,", "test", bi), "roundInfo", "message", "123", messages.TSSKeyGenMsg)
 	buf, err := json.Marshal(wrapMsg)
