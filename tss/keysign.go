@@ -49,6 +49,23 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 	defer t.p2pCommunication.CancelSubscribe(messages.TSSControlMsg, msgID)
 	defer t.p2pCommunication.CancelSubscribe(messages.TSSTaskDone, msgID)
 
+	var peersID []peer.ID
+
+	for _, el := range req.SignerPubKeys {
+		pid, err := conversion.GetPeerIDFromPubKey(el)
+		if err != nil {
+			t.logger.Error().Err(err).Msg("fail to convert the public key")
+			return emptyResp, err
+		}
+		peersID = append(peersID, pid)
+	}
+
+	//defer func() {
+	//	// clean up the p2p stream
+	//	t.logger.Info().Msgf("--------------------clean up---------------")
+	//	t.p2pCommunication.CleanAllStreams(peersID)
+	//}()
+
 	localStateItem, err := t.stateManager.GetLocalState(req.PoolPubKey)
 	if err != nil {
 		return emptyResp, fmt.Errorf("fail to get local keygen state: %w", err)

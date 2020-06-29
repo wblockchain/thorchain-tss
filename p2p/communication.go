@@ -291,8 +291,6 @@ func (c *Communication) connectToOnePeer(pID peer.ID) (network.Stream, error) {
 	c.logger.Debug().Msgf("connect to peer : %s", pID.String())
 	ctx, cancel := context.WithTimeout(context.Background(), TimeoutConnecting)
 	defer cancel()
-	c.logger.Info().Msg(">>>>>TRIM connection")
-	c.host.ConnManager().TrimOpenConns(ctx)
 	stream, err := c.host.NewStream(ctx, pID, TSSProtocolID)
 	if err != nil {
 		return nil, fmt.Errorf("fail to create new stream to peer: %s, %w", pID, err)
@@ -419,4 +417,25 @@ func (c *Communication) ProcessBroadcast() {
 			return
 		}
 	}
+}
+
+func (c *Communication) CleanAllStreams(peers []peer.ID) error {
+	for _, el := range peers {
+		ctx, cancel := context.WithTimeout(context.Background(), TimeoutConnecting)
+		defer cancel()
+		s, err := c.host.NewStream(ctx, el, joinPartyProtocol)
+		if err != nil {
+			c.logger.Error().Err(err).Msgf("EEEEEEEEEEE")
+			continue
+		}
+		s.Conn().Close()
+		s, err = c.host.NewStream(ctx, el, TSSProtocolID)
+		if err != nil {
+			c.logger.Error().Err(err).Msgf("WWWWWW")
+			continue
+		}
+		s.Conn().Close()
+	}
+
+	return nil
 }

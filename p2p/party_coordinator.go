@@ -11,6 +11,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
@@ -144,6 +145,8 @@ func (pc *PartyCoordinator) sendRequestToPeer(msg *messages.JoinPartyRequest, re
 	go func() {
 		defer close(streamGetChan)
 
+		pc.host.Network().Conns()
+
 		pc.logger.Info().Msgf("try to open stream to (%s) ", remotePeer)
 		stream, err = pc.host.NewStream(ctx, remotePeer, joinPartyProtocol)
 		if err != nil {
@@ -238,4 +241,43 @@ func (pc *PartyCoordinator) JoinPartyWithRetry(msg *messages.JoinPartyRequest, p
 		return onlinePeers, nil
 	}
 	return onlinePeers, errJoinPartyTimeout
+}
+
+func GetStream(host host.Host, protocolID string, pid peer.ID) (network.Stream, error) {
+	nt := host.Network()
+	nc := nt.ConnsToPeer(pid)
+	// if no connection to the given peer, we need to create one
+	if len(nc) == 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+		defer cancel()
+		conn, err := nt.DialPeer(ctx, pid)
+		if err != nil {
+			return nil, err
+		}
+		stream, err := conn.NewStream()
+		if err != nil {
+			return nil, err
+		}
+		stream.SetProtocol(protocol.ID(protocolID))
+		return stream, err
+	}
+	// we try to get this stream from the connection
+	for _, el := range nc {
+		streams := el.GetStreams()
+		for _, s := range streams {
+			if s.Protocol() == protocol.ID(protocolID) {
+				return s, nil
+			}
+		}
+	}
+	// we cannot find the stream with this protocol, create one
+	for _, el := range nc {
+		stream, err := el.NewStream()
+		if err != nil {
+			return nil, err
+		}
+		stream.SetProtocol(protocol.ID(protocolID))
+		return stream, nil
+	}
+	return nil, errors.New("we can not create a stream over a connection")
 }
