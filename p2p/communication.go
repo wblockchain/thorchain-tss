@@ -54,6 +54,8 @@ type Communication struct {
 	streamCount      int64
 	BroadcastMsgChan chan *messages.BroadcastMsgChan
 	externalAddr     maddr.Multiaddr
+	unusedStreams    map[string][]network.Stream
+	streamLocker     *sync.Mutex
 }
 
 // NewCommunication create a new instance of Communication
@@ -81,6 +83,8 @@ func NewCommunication(rendezvous string, bootstrapPeers []maddr.Multiaddr, port 
 		streamCount:      0,
 		BroadcastMsgChan: make(chan *messages.BroadcastMsgChan, 1024),
 		externalAddr:     externalAddr,
+		unusedStreams:    make(map[string][]network.Stream),
+		streamLocker:     &sync.Mutex{},
 	}, nil
 }
 
@@ -130,6 +134,21 @@ func (c *Communication) writeToStream(pID peer.ID, msg []byte) error {
 	}
 
 	defer func() {
+		var wrappedMsg messages.WrappedMessage
+		if err := json.Unmarshal(msg, &wrappedMsg); nil != err {
+			c.logger.Error().Err(err).Msg("fail to unmarshal wrapped message bytes")
+			return
+		}
+		c.streamLocker.Lock()
+		defer c.streamLocker.Unlock()
+		entries, ok := c.unusedStreams[wrappedMsg.MsgID]
+		if !ok {
+			entries := []network.Stream{stream}
+			c.unusedStreams[wrappedMsg.MsgID] = entries
+		} else {
+			entries = append(entries, stream)
+			c.unusedStreams[wrappedMsg.MsgID] = entries
+		}
 		if err := stream.Close(); nil != err {
 			c.logger.Error().Err(err).Msgf("fail to reset stream to peer(%s)", pID)
 		}
@@ -143,7 +162,7 @@ func (c *Communication) readFromStream(stream network.Stream) {
 	peerID := stream.Conn().RemotePeer().String()
 	c.logger.Debug().Msgf("reading from stream of peer: %s", peerID)
 	defer func() {
-		if err := stream.Close(); nil != err {
+		if err := stream.Reset(); nil != err {
 			c.logger.Error().Err(err).Msg("fail to close stream")
 		}
 	}()
@@ -438,4 +457,14 @@ func (c *Communication) CleanAllStreams(peers []peer.ID) error {
 	}
 
 	return nil
+}
+
+func (c *Communication) StreamCleanup(msgID string) {
+	entries, ok := c.unusedStreams[msgID]
+	if ok {
+		for _, el := range entries {
+			el.Reset()
+		}
+		delete(c.unusedStreams, msgID)
+	}
 }

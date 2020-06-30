@@ -135,7 +135,12 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 		}, nil
 
 	}
-
+	defer func() {
+		t.logger.Info().Msg("---------WWWWWDDDDDDDD clean up WWWWWWWWWWWWw")
+		t.p2pCommunication.StreamCleanup(msgID)
+		t.signatureNotifier.StreamCleanup(msgID)
+		t.partyCoordinator.StreamCleanup(msgID)
+	}()
 	signatureData, err := keysignInstance.SignMessage(msgToSign, localStateItem, req.SignerPubKeys)
 	// the statistic of keygen only care about Tss it self, even if the following http response aborts,
 	// it still counted as a successful keygen as the Tss model runs successfully.
