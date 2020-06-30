@@ -189,6 +189,7 @@ func (pc *PartyCoordinator) sendRequestToPeer(msg *messages.JoinPartyRequest, re
 
 // JoinPartyWithRetry this method provide the functionality to join party with retry and back off
 func (pc *PartyCoordinator) JoinPartyWithRetry(msg *messages.JoinPartyRequest, peers []string) ([]peer.ID, error) {
+	fmt.Println(">>>> Join Party With Retry")
 	peerGroup, err := pc.createJoinPartyGroups(msg.ID, peers)
 	if err != nil {
 		pc.logger.Error().Err(err).Msg("fail to create the join party group")
