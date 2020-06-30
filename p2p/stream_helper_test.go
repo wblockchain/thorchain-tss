@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"strconv"
 	"testing"
 	"time"
 
@@ -16,6 +17,7 @@ const testProtocolID protocol.ID = "/p2p/test-stream"
 type MockNetworkStream struct {
 	*bytes.Buffer
 	protocol            protocol.ID
+	id                  string
 	errSetReadDeadLine  bool
 	errSetWriteDeadLine bool
 	errRead             bool
@@ -23,6 +25,7 @@ type MockNetworkStream struct {
 
 func NewMockNetworkStream() *MockNetworkStream {
 	return &MockNetworkStream{
+		id:       strconv.FormatInt(time.Now().UnixNano(), 10),
 		Buffer:   &bytes.Buffer{},
 		protocol: testProtocolID,
 	}
@@ -33,6 +36,9 @@ func (m MockNetworkStream) Read(buf []byte) (int, error) {
 		return 0, errors.New("you asked for it")
 	}
 	return m.Buffer.Read(buf)
+}
+func (m MockNetworkStream) ID() string {
+	return m.id
 }
 
 func (m MockNetworkStream) Close() error {
