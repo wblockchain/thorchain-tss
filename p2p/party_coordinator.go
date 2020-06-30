@@ -194,6 +194,7 @@ func (pc *PartyCoordinator) JoinPartyWithRetry(msg *messages.JoinPartyRequest, p
 		pc.logger.Error().Err(err).Msg("fail to create the join party group")
 		return nil, err
 	}
+	fmt.Printf(">>>> [%s] peer group: %+v\n", time.Now(), peerGroup)
 	defer pc.removePeerGroup(msg.ID)
 	_, offline := peerGroup.getPeersStatus()
 	var wg sync.WaitGroup
@@ -220,13 +221,13 @@ func (pc *PartyCoordinator) JoinPartyWithRetry(msg *messages.JoinPartyRequest, p
 			case <-peerGroup.newFound:
 				pc.logger.Info().Msg("we have found the new peer")
 				if peerGroup.getCoordinationStatus() {
-					fmt.Println(">>>> peer group we have our peers")
+					fmt.Printf(">>>> [%s] peer group we have our peers\n", time.Now())
 					close(done)
 					return
 				}
 			case <-time.After(pc.timeout):
 				// timeout
-				fmt.Println(">>>> peer group timeout")
+				fmt.Printf(">>>> [%s] peer group timeout\n", time.Now())
 				close(done)
 				return
 			}
@@ -235,8 +236,8 @@ func (pc *PartyCoordinator) JoinPartyWithRetry(msg *messages.JoinPartyRequest, p
 
 	wg.Wait()
 	onlinePeers, offlinePeers := peerGroup.getPeersStatus()
-	fmt.Printf(">>>> peer group online: %+v\n", onlinePeers)
-	fmt.Printf(">>>> peer group offline: %+v\n", offlinePeers)
+	fmt.Printf(">>>> [%s] peer group online: %+v\n", time.Now(), onlinePeers)
+	fmt.Printf(">>>> [%s] peer group offline: %+v\n", time.Now(), offlinePeers)
 	pc.sendRequestToAll(msg, onlinePeers)
 	// we always set ourselves as online
 	onlinePeers = append(onlinePeers, pc.host.ID())
