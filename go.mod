@@ -3,34 +3,23 @@ module gitlab.com/thorchain/tss/go-tss
 go 1.14
 
 require (
-	github.com/alangpierce/go-forceexport v0.0.0-20160317203124-8f1d6941cd75 // indirect
 	github.com/binance-chain/go-sdk v0.0.0-00010101000000-000000000000
 	github.com/binance-chain/tss-lib v1.3.2
 	github.com/btcsuite/btcd v0.20.1-beta
 	github.com/cosmos/cosmos-sdk v0.38.1
-	github.com/davidlazar/go-crypto v0.0.0-20190912175916-7055855a373f // indirect
 	github.com/deckarep/golang-set v1.7.1
 	github.com/decred/dcrd/dcrec/secp256k1 v1.0.3
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/protobuf v1.3.5
 	github.com/gorilla/mux v1.7.3
-	github.com/ipfs/go-cid v0.0.6 // indirect
-	github.com/ipfs/go-ipfs-util v0.0.2 // indirect
 	github.com/ipfs/go-log v1.0.4
-	github.com/libp2p/go-eventbus v0.2.1 // indirect
 	github.com/libp2p/go-libp2p v0.9.6
-	github.com/libp2p/go-libp2p-autonat v0.2.3 // indirect
-	github.com/libp2p/go-libp2p-blankhost v0.1.6 // indirect
-	github.com/libp2p/go-libp2p-circuit v0.2.3 // indirect
-	github.com/libp2p/go-libp2p-core v0.6.0
+	github.com/libp2p/go-libp2p-core v0.5.7
 	github.com/libp2p/go-libp2p-discovery v0.4.0
 	github.com/libp2p/go-libp2p-kad-dht v0.3.0
 	github.com/libp2p/go-libp2p-peerstore v0.2.6
 	github.com/libp2p/go-libp2p-quic-transport v0.4.0 // indirect
-	github.com/libp2p/go-libp2p-swarm v0.2.8 // indirect
 	github.com/libp2p/go-libp2p-testing v0.1.1
-	github.com/libp2p/go-libp2p-yamux v0.2.8 // indirect
-	github.com/libp2p/go-sockaddr v0.1.0 // indirect
 	github.com/multiformats/go-multiaddr v0.2.2
 	github.com/onsi/ginkgo v1.12.1 // indirect
 	github.com/rs/zerolog v1.17.2
