@@ -11,6 +11,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
@@ -26,6 +27,8 @@ type PartyCoordinator struct {
 	timeout            time.Duration
 	peersGroup         map[string]*PeerStatus
 	joinPartyGroupLock *sync.Mutex
+	unusedStreams      map[string][]network.Stream
+	streamLocker       *sync.Mutex
 }
 
 // NewPartyCoordinator create a new instance of PartyCoordinator
@@ -41,6 +44,8 @@ func NewPartyCoordinator(host host.Host, timeout time.Duration) *PartyCoordinato
 		timeout:            timeout,
 		peersGroup:         make(map[string]*PeerStatus),
 		joinPartyGroupLock: &sync.Mutex{},
+		unusedStreams:      make(map[string][]network.Stream),
+		streamLocker:       &sync.Mutex{},
 	}
 	host.SetStreamHandler(joinPartyProtocol, pc.HandleStream)
 	return pc
@@ -56,7 +61,7 @@ func (pc *PartyCoordinator) Stop() {
 // HandleStream handle party coordinate stream
 func (pc *PartyCoordinator) HandleStream(stream network.Stream) {
 	defer func() {
-		if err := stream.Close(); err != nil {
+		if err := stream.Reset(); err != nil {
 			pc.logger.Err(err).Msg("fail to close the stream")
 		}
 	}()
@@ -165,11 +170,22 @@ func (pc *PartyCoordinator) sendRequestToPeer(msg *messages.JoinPartyRequest, re
 		pc.logger.Error().Err(ctx.Err()).Msg("fail to open stream with context timeout")
 		// we reset the whole connection of this peer
 		err := pc.host.Network().ClosePeer(remotePeer)
-		pc.logger.Error().Err(err).Msgf("fail to clolse the connection to peer %s", remotePeer.String())
+		pc.logger.Error().Err(err).Msgf("fail to close the connection to peer %s", remotePeer.String())
 		return ctx.Err()
 	}
 
 	defer func() {
+		pc.streamLocker.Lock()
+		defer pc.streamLocker.Unlock()
+		entries, ok := pc.unusedStreams[msg.ID]
+		if !ok {
+			entries := []network.Stream{stream}
+			pc.unusedStreams[msg.ID] = entries
+		} else {
+			entries = append(entries, stream)
+			pc.unusedStreams[msg.ID] = entries
+		}
+
 		if err := stream.Close(); err != nil {
 			pc.logger.Error().Err(err).Msg("fail to close stream")
 		}
@@ -233,11 +249,63 @@ func (pc *PartyCoordinator) JoinPartyWithRetry(msg *messages.JoinPartyRequest, p
 
 	wg.Wait()
 	onlinePeers, _ := peerGroup.getPeersStatus()
+	pc.logger.Info().Msg("----------->start broadcast........")
 	pc.sendRequestToAll(msg, onlinePeers)
+	pc.logger.Info().Msg("----------->finishing broadcast........")
 	// we always set ourselves as online
 	onlinePeers = append(onlinePeers, pc.host.ID())
 	if len(onlinePeers) == len(peers) {
 		return onlinePeers, nil
 	}
 	return onlinePeers, errJoinPartyTimeout
+}
+
+func GetStream(host host.Host, protocolID string, pid peer.ID) (network.Stream, error) {
+	nt := host.Network()
+	nc := nt.ConnsToPeer(pid)
+	// if no connection to the given peer, we need to create one
+	if len(nc) == 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+		defer cancel()
+		conn, err := nt.DialPeer(ctx, pid)
+		if err != nil {
+			return nil, err
+		}
+		stream, err := conn.NewStream()
+		if err != nil {
+			return nil, err
+		}
+		stream.SetProtocol(protocol.ID(protocolID))
+		return stream, err
+	}
+	// we try to get this stream from the connection
+	for _, el := range nc {
+		streams := el.GetStreams()
+		for _, s := range streams {
+			if s.Protocol() == protocol.ID(protocolID) {
+				return s, nil
+			}
+		}
+	}
+	// we cannot find the stream with this protocol, create one
+	for _, el := range nc {
+		stream, err := el.NewStream()
+		if err != nil {
+			return nil, err
+		}
+		stream.SetProtocol(protocol.ID(protocolID))
+		return stream, nil
+	}
+	return nil, errors.New("we can not create a stream over a connection")
+}
+
+func (pc *PartyCoordinator) StreamCleanup(msgID string) {
+	entries, ok := pc.unusedStreams[msgID]
+	if ok {
+		for _, el := range entries {
+			el.Reset()
+		}
+
+		delete(pc.unusedStreams, msgID)
+	}
 }

@@ -49,6 +49,23 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 	defer t.p2pCommunication.CancelSubscribe(messages.TSSControlMsg, msgID)
 	defer t.p2pCommunication.CancelSubscribe(messages.TSSTaskDone, msgID)
 
+	var peersID []peer.ID
+
+	for _, el := range req.SignerPubKeys {
+		pid, err := conversion.GetPeerIDFromPubKey(el)
+		if err != nil {
+			t.logger.Error().Err(err).Msg("fail to convert the public key")
+			return emptyResp, err
+		}
+		peersID = append(peersID, pid)
+	}
+
+	//defer func() {
+	//	// clean up the p2p stream
+	//	t.logger.Info().Msgf("--------------------clean up---------------")
+	//	t.p2pCommunication.CleanAllStreams(peersID)
+	//}()
+
 	localStateItem, err := t.stateManager.GetLocalState(req.PoolPubKey)
 	if err != nil {
 		return emptyResp, fmt.Errorf("fail to get local keygen state: %w", err)
@@ -118,7 +135,12 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 		}, nil
 
 	}
-
+	defer func() {
+		t.logger.Info().Msg("---------WWWWWDDDDDDDD clean up WWWWWWWWWWWWw")
+		t.p2pCommunication.StreamCleanup(msgID)
+		t.signatureNotifier.StreamCleanup(msgID)
+		t.partyCoordinator.StreamCleanup(msgID)
+	}()
 	signatureData, err := keysignInstance.SignMessage(msgToSign, localStateItem, req.SignerPubKeys)
 	// the statistic of keygen only care about Tss it self, even if the following http response aborts,
 	// it still counted as a successful keygen as the Tss model runs successfully.

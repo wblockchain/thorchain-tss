@@ -32,25 +32,29 @@ type signatureItem struct {
 
 // SignatureNotifier is design to notify the
 type SignatureNotifier struct {
-	logger       zerolog.Logger
-	host         host.Host
-	stopChan     chan struct{}
-	notifierLock *sync.Mutex
-	notifiers    map[string]*Notifier
-	messages     chan *signatureItem
-	wg           *sync.WaitGroup
+	logger        zerolog.Logger
+	host          host.Host
+	stopChan      chan struct{}
+	notifierLock  *sync.Mutex
+	notifiers     map[string]*Notifier
+	messages      chan *signatureItem
+	wg            *sync.WaitGroup
+	unusedStreams map[string][]network.Stream
+	streamLocker  *sync.Mutex
 }
 
 // NewSignatureNotifier create a new instance of SignatureNotifier
 func NewSignatureNotifier(host host.Host) *SignatureNotifier {
 	s := &SignatureNotifier{
-		logger:       log.With().Str("module", "signature_notifier").Logger(),
-		host:         host,
-		notifierLock: &sync.Mutex{},
-		notifiers:    make(map[string]*Notifier),
-		stopChan:     make(chan struct{}),
-		messages:     make(chan *signatureItem),
-		wg:           &sync.WaitGroup{},
+		logger:        log.With().Str("module", "signature_notifier").Logger(),
+		host:          host,
+		notifierLock:  &sync.Mutex{},
+		notifiers:     make(map[string]*Notifier),
+		stopChan:      make(chan struct{}),
+		messages:      make(chan *signatureItem),
+		wg:            &sync.WaitGroup{},
+		unusedStreams: make(map[string][]network.Stream),
+		streamLocker:  &sync.Mutex{},
 	}
 	host.SetStreamHandler(signatureNotifierProtocol, s.handleStream)
 	return s
@@ -59,7 +63,7 @@ func NewSignatureNotifier(host host.Host) *SignatureNotifier {
 // HandleStream handle signature notify stream
 func (s *SignatureNotifier) handleStream(stream network.Stream) {
 	defer func() {
-		if err := stream.Close(); err != nil {
+		if err := stream.Reset(); err != nil {
 			s.logger.Err(err).Msg("fail to close the stream")
 		}
 	}()
@@ -139,6 +143,17 @@ func (s *SignatureNotifier) sendOneMsgToPeer(m *signatureItem) error {
 	}
 	s.logger.Debug().Msgf("open stream to (%s) successfully", m.peerID)
 	defer func() {
+		s.streamLocker.Lock()
+		defer s.streamLocker.Unlock()
+		entries, ok := s.unusedStreams[m.messageID]
+		if !ok {
+			entries := []network.Stream{stream}
+			s.unusedStreams[m.messageID] = entries
+		} else {
+			entries = append(entries, stream)
+			s.unusedStreams[m.messageID] = entries
+		}
+
 		if err := stream.Close(); err != nil {
 			s.logger.Error().Err(err).Msg("fail to close stream")
 		}
@@ -228,5 +243,15 @@ func (s *SignatureNotifier) WaitForSignature(messageID string, message []byte, p
 		return nil, errors.New("request to exit")
 	case <-time.After(timeout):
 		return nil, fmt.Errorf("timeout: didn't receive signature after %s", timeout)
+	}
+}
+
+func (s *SignatureNotifier) StreamCleanup(msgID string) {
+	entries, ok := s.unusedStreams[msgID]
+	if ok {
+		for _, el := range entries {
+			el.Reset()
+		}
+		delete(s.unusedStreams, msgID)
 	}
 }
