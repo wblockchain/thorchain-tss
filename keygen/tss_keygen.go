@@ -124,7 +124,7 @@ func (tKeyGen *TssKeyGen) GenerateNewKey(keygenReq Request) (*bcrypto.ECPoint, e
 	r, err := tKeyGen.processKeyGen(errChan, outCh, endCh, keyGenLocalStateItem)
 	if err != nil {
 		close(tKeyGen.commStopChan)
-		return nil, fmt.Errorf("fail to process key sign: %w", err)
+		return nil, fmt.Errorf("fail to process key gen: %w", err)
 	}
 	select {
 	case <-time.After(time.Second * 5):

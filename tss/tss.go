@@ -1,6 +1,7 @@
 package tss
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-peerstore/addr"
+	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	tcrypto "github.com/tendermint/tendermint/crypto"
@@ -98,6 +100,7 @@ func NewTss(
 	if err != nil {
 		return nil, fmt.Errorf("fail to get private key")
 	}
+
 	if err := comm.Start(priKeyRawBytes); nil != err {
 		return nil, fmt.Errorf("fail to start p2p network: %w", err)
 	}
@@ -169,16 +172,70 @@ func (t *TssServer) requestToMsgId(request interface{}) (string, error) {
 	return common.MsgToHashString(dat)
 }
 
+func (t *TssServer) networkConnectionCheck(peersID []string) ([]peer.ID, error) {
+	result := make(map[peer.ID]bool)
+	locker := &sync.Mutex{}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
+	defer cancel()
+	wg := sync.WaitGroup{}
+	for _, el := range peersID {
+		if el == t.GetLocalPeerID() {
+			result[t.p2pCommunication.GetHost().ID()] = true
+			continue
+		}
+		pid, err := peer.Decode(el)
+		if err != nil {
+			return nil, fmt.Errorf("fail to decode peer id(%s):%w", el, err)
+		}
+		wg.Add(1)
+		result[pid] = false
+		go func(n peer.ID) {
+			defer wg.Done()
+			outChan := ping.Ping(ctx, t.p2pCommunication.GetHost(), n)
+			for {
+				ret, ok := <-outChan
+				if !ok {
+					return
+				}
+				if ret.Error == nil {
+					t.logger.Debug().Msgf("connect to peer %v with RTT %s", n.String(), ret.RTT)
+					locker.Lock()
+					result[n] = true
+					locker.Unlock()
+					return
+				}
+			}
+		}(pid)
+	}
+	wg.Wait()
+	var onlinePeers []peer.ID
+	for k, v := range result {
+		if v {
+			onlinePeers = append(onlinePeers, k)
+		}
+	}
+	if len(onlinePeers) != len(peersID) {
+		return onlinePeers, errors.New("fail to connect to one or some nodes")
+	}
+	return onlinePeers, nil
+}
+
 func (t *TssServer) joinParty(msgID string, keys []string) ([]peer.ID, error) {
 	peerIDs, err := conversion.GetPeerIDsFromPubKeys(keys)
 	if err != nil {
 		return nil, fmt.Errorf("fail to convert pub key to peer id: %w", err)
 	}
 
+	// since p2p connection have the error that node can receive msg while cannot send msg,
+	// so we run ping-pong to detect any p2p connection issues.
+	onlinePeers, err := t.networkConnectionCheck(peerIDs)
+	if err != nil {
+		return onlinePeers, err
+	}
 	joinPartyReq := &messages.JoinPartyRequest{
 		ID: msgID,
 	}
-	onlinePeers, err := t.partyCoordinator.JoinPartyWithRetry(joinPartyReq, peerIDs)
+	onlinePeers, err = t.partyCoordinator.JoinPartyWithRetry(joinPartyReq, peerIDs)
 	return onlinePeers, err
 }
 

@@ -130,8 +130,11 @@ func (s *TssKeygenTestSuite) SetUpTest(c *C) {
 
 func (s *TssKeygenTestSuite) TearDownTest(c *C) {
 	time.Sleep(time.Second)
-	for _, item := range s.comms {
+	for i, item := range s.comms {
 		c.Assert(item.Stop(), IsNil)
+		baseHome := path.Join(os.TempDir(), strconv.Itoa(i))
+		filepath := path.Join(baseHome, "address_book.seed")
+		os.RemoveAll(filepath)
 	}
 }
 
