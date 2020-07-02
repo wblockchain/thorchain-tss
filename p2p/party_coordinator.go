@@ -84,7 +84,6 @@ func (pc *PartyCoordinator) HandleStream(stream network.Stream) {
 		_, offlinePeers := peerGroup.getPeersStatus()
 		if len(offlinePeers) == 0 {
 			if peerGroup.updateFinishedPeer(remotePeer) {
-				fmt.Printf("-------node %v is done----------\n", pc.host.ID())
 				peerGroup.joinPartyConfirmed <- true
 			}
 		}
@@ -200,7 +199,6 @@ func (pc *PartyCoordinator) sendRequestToPeer(msg *messages.JoinPartyRequest, re
 // JoinPartyWithRetry this method provide the functionality to join party with retry and back off
 func (pc *PartyCoordinator) JoinPartyWithRetry(msg *messages.JoinPartyRequest, peers []string) ([]peer.ID, error) {
 	joinPartyDone := false
-	nodesReady := false
 	peerGroup, err := pc.createJoinPartyGroups(msg.ID, peers)
 	if err != nil {
 		pc.logger.Error().Err(err).Msg("fail to create the join party group")
@@ -224,7 +222,7 @@ func (pc *PartyCoordinator) JoinPartyWithRetry(msg *messages.JoinPartyRequest, p
 			default:
 				msg.Fin = false
 				pc.sendRequestToAll(msg, offline)
-				if nodesReady {
+				if len(offline) == 0 {
 					msg.Fin = true
 					pc.sendRequestToAll(msg, offline)
 				}
@@ -244,7 +242,6 @@ func (pc *PartyCoordinator) JoinPartyWithRetry(msg *messages.JoinPartyRequest, p
 					// now we notify others we will quit join party
 					msg.Fin = true
 					pc.sendRequestToAll(msg, pIDs)
-					nodesReady = true
 				}
 			case <-peerGroup.joinPartyConfirmed:
 				joinPartyDone = true
