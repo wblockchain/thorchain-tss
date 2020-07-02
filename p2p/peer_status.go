@@ -8,9 +8,12 @@ import (
 )
 
 type PeerStatus struct {
-	peersResponse  map[peer.ID]bool
-	peerStatusLock *sync.RWMutex
-	newFound       chan bool
+	peersResponse      map[peer.ID]bool
+	joinPartyMember    map[peer.ID]bool
+	peerStatusLock     *sync.RWMutex
+	joinPartyMemLock   *sync.RWMutex
+	newFound           chan bool
+	joinPartyConfirmed chan bool
 }
 
 func NewPeerStatus(peerNodes []peer.ID, myPeerID peer.ID) *PeerStatus {
@@ -22,9 +25,12 @@ func NewPeerStatus(peerNodes []peer.ID, myPeerID peer.ID) *PeerStatus {
 		dat[el] = false
 	}
 	peerStatus := &PeerStatus{
-		peersResponse:  dat,
-		peerStatusLock: &sync.RWMutex{},
-		newFound:       make(chan bool, len(peerNodes)),
+		peersResponse:      dat,
+		joinPartyMember:    make(map[peer.ID]bool),
+		peerStatusLock:     &sync.RWMutex{},
+		joinPartyMemLock:   &sync.RWMutex{},
+		newFound:           make(chan bool, len(peerNodes)),
+		joinPartyConfirmed: make(chan bool, len(peerNodes)),
 	}
 	return peerStatus
 }
@@ -48,6 +54,13 @@ func (ps *PeerStatus) getPeersStatus() ([]peer.ID, []peer.ID) {
 	}
 
 	return online, offline
+}
+
+func (ps *PeerStatus) updateFinishedPeer(peerNode peer.ID) bool {
+	ps.joinPartyMemLock.Lock()
+	defer ps.joinPartyMemLock.Unlock()
+	ps.joinPartyMember[peerNode] = true
+	return len(ps.joinPartyMember) == len(ps.peersResponse)
 }
 
 func (ps *PeerStatus) updatePeer(peerNode peer.ID) (bool, error) {

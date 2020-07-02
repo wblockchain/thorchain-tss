@@ -10,7 +10,8 @@ require (
 	github.com/deckarep/golang-set v1.7.1
 	github.com/decred/dcrd/dcrec/secp256k1 v1.0.3
 	github.com/gogo/protobuf v1.3.1
-	github.com/golang/protobuf v1.3.4
+	github.com/golang/protobuf v1.3.5
+	github.com/google/go-cmp v0.5.0 // indirect
 	github.com/gorilla/mux v1.7.3
 	github.com/ipfs/go-log v1.0.2
 	github.com/jackpal/go-nat-pmp v1.0.2 // indirect
@@ -35,7 +36,6 @@ require (
 	golang.org/x/net v0.0.0-20200222125558-5a598a2470a0 // indirect
 	golang.org/x/sys v0.0.0-20200223170610-d5e6a3e2c0ae // indirect
 	golang.org/x/tools v0.0.0-20200221224223-e1da425f72fd // indirect
-	google.golang.org/genproto v0.0.0-20191206224255-0243a4be9c8f // indirect
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15
 	honnef.co/go/tools v0.0.1-2020.1.3 // indirect
 )

@@ -265,6 +265,12 @@ func (s *FourNodeTestSuite) TearDownTest(c *C) {
 	for i := 1; i < partyNum; i++ {
 		s.servers[i].Stop()
 	}
+
+	for i := 0; i < partyNum; i++ {
+		baseHome := path.Join(os.TempDir(), strconv.Itoa(i))
+		filepath := path.Join(baseHome, "address_book.seed")
+		os.RemoveAll(filepath)
+	}
 }
 
 func (s *FourNodeTestSuite) getTssServer(c *C, index int, conf common.TssConfig, bootstrap string) *TssServer {

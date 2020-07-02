@@ -25,7 +25,7 @@ type PartyCoordinator struct {
 	stopChan           chan struct{}
 	timeout            time.Duration
 	peersGroup         map[string]*PeerStatus
-	joinPartyGroupLock *sync.Mutex
+	joinPartyGroupLock *sync.RWMutex
 }
 
 // NewPartyCoordinator create a new instance of PartyCoordinator
@@ -40,7 +40,7 @@ func NewPartyCoordinator(host host.Host, timeout time.Duration) *PartyCoordinato
 		stopChan:           make(chan struct{}),
 		timeout:            timeout,
 		peersGroup:         make(map[string]*PeerStatus),
-		joinPartyGroupLock: &sync.Mutex{},
+		joinPartyGroupLock: &sync.RWMutex{},
 	}
 	host.SetStreamHandler(joinPartyProtocol, pc.HandleStream)
 	return pc
@@ -73,11 +73,21 @@ func (pc *PartyCoordinator) HandleStream(stream network.Stream) {
 		logger.Err(err).Msg("fail to unmarshal join party request")
 		return
 	}
-	pc.joinPartyGroupLock.Lock()
+	pc.joinPartyGroupLock.RLock()
 	peerGroup, ok := pc.peersGroup[msg.ID]
-	pc.joinPartyGroupLock.Unlock()
+	pc.joinPartyGroupLock.RUnlock()
 	if !ok {
 		pc.logger.Info().Msg("this party is not ready")
+		return
+	}
+	if msg.Fin {
+		_, offlinePeers := peerGroup.getPeersStatus()
+		if len(offlinePeers) == 0 {
+			if peerGroup.updateFinishedPeer(remotePeer) {
+				fmt.Printf("-------node %v is done----------\n", pc.host.ID())
+				peerGroup.joinPartyConfirmed <- true
+			}
+		}
 		return
 	}
 	newFound, err := peerGroup.updatePeer(remotePeer)
@@ -189,12 +199,18 @@ func (pc *PartyCoordinator) sendRequestToPeer(msg *messages.JoinPartyRequest, re
 
 // JoinPartyWithRetry this method provide the functionality to join party with retry and back off
 func (pc *PartyCoordinator) JoinPartyWithRetry(msg *messages.JoinPartyRequest, peers []string) ([]peer.ID, error) {
+	joinPartyDone := false
+	nodesReady := false
 	peerGroup, err := pc.createJoinPartyGroups(msg.ID, peers)
 	if err != nil {
 		pc.logger.Error().Err(err).Msg("fail to create the join party group")
 		return nil, err
 	}
 	defer pc.removePeerGroup(msg.ID)
+	pIDs, err := pc.getPeerIDs(peers)
+	if err != nil {
+		pc.logger.Error().Msg("fail to convert the peer ID")
+	}
 	_, offline := peerGroup.getPeersStatus()
 	var wg sync.WaitGroup
 	done := make(chan struct{})
@@ -206,7 +222,12 @@ func (pc *PartyCoordinator) JoinPartyWithRetry(msg *messages.JoinPartyRequest, p
 			case <-done:
 				return
 			default:
+				msg.Fin = false
 				pc.sendRequestToAll(msg, offline)
+				if nodesReady {
+					msg.Fin = true
+					pc.sendRequestToAll(msg, offline)
+				}
 			}
 			time.Sleep(time.Second)
 		}
@@ -220,9 +241,17 @@ func (pc *PartyCoordinator) JoinPartyWithRetry(msg *messages.JoinPartyRequest, p
 			case <-peerGroup.newFound:
 				pc.logger.Info().Msg("we have found the new peer")
 				if peerGroup.getCoordinationStatus() {
-					close(done)
-					return
+					// now we notify others we will quit join party
+					msg.Fin = true
+					pc.sendRequestToAll(msg, pIDs)
+					nodesReady = true
 				}
+			case <-peerGroup.joinPartyConfirmed:
+				joinPartyDone = true
+				msg.Fin = true
+				pc.sendRequestToAll(msg, pIDs)
+				close(done)
+				return
 			case <-time.After(pc.timeout):
 				// timeout
 				close(done)
@@ -230,13 +259,11 @@ func (pc *PartyCoordinator) JoinPartyWithRetry(msg *messages.JoinPartyRequest, p
 			}
 		}
 	}()
-
 	wg.Wait()
 	onlinePeers, _ := peerGroup.getPeersStatus()
-	pc.sendRequestToAll(msg, onlinePeers)
 	// we always set ourselves as online
 	onlinePeers = append(onlinePeers, pc.host.ID())
-	if len(onlinePeers) == len(peers) {
+	if joinPartyDone {
 		return onlinePeers, nil
 	}
 	return onlinePeers, errJoinPartyTimeout
