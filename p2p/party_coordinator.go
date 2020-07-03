@@ -93,12 +93,13 @@ func (pc *PartyCoordinator) HandleStream(stream network.Stream) {
 			pc.logger.Error().Err(err).Msg("fail to write the the join party sender")
 			return
 		}
-		peerGroup.peerStatusLock.Lock()
+		peerGroup.confirmPeerLock.Lock()
 		peerGroup.confirmedReceived[remotePeer] = true
-		if len(peerGroup.confirmedReceived) == len(peerGroup.peersResponse) {
+		fin := len(peerGroup.confirmedReceived) == len(peerGroup.peersResponse)
+		peerGroup.confirmPeerLock.Unlock()
+		if fin {
 			peerGroup.confirmedChan <- true
 		}
-		peerGroup.peerStatusLock.Unlock()
 		return
 	}
 
@@ -140,8 +141,11 @@ func (pc *PartyCoordinator) getPeerIDs(ids []string) ([]peer.ID, error) {
 
 func (pc *PartyCoordinator) sendRequestToAll(msg *messages.JoinPartyRequest, peers []peer.ID) {
 	var wg sync.WaitGroup
-	wg.Add(len(peers))
 	for _, el := range peers {
+		if el == pc.host.ID() {
+			continue
+		}
+		wg.Add(1)
 		go func(peer peer.ID) {
 			defer wg.Done()
 			if err := pc.sendRequestToPeer(msg, peer); err != nil {
@@ -161,7 +165,6 @@ func (pc *PartyCoordinator) getStream(remotePeer peer.ID) (network.Stream, error
 	streamGetChan := make(chan struct{})
 	go func() {
 		defer close(streamGetChan)
-		pc.logger.Info().Msgf("try to open stream to (%s) ", remotePeer)
 		stream, err = pc.host.NewStream(ctx, remotePeer, joinPartyProtocol)
 		if err != nil {
 			streamError = fmt.Errorf("fail to create stream to peer(%s):%w", remotePeer, err)
@@ -215,9 +218,12 @@ func (pc *PartyCoordinator) pingPong(msgID string, pIDs []peer.ID) []peer.ID {
 	var wg sync.WaitGroup
 	var sendConfirm []peer.ID
 	locker := &sync.Mutex{}
-	wg.Add(len(pIDs))
 	for _, el := range pIDs {
-		go func(pID peer.ID) {
+		if el == pc.host.ID() {
+			continue
+		}
+		wg.Add(1)
+		go func(pID peer.ID, wg *sync.WaitGroup, locker *sync.Mutex) {
 			defer wg.Done()
 			finMsg := &messages.JoinPartyRequest{
 				ID:  msgID,
@@ -263,23 +269,39 @@ func (pc *PartyCoordinator) pingPong(msgID string, pIDs []peer.ID) []peer.ID {
 				sendConfirm = append(sendConfirm, pID)
 				locker.Unlock()
 			}
-		}(el)
+		}(el, &wg, locker)
 	}
 	wg.Wait()
 	return sendConfirm
 }
 
-func (pc *PartyCoordinator) getConfirmFromAllPeer(peerStatus *PeerStatus, msgID string, pIDs []peer.ID) bool {
+func elementInBoth(a []peer.ID, b map[peer.ID]bool) []peer.ID {
+	var onlines []peer.ID
+	for _, el := range a {
+		if b[el] {
+			onlines = append(onlines, el)
+		}
+	}
+	return onlines
+}
+
+func (pc *PartyCoordinator) getConfirmFromAllPeer(peerStatus *PeerStatus, msgID string, pIDs []peer.ID) ([]peer.ID, bool) {
 	sendConfirmed := pc.pingPong(msgID, pIDs)
 	// cause we add ourselves in pID, so exclude ourselves
 	if len(sendConfirmed) != len(pIDs)-1 {
-		return false
+		peerStatus.confirmPeerLock.RLock()
+		onlines := elementInBoth(sendConfirmed, peerStatus.confirmedReceived)
+		peerStatus.confirmPeerLock.RUnlock()
+		return onlines, false
 	}
 	select {
 	case <-time.After(time.Second * 5):
-		return false
+		peerStatus.confirmPeerLock.RLock()
+		onlines := elementInBoth(sendConfirmed, peerStatus.confirmedReceived)
+		peerStatus.confirmPeerLock.RUnlock()
+		return onlines, false
 	case <-peerStatus.confirmedChan:
-		return true
+		return nil, true
 	}
 }
 
@@ -340,10 +362,16 @@ func (pc *PartyCoordinator) JoinPartyWithRetry(msg *messages.JoinPartyRequest, p
 	pc.sendRequestToAll(msg, onlinePeers)
 	// we always set ourselves as online
 	onlinePeers = append(onlinePeers, pc.host.ID())
+	if len(onlinePeers) != len(peers) {
+		fmt.Println("HEEEEEEEEEEEEWWWWWWWWRETURN")
+		return onlinePeers, errJoinPartyTimeout
+	}
+
 	// now we send and waiting for the confirmation
 	fmt.Println("222222222222222222222")
-	if pc.getConfirmFromAllPeer(peerGroup, msg.ID, pIDs) {
+	confirmedOnlines, ok := pc.getConfirmFromAllPeer(peerGroup, msg.ID, pIDs)
+	if ok {
 		return onlinePeers, nil
 	}
-	return onlinePeers, errJoinPartyTimeout
+	return confirmedOnlines, errJoinPartyTimeout
 }

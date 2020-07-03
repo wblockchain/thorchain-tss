@@ -12,6 +12,7 @@ type PeerStatus struct {
 	peerStatusLock    *sync.RWMutex
 	newFound          chan bool
 	confirmedReceived map[peer.ID]bool
+	confirmPeerLock   *sync.RWMutex
 	confirmedChan     chan bool
 }
 
@@ -28,7 +29,8 @@ func NewPeerStatus(peerNodes []peer.ID, myPeerID peer.ID) *PeerStatus {
 		peerStatusLock:    &sync.RWMutex{},
 		newFound:          make(chan bool, len(peerNodes)),
 		confirmedReceived: make(map[peer.ID]bool),
-		confirmedChan:     make(chan bool),
+		confirmPeerLock:   &sync.RWMutex{},
+		confirmedChan:     make(chan bool, len(peerNodes)),
 	}
 	return peerStatus
 }
@@ -50,7 +52,6 @@ func (ps *PeerStatus) getPeersStatus() ([]peer.ID, []peer.ID) {
 			offline = append(offline, peerNode)
 		}
 	}
-
 	return online, offline
 }
 

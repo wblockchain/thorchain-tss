@@ -179,6 +179,9 @@ func (t *TssServer) joinParty(msgID string, keys []string) ([]peer.ID, error) {
 		ID: msgID,
 	}
 	onlinePeers, err := t.partyCoordinator.JoinPartyWithRetry(joinPartyReq, peerIDs)
+	if err != nil {
+		t.logger.Error().Err(err).Msg("fail to form tss party")
+	}
 	return onlinePeers, err
 }
 

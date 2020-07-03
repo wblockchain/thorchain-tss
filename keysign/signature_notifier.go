@@ -140,7 +140,6 @@ func (s *SignatureNotifier) sendOneMsgToPeer(m *signatureItem) error {
 	streamGetChan := make(chan struct{})
 	go func() {
 		defer close(streamGetChan)
-		s.logger.Info().Msgf("try to open stream to (%s) ", m.peerID)
 		stream, err = s.host.NewStream(ctx, m.peerID, signatureNotifierProtocol)
 		if err != nil {
 			streamError = fmt.Errorf("fail to create stream to peer(%s):%w", m.peerID, err)

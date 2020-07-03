@@ -297,7 +297,6 @@ func (c *Communication) connectToOnePeer(pID peer.ID) (network.Stream, error) {
 	streamGetChan := make(chan struct{})
 	go func() {
 		defer close(streamGetChan)
-		c.logger.Info().Msgf("try to open stream to (%s) ", pID)
 		stream, err = c.host.NewStream(ctx, pID, TSSProtocolID)
 		if err != nil {
 			streamError = fmt.Errorf("fail to create stream to peer(%s):%w", pID, err)
