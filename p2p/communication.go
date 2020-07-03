@@ -291,7 +291,33 @@ func (c *Communication) connectToOnePeer(pID peer.ID) (network.Stream, error) {
 	c.logger.Debug().Msgf("connect to peer : %s", pID.String())
 	ctx, cancel := context.WithTimeout(context.Background(), TimeoutConnecting)
 	defer cancel()
-	stream, err := c.host.NewStream(ctx, pID, TSSProtocolID)
+	var stream network.Stream
+	var streamError error
+	var err error
+	streamGetChan := make(chan struct{})
+	go func() {
+		defer close(streamGetChan)
+		c.logger.Info().Msgf("try to open stream to (%s) ", pID)
+		stream, err = c.host.NewStream(ctx, pID, TSSProtocolID)
+		if err != nil {
+			streamError = fmt.Errorf("fail to create stream to peer(%s):%w", pID, err)
+		}
+	}()
+
+	select {
+	case <-streamGetChan:
+		if streamError != nil {
+			c.logger.Error().Err(streamError).Msg("fail to open stream")
+			return nil, streamError
+		}
+	case <-ctx.Done():
+		c.logger.Error().Err(ctx.Err()).Msg("fail to open stream with context timeout")
+		// we reset the whole connection of this peer
+		err := c.host.Network().ClosePeer(pID)
+		c.logger.Error().Err(err).Msgf("fail to clolse the connection to peer %s", pID.String())
+		return nil, ctx.Err()
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("fail to create new stream to peer: %s, %w", pID, err)
 	}

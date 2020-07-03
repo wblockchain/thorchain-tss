@@ -328,6 +328,7 @@ func (pc *PartyCoordinator) JoinPartyWithRetry(msg *messages.JoinPartyRequest, p
 				}
 			case <-time.After(pc.timeout):
 				// timeout
+				fmt.Println("we time out!!!!")
 				close(done)
 				return
 			}
@@ -340,6 +341,7 @@ func (pc *PartyCoordinator) JoinPartyWithRetry(msg *messages.JoinPartyRequest, p
 	// we always set ourselves as online
 	onlinePeers = append(onlinePeers, pc.host.ID())
 	// now we send and waiting for the confirmation
+	fmt.Println("222222222222222222222")
 	if pc.getConfirmFromAllPeer(peerGroup, msg.ID, pIDs) {
 		return onlinePeers, nil
 	}

@@ -133,10 +133,34 @@ func (s *SignatureNotifier) sendMessageToPeer() {
 func (s *SignatureNotifier) sendOneMsgToPeer(m *signatureItem) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
-	stream, err := s.host.NewStream(ctx, m.peerID, signatureNotifierProtocol)
-	if err != nil {
-		return fmt.Errorf("fail to create stream to peer(%s):%w", m.peerID, err)
+
+	var stream network.Stream
+	var streamError error
+	var err error
+	streamGetChan := make(chan struct{})
+	go func() {
+		defer close(streamGetChan)
+		s.logger.Info().Msgf("try to open stream to (%s) ", m.peerID)
+		stream, err = s.host.NewStream(ctx, m.peerID, signatureNotifierProtocol)
+		if err != nil {
+			streamError = fmt.Errorf("fail to create stream to peer(%s):%w", m.peerID, err)
+		}
+	}()
+
+	select {
+	case <-streamGetChan:
+		if streamError != nil {
+			s.logger.Error().Err(streamError).Msg("fail to open stream")
+			return streamError
+		}
+	case <-ctx.Done():
+		s.logger.Error().Err(ctx.Err()).Msg("fail to open stream with context timeout")
+		// we reset the whole connection of this peer
+		err := s.host.Network().ClosePeer(m.peerID)
+		s.logger.Error().Err(err).Msgf("fail to clolse the connection to peer %s", m.peerID.String())
+		return ctx.Err()
 	}
+
 	s.logger.Debug().Msgf("open stream to (%s) successfully", m.peerID)
 	defer func() {
 		if err := stream.Close(); err != nil {
