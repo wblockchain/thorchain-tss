@@ -8,9 +8,11 @@ import (
 )
 
 type PeerStatus struct {
-	peersResponse  map[peer.ID]bool
-	peerStatusLock *sync.RWMutex
-	newFound       chan bool
+	peersResponse     map[peer.ID]bool
+	peerStatusLock    *sync.RWMutex
+	newFound          chan bool
+	confirmedReceived map[peer.ID]bool
+	confirmedChan     chan bool
 }
 
 func NewPeerStatus(peerNodes []peer.ID, myPeerID peer.ID) *PeerStatus {
@@ -22,9 +24,11 @@ func NewPeerStatus(peerNodes []peer.ID, myPeerID peer.ID) *PeerStatus {
 		dat[el] = false
 	}
 	peerStatus := &PeerStatus{
-		peersResponse:  dat,
-		peerStatusLock: &sync.RWMutex{},
-		newFound:       make(chan bool, len(peerNodes)),
+		peersResponse:     dat,
+		peerStatusLock:    &sync.RWMutex{},
+		newFound:          make(chan bool, len(peerNodes)),
+		confirmedReceived: make(map[peer.ID]bool),
+		confirmedChan:     make(chan bool),
 	}
 	return peerStatus
 }

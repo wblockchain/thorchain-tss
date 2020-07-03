@@ -80,6 +80,28 @@ func (pc *PartyCoordinator) HandleStream(stream network.Stream) {
 		pc.logger.Info().Msg("this party is not ready")
 		return
 	}
+
+	if msg.Msg == "FIN-PING" {
+		msg.Msg = "FIN-PONG"
+		buf, err := proto.Marshal(&msg)
+		if err != nil {
+			pc.logger.Error().Err(err).Msg("fail to marshal sent msg")
+			return
+		}
+		err = WriteStreamWithBuffer(buf, stream)
+		if err != nil {
+			pc.logger.Error().Err(err).Msg("fail to write the the join party sender")
+			return
+		}
+		peerGroup.peerStatusLock.Lock()
+		peerGroup.confirmedReceived[remotePeer] = true
+		if len(peerGroup.confirmedReceived) == len(peerGroup.peersResponse) {
+			peerGroup.confirmedChan <- true
+		}
+		peerGroup.peerStatusLock.Unlock()
+		return
+	}
+
 	newFound, err := peerGroup.updatePeer(remotePeer)
 	if err != nil {
 		pc.logger.Error().Err(err).Msg("receive msg from unknown peer")
@@ -96,12 +118,7 @@ func (pc *PartyCoordinator) removePeerGroup(messageID string) {
 	delete(pc.peersGroup, messageID)
 }
 
-func (pc *PartyCoordinator) createJoinPartyGroups(messageID string, peers []string) (*PeerStatus, error) {
-	pIDs, err := pc.getPeerIDs(peers)
-	if err != nil {
-		pc.logger.Error().Err(err).Msg("fail to parse peer id")
-		return nil, err
-	}
+func (pc *PartyCoordinator) createJoinPartyGroups(messageID string, pIDs []peer.ID) (*PeerStatus, error) {
 	pc.joinPartyGroupLock.Lock()
 	defer pc.joinPartyGroupLock.Unlock()
 	peerStatus := NewPeerStatus(pIDs, pc.host.ID())
@@ -135,19 +152,15 @@ func (pc *PartyCoordinator) sendRequestToAll(msg *messages.JoinPartyRequest, pee
 	wg.Wait()
 }
 
-func (pc *PartyCoordinator) sendRequestToPeer(msg *messages.JoinPartyRequest, remotePeer peer.ID) error {
-	msgBuf, err := proto.Marshal(msg)
-	if err != nil {
-		return fmt.Errorf("fail to marshal msg to bytes: %w", err)
-	}
+func (pc *PartyCoordinator) getStream(remotePeer peer.ID) (network.Stream, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*4)
 	defer cancel()
 	var stream network.Stream
 	var streamError error
+	var err error
 	streamGetChan := make(chan struct{})
 	go func() {
 		defer close(streamGetChan)
-
 		pc.logger.Info().Msgf("try to open stream to (%s) ", remotePeer)
 		stream, err = pc.host.NewStream(ctx, remotePeer, joinPartyProtocol)
 		if err != nil {
@@ -159,22 +172,33 @@ func (pc *PartyCoordinator) sendRequestToPeer(msg *messages.JoinPartyRequest, re
 	case <-streamGetChan:
 		if streamError != nil {
 			pc.logger.Error().Err(streamError).Msg("fail to open stream")
-			return streamError
+			return nil, streamError
 		}
 	case <-ctx.Done():
 		pc.logger.Error().Err(ctx.Err()).Msg("fail to open stream with context timeout")
 		// we reset the whole connection of this peer
 		err := pc.host.Network().ClosePeer(remotePeer)
 		pc.logger.Error().Err(err).Msgf("fail to clolse the connection to peer %s", remotePeer.String())
-		return ctx.Err()
+		return nil, ctx.Err()
 	}
 
+	return stream, nil
+}
+
+func (pc *PartyCoordinator) sendRequestToPeer(msg *messages.JoinPartyRequest, remotePeer peer.ID) error {
+	msgBuf, err := proto.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("fail to marshal msg to bytes: %w", err)
+	}
+	stream, err := pc.getStream(remotePeer)
+	if err != nil {
+		return err
+	}
 	defer func() {
 		if err := stream.Close(); err != nil {
 			pc.logger.Error().Err(err).Msg("fail to close stream")
 		}
 	}()
-	pc.logger.Info().Msgf("open stream to (%s) successfully", remotePeer)
 
 	err = WriteStreamWithBuffer(msgBuf, stream)
 	if err != nil {
@@ -187,13 +211,92 @@ func (pc *PartyCoordinator) sendRequestToPeer(msg *messages.JoinPartyRequest, re
 	return nil
 }
 
+func (pc *PartyCoordinator) pingPong(msgID string, pIDs []peer.ID) []peer.ID {
+	var wg sync.WaitGroup
+	var sendConfirm []peer.ID
+	locker := &sync.Mutex{}
+	wg.Add(len(pIDs))
+	for _, el := range pIDs {
+		go func(pID peer.ID) {
+			defer wg.Done()
+			finMsg := &messages.JoinPartyRequest{
+				ID:  msgID,
+				Msg: "FIN-PING",
+			}
+			msgBuf, errPingPong := proto.Marshal(finMsg)
+			if errPingPong != nil {
+				return
+			}
+
+			stream, err := pc.getStream(pID)
+			if err != nil {
+				pc.logger.Error().Err(err).Msg("fail to get stream")
+				return
+			}
+			defer func() {
+				if err := stream.Close(); err != nil {
+					pc.logger.Error().Err(err).Msg("fail to close the stream")
+				}
+			}()
+
+			err = WriteStreamWithBuffer(msgBuf, stream)
+			if err != nil {
+				if err := stream.Reset(); err != nil {
+					pc.logger.Error().Err(err).Msg("fail to reset stream")
+					return
+				}
+				pc.logger.Error().Err(err).Msg("fail to write stream")
+			}
+			// we wait for pong msg
+			ret, err := ReadStreamWithBuffer(stream)
+			if err != nil {
+				pc.logger.Error().Err(err).Msg("fail to read stream")
+				return
+			}
+			var retMsg messages.JoinPartyRequest
+			if err = proto.Unmarshal(ret, &retMsg); err != nil {
+				pc.logger.Error().Err(err).Msg("fail to unmarshal data")
+				return
+			}
+			if retMsg.Msg == "FIN-PONG" {
+				locker.Lock()
+				sendConfirm = append(sendConfirm, pID)
+				locker.Unlock()
+			}
+		}(el)
+	}
+	wg.Wait()
+	return sendConfirm
+}
+
+func (pc *PartyCoordinator) getConfirmFromAllPeer(peerStatus *PeerStatus, msgID string, pIDs []peer.ID) bool {
+	sendConfirmed := pc.pingPong(msgID, pIDs)
+	// cause we add ourselves in pID, so exclude ourselves
+	if len(sendConfirmed) != len(pIDs)-1 {
+		return false
+	}
+	select {
+	case <-time.After(time.Second * 5):
+		return false
+	case <-peerStatus.confirmedChan:
+		return true
+	}
+}
+
 // JoinPartyWithRetry this method provide the functionality to join party with retry and back off
 func (pc *PartyCoordinator) JoinPartyWithRetry(msg *messages.JoinPartyRequest, peers []string) ([]peer.ID, error) {
-	peerGroup, err := pc.createJoinPartyGroups(msg.ID, peers)
+	pIDs, err := pc.getPeerIDs(peers)
+	if err != nil {
+		pc.logger.Error().Err(err).Msg("fail to parse peer id")
+		return nil, err
+	}
+
+	peerGroup, err := pc.createJoinPartyGroups(msg.ID, pIDs)
 	if err != nil {
 		pc.logger.Error().Err(err).Msg("fail to create the join party group")
 		return nil, err
 	}
+
 	defer pc.removePeerGroup(msg.ID)
 	_, offline := peerGroup.getPeersStatus()
 	var wg sync.WaitGroup
@@ -236,7 +339,8 @@ func (pc *PartyCoordinator) JoinPartyWithRetry(msg *messages.JoinPartyRequest, p
 	pc.sendRequestToAll(msg, onlinePeers)
 	// we always set ourselves as online
 	onlinePeers = append(onlinePeers, pc.host.ID())
-	if len(onlinePeers) == len(peers) {
+	// now we send and waiting for the confirmation
+	if pc.getConfirmFromAllPeer(peerGroup, msg.ID, pIDs) {
 		return onlinePeers, nil
 	}
 	return onlinePeers, errJoinPartyTimeout
