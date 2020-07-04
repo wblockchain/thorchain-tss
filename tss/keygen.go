@@ -41,6 +41,12 @@ func (t *TssServer) Keygen(req keygen.Request) (keygen.Response, error) {
 	defer t.p2pCommunication.CancelSubscribe(messages.TSSKeyGenVerMsg, msgID)
 	defer t.p2pCommunication.CancelSubscribe(messages.TSSControlMsg, msgID)
 	defer t.p2pCommunication.CancelSubscribe(messages.TSSTaskDone, msgID)
+
+	// though we fail to creat this join party, no harm to remove an non-exist entry
+	defer func() {
+		t.partyCoordinator.RemovePeerGroup(msgID)
+	}()
+
 	onlinePeers, err := t.joinParty(msgID, req.Keys)
 	if err != nil {
 		if onlinePeers == nil {

@@ -3,6 +3,7 @@ package messages;
 
 message JoinPartyRequest {
     string ID = 1; // the unique hash id
+    string Msg = 2;
 }
 
 message JoinPartyResponse {

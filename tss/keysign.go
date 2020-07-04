@@ -94,6 +94,10 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 		return emptyResp, fmt.Errorf("fail to convert pub keys to peer id:%w", err)
 	}
 
+	// though we fail to creat this join party, no harm to remove an non-exist entry
+	defer func() {
+		t.partyCoordinator.RemovePeerGroup(msgID)
+	}()
 	onlinePeers, err := t.joinParty(msgID, req.SignerPubKeys)
 	if err != nil {
 		if onlinePeers == nil {

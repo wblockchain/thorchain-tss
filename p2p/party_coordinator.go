@@ -62,7 +62,7 @@ func (pc *PartyCoordinator) HandleStream(stream network.Stream) {
 	}()
 	remotePeer := stream.Conn().RemotePeer()
 	logger := pc.logger.With().Str("remote peer", remotePeer.String()).Logger()
-	logger.Debug().Msg("reading from join party request")
+	// logger.Debug().Msg("reading from join party request")
 	payload, err := ReadStreamWithBuffer(stream)
 	if err != nil {
 		logger.Err(err).Msgf("fail to read payload from stream")
@@ -80,6 +80,13 @@ func (pc *PartyCoordinator) HandleStream(stream network.Stream) {
 		pc.logger.Info().Msg("this party is not ready")
 		return
 	}
+	if msg.Msg == "PING" {
+		msg.Msg = "PONG"
+		if err := pc.sendRequestToPeer(&msg, remotePeer); err != nil {
+			pc.logger.Error().Err(err).Msg("error in send the join party request to peer in handler stream")
+		}
+	}
+
 	newFound, err := peerGroup.updatePeer(remotePeer)
 	if err != nil {
 		pc.logger.Error().Err(err).Msg("receive msg from unknown peer")
@@ -90,7 +97,7 @@ func (pc *PartyCoordinator) HandleStream(stream network.Stream) {
 	}
 }
 
-func (pc *PartyCoordinator) removePeerGroup(messageID string) {
+func (pc *PartyCoordinator) RemovePeerGroup(messageID string) {
 	pc.joinPartyGroupLock.Lock()
 	defer pc.joinPartyGroupLock.Unlock()
 	delete(pc.peersGroup, messageID)
@@ -148,7 +155,7 @@ func (pc *PartyCoordinator) sendRequestToPeer(msg *messages.JoinPartyRequest, re
 	go func() {
 		defer close(streamGetChan)
 
-		pc.logger.Info().Msgf("try to open stream to (%s) ", remotePeer)
+		// pc.logger.Info().Msgf("try to open stream to (%s) ", remotePeer)
 		stream, err = pc.host.NewStream(ctx, remotePeer, joinPartyProtocol)
 		if err != nil {
 			streamError = fmt.Errorf("fail to create stream to peer(%s):%w", remotePeer, err)
@@ -174,7 +181,7 @@ func (pc *PartyCoordinator) sendRequestToPeer(msg *messages.JoinPartyRequest, re
 			pc.logger.Error().Err(err).Msg("fail to close stream")
 		}
 	}()
-	pc.logger.Info().Msgf("open stream to (%s) successfully", remotePeer)
+	// pc.logger.Info().Msgf("open stream to (%s) successfully", remotePeer)
 
 	err = WriteStreamWithBuffer(msgBuf, stream)
 	if err != nil {
@@ -194,7 +201,6 @@ func (pc *PartyCoordinator) JoinPartyWithRetry(msg *messages.JoinPartyRequest, p
 		pc.logger.Error().Err(err).Msg("fail to create the join party group")
 		return nil, err
 	}
-	defer pc.removePeerGroup(msg.ID)
 	_, offline := peerGroup.getPeersStatus()
 	var wg sync.WaitGroup
 	done := make(chan struct{})
@@ -206,6 +212,7 @@ func (pc *PartyCoordinator) JoinPartyWithRetry(msg *messages.JoinPartyRequest, p
 			case <-done:
 				return
 			default:
+				msg.Msg = "PING"
 				pc.sendRequestToAll(msg, offline)
 			}
 			time.Sleep(time.Second)
