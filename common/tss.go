@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	btss "github.com/binance-chain/tss-lib/tss"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -170,10 +171,24 @@ func (t *TssCommon) updateLocal(wireMsg *messages.WireMessage) error {
 	if !wireMsg.Routing.IsBroadcast {
 		t.blameMgr.SetLastUnicastPeer(dataOwnerPeerID, wireMsg.RoundInfo)
 	}
-	if _, err := partyInfo.Party.UpdateFromBytes(wireMsg.Message, partyID, wireMsg.Routing.IsBroadcast); nil != err {
-		return t.processInvalidMsgBlame(wireMsg, err)
+
+	var updateErr *btss.Error
+	finChan := make(chan struct{})
+	runUpdateBytes := func() {
+		_, updateErr = partyInfo.Party.UpdateFromBytes(wireMsg.Message, partyID, wireMsg.Routing.IsBroadcast)
+		close(finChan)
 	}
-	return nil
+	go runUpdateBytes()
+	select {
+	case <-time.After(time.Second * 5):
+		err := btss.NewError(errors.New("timeout"), wireMsg.RoundInfo, 0, t.partyInfo.Party.PartyID(), partyID)
+		return t.processInvalidMsgBlame(wireMsg, err)
+	case <-finChan:
+		if updateErr != nil {
+			return t.processInvalidMsgBlame(wireMsg, updateErr)
+		}
+		return nil
+	}
 }
 
 func (t *TssCommon) checkDupAndUpdateVerMsg(bMsg *messages.BroadcastConfirmMessage, peerID string) bool {
