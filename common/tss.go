@@ -177,18 +177,18 @@ func (t *TssCommon) updateLocal(wireMsg *messages.WireMessage) error {
 	if !wireMsg.Routing.IsBroadcast {
 		t.blameMgr.SetLastUnicastPeer(dataOwnerPeerID, wireMsg.RoundInfo)
 	}
-	if t.partyInfo.Party.PartyID().Id == "0" {
-		fmt.Printf("apply share from %s of phrase %s\n", wireMsg.Routing.From, wireMsg.RoundInfo)
-	}
+	//if t.partyInfo.Party.PartyID().Id == "0" {
+	//	fmt.Printf("apply share from %s of phrase %s\n", wireMsg.Routing.From, wireMsg.RoundInfo)
+	//}
 	ok, err := partyInfo.Party.UpdateFromBytes(wireMsg.Message, partyID, wireMsg.Routing.IsBroadcast)
 	if err != nil {
 		fmt.Printf("UPDATE ERRORRRRRRRR\n")
 		return t.processInvalidMsgBlame(wireMsg, err)
 	}
-
-	if t.partyInfo.Party.PartyID().Id == "0" {
-		fmt.Printf("update done\n")
-	}
+	//
+	//if t.partyInfo.Party.PartyID().Id == "0" {
+	//	fmt.Printf("update done\n")
+	//}
 	//if _, err := partyInfo.Party.UpdateFromBytes(wireMsg.Message, partyID, wireMsg.Routing.IsBroadcast); nil != err {
 	//	fmt.Printf("we return............\n")
 	//	return t.processInvalidMsgBlame(wireMsg, err)
@@ -339,8 +339,7 @@ func (t *TssCommon) ProcessOutCh(msg btss.Message, msgType messages.THORChainTSS
 	if t.conf.Attacker == 3 {
 		phraseValue := phrases[msg.Type()]
 		if phraseValue == "1" {
-			fmt.Printf("WWWWWWWWWWWWWWWW222223333\n")
-			buf = shares[1].Message
+			buf = shares[0].Message
 		}
 	}
 

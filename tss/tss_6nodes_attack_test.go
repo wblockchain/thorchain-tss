@@ -79,6 +79,8 @@ func (s *SixNodeTestSuite) SetUpTest(c *C) {
 	common.InitLog("info", true, "Six_nodes_test")
 	_ = golog.SetLogLevel("tss-lib", "INFO")
 	conversion.SetupBech32Prefix()
+	pathss := os.TempDir()
+	fmt.Printf("###########---->%s", pathss)
 	s.ports = []int{
 		16666, 16667, 16668, 16669, 16670, 16671,
 	}

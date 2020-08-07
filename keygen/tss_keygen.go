@@ -184,7 +184,7 @@ func (tKeyGen *TssKeyGen) processKeyGen(errChan chan struct{},
 			// we bail out after KeyGenTimeoutSeconds
 			tKeyGen.logger.Error().Msgf("fail to generate message with %s", tssConf.KeyGenTimeout.String())
 			out := party.WaitingFor()
-			fmt.Printf("----->%v", out)
+			fmt.Printf("--we wait for--->%v", out)
 			lastMsg := blameMgr.GetLastMsg()
 			failReason := blameMgr.GetBlame().FailReason
 			if failReason == "" {
