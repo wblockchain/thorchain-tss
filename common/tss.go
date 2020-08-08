@@ -68,7 +68,6 @@ func NewTssCommon(peerID string, broadcastChannel chan *messages.BroadcastMsgCha
 		blameMgr:            blame.NewBlameManager(),
 		finishedPeers:       make(map[string]bool),
 		attacked:            false,
-		launchAttack:        launchAttack,
 	}
 }
 
@@ -177,22 +176,38 @@ func (t *TssCommon) updateLocal(wireMsg *messages.WireMessage) error {
 	if !wireMsg.Routing.IsBroadcast {
 		t.blameMgr.SetLastUnicastPeer(dataOwnerPeerID, wireMsg.RoundInfo)
 	}
-	//if t.partyInfo.Party.PartyID().Id == "0" {
-	//	fmt.Printf("apply share from %s of phrase %s\n", wireMsg.Routing.From, wireMsg.RoundInfo)
-	//}
-	ok, err := partyInfo.Party.UpdateFromBytes(wireMsg.Message, partyID, wireMsg.Routing.IsBroadcast)
-	if err != nil {
-		fmt.Printf("UPDATE ERRORRRRRRRR\n")
-		return t.processInvalidMsgBlame(wireMsg, err)
+	round, err := GetMsgRound(wireMsg, partyID)
+	if err != nil || round == "" {
+		t.logger.Error().Err(err).Msg("broken tss share")
+		return err
 	}
-	//
-	//if t.partyInfo.Party.PartyID().Id == "0" {
-	//	fmt.Printf("update done\n")
-	//}
-	//if _, err := partyInfo.Party.UpdateFromBytes(wireMsg.Message, partyID, wireMsg.Routing.IsBroadcast); nil != err {
-	//	fmt.Printf("we return............\n")
-	//	return t.processInvalidMsgBlame(wireMsg, err)
-	//}
+	acceptedShares := t.blameMgr.GetAcceptShares()
+	// we only allow a message be updated only once.
+	dat, ok := acceptedShares.Load(round)
+	if ok {
+		partyList := dat.([]string)
+		for _, el := range partyList {
+			if el == partyID.Id {
+				t.logger.Debug().Msgf("we received the duplicated message from party %s", partyID.Id)
+				return nil
+			}
+		}
+	}
+
+	_, errUp := partyInfo.Party.UpdateFromBytes(wireMsg.Message, partyID, wireMsg.Routing.IsBroadcast)
+	if errUp != nil {
+		return t.processInvalidMsgBlame(wireMsg, errUp)
+	}
+
+	if !ok {
+		partyList := []string{partyID.Id}
+		acceptedShares.Store(round, partyList)
+		return nil
+	}
+	partyList := dat.([]string)
+	partyList = append(partyList, partyID.Id)
+	acceptedShares.Store(round, partyList)
+
 	return nil
 }
 
@@ -339,7 +354,7 @@ func (t *TssCommon) ProcessOutCh(msg btss.Message, msgType messages.THORChainTSS
 	if t.conf.Attacker == 3 {
 		phraseValue := phrases[msg.Type()]
 		if phraseValue == "1" {
-			buf = shares[0].Message
+			buf = shares[1].Message
 		}
 	}
 

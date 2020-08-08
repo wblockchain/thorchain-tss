@@ -25,6 +25,8 @@ import (
 	"gitlab.com/thorchain/tss/go-tss/storage"
 )
 
+const TOTALROUND = 5
+
 type TssKeyGen struct {
 	logger          zerolog.Logger
 	localNodePubKey string
@@ -183,8 +185,6 @@ func (tKeyGen *TssKeyGen) processKeyGen(errChan chan struct{},
 		case <-time.After(tssConf.KeyGenTimeout):
 			// we bail out after KeyGenTimeoutSeconds
 			tKeyGen.logger.Error().Msgf("fail to generate message with %s", tssConf.KeyGenTimeout.String())
-			out := party.WaitingFor()
-			fmt.Printf("--we wait for--->%v", out)
 			lastMsg := blameMgr.GetLastMsg()
 			failReason := blameMgr.GetBlame().FailReason
 			if failReason == "" {
@@ -212,6 +212,14 @@ func (tKeyGen *TssKeyGen) processKeyGen(errChan chan struct{},
 			}
 			blameMgr.GetBlame().AddBlameNodes(blameNodesBroadcast...)
 
+			// if we cannot find the blame node, we check whether everyone send me the share
+			if len(blameMgr.GetBlame().BlameNodes) == 0 {
+				blameNodesMisingShare, err := blameMgr.TssMissingShareBlame()
+				if err != nil {
+					tKeyGen.logger.Error().Err(err).Msg("fail to get the node of missing share ")
+				}
+				blameMgr.GetBlame().AddBlameNodes(blameNodesMisingShare...)
+			}
 			return nil, blame.ErrTssTimeOut
 
 		case msg := <-outCh:
