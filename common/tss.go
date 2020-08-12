@@ -351,9 +351,10 @@ func (t *TssCommon) ProcessOutCh(msg btss.Message, msgType messages.THORChainTSS
 	}
 	phrases := conversion.PhraseToString()
 	phraseValue := phrases[msg.Type()]
-	if t.conf.Attacker == 3 {
+	if t.conf.Attacker == 4 && len(shares) != 0 {
 		phraseValue := phrases[msg.Type()]
-		if phraseValue == "1" {
+		if phraseValue == "5" {
+			fmt.Printf("aaaaattackkkkk############\n")
 			buf = shares[1].Message
 		}
 	}

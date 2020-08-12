@@ -2,6 +2,7 @@ package tss
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -23,6 +24,7 @@ import (
 	"gitlab.com/thorchain/tss/go-tss/common"
 	"gitlab.com/thorchain/tss/go-tss/conversion"
 	"gitlab.com/thorchain/tss/go-tss/keygen"
+	"gitlab.com/thorchain/tss/go-tss/keysign"
 )
 
 const (
@@ -98,7 +100,7 @@ func (s *SixNodeTestSuite) SetUpTest(c *C) {
 		KeySignTimeout:  15 * time.Second,
 		PreParamTimeout: 5 * time.Second,
 		PartyTimeout:    20 * time.Second,
-		Attacker:        3,
+		Attacker:        4,
 		AttackUnicast:   false,
 		AttackNodes:     "1",
 		AttackPhrase:    "1,3",
@@ -212,8 +214,24 @@ func (s *SixNodeTestSuite) TestKeygen(c *C) {
 	}
 	wg.Wait()
 
+	poolPubKey := keygenResult[0].PubKey
+	keysignReq := keysign.NewRequest(poolPubKey, base64.StdEncoding.EncodeToString(hash([]byte("helloworld"))), testPubKeys)
+	keysignResult := make(map[int]keysign.Response)
+	for i := 0; i < partyNum; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			res, err := s.servers[idx].KeySign(keysignReq)
+			c.Assert(err, IsNil)
+			lock.Lock()
+			defer lock.Unlock()
+			keysignResult[idx] = res
+		}(i)
+	}
+	wg.Wait()
+
 	votes := make(map[string]int)
-	for i, item := range keygenResult {
+	for i, item := range keysignResult {
 		fmt.Printf("\nresult::>>%d---status:%v-unicast(%v)->%v\n", i, item.Status, item.Blame.IsUnicast, item.Blame)
 
 		for _, el := range item.Blame.BlameNodes {
@@ -234,6 +252,13 @@ func (s *SixNodeTestSuite) TestKeygen(c *C) {
 	return
 }
 
+func (s *SixNodeTestSuite) TearDownSuit() {
+	for i := 0; i < partyNum; i++ {
+		baseHome := path.Join(os.TempDir(), strconv.Itoa(i))
+		os.RemoveAll(baseHome)
+	}
+}
+
 func (s *SixNodeTestSuite) TearDownTest(c *C) {
 	// give a second before we shutdown the network
 	time.Sleep(time.Second)
@@ -242,10 +267,6 @@ func (s *SixNodeTestSuite) TearDownTest(c *C) {
 	}
 	for i := 1; i < partyNum; i++ {
 		s.servers[i].Stop()
-	}
-	for i := 0; i < partyNum; i++ {
-		baseHome := path.Join(os.TempDir(), strconv.Itoa(i))
-		os.RemoveAll(baseHome)
 	}
 }
 
