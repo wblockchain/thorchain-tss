@@ -25,7 +25,7 @@ import (
 	"gitlab.com/thorchain/tss/go-tss/storage"
 )
 
-const TOTALROUND = 5
+const TSSKEYGENROUNDS = 5
 
 type TssKeyGen struct {
 	logger          zerolog.Logger
@@ -214,11 +214,13 @@ func (tKeyGen *TssKeyGen) processKeyGen(errChan chan struct{},
 
 			// if we cannot find the blame node, we check whether everyone send me the share
 			if len(blameMgr.GetBlame().BlameNodes) == 0 {
-				blameNodesMisingShare, err := blameMgr.TssMissingShareBlame()
+				blameNodesMisingShare, err := blameMgr.TssMissingShareBlame(TSSKEYGENROUNDS)
 				if err != nil {
 					tKeyGen.logger.Error().Err(err).Msg("fail to get the node of missing share ")
 				}
-				blameMgr.GetBlame().AddBlameNodes(blameNodesMisingShare...)
+				if len(blameNodesMisingShare) > 0 && len(blameNodesMisingShare) <= threshold {
+					blameMgr.GetBlame().AddBlameNodes(blameNodesMisingShare...)
+				}
 			}
 			return nil, blame.ErrTssTimeOut
 

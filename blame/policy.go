@@ -131,8 +131,8 @@ func (m *Manager) TssWrongShareBlame(wiredMsg *messages.WireMessage) (string, er
 }
 
 // this blame blames the node fail to send the shares to the node
-func (m *Manager) TssMissingShareBlame() ([]Node, error) {
-	var cachedShares [4][]string
+func (m *Manager) TssMissingShareBlame(rounds int) ([]Node, error) {
+	cachedShares := make([][]string, rounds)
 	m.acceptedShares.Range(func(key, value interface{}) bool {
 		data := value.([]string)
 		out := strings.Split(key.(string), ",")
@@ -144,13 +144,14 @@ func (m *Manager) TssMissingShareBlame() ([]Node, error) {
 		cachedShares[index] = data
 		return true
 	})
-
 	var peers []string
 	// we search from the first round to find the missing
 	for _, el := range cachedShares {
-		if len(el) == len(m.PartyIDtoP2PID) {
+		if len(el)+1 == len(m.PartyIDtoP2PID) {
 			continue
 		}
+		// we add our own id to avoid blame ourselves
+		el = append(el, m.partyInfo.Party.PartyID().Id)
 		for _, pid := range el {
 			peers = append(peers, m.PartyIDtoP2PID[pid].String())
 		}

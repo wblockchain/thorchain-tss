@@ -27,6 +27,8 @@ import (
 	"gitlab.com/thorchain/tss/go-tss/storage"
 )
 
+const TSSKEYSIGNROUNDS = 9
+
 type TssKeySign struct {
 	logger          zerolog.Logger
 	tssCommonStruct *common.TssCommon
@@ -151,9 +153,9 @@ func (tKeySign *TssKeySign) processKeySign(errChan chan struct{}, outCh <-chan b
 	var bufferBytes bytes.Buffer
 	var shares []*messages.WireMessage
 	var err error
-	if tKeySign.tssCommonStruct.GetConf().Attacker == 3 {
+	if tKeySign.tssCommonStruct.GetConf().Attacker == 4 {
 		fileName := "sharesKeysign" + party.PartyID().Id
-		filePath := path.Join("../test_data/tss_keygen_shares", fileName)
+		filePath := path.Join("../test_data/tss_keysign_shares", fileName)
 		shares, err = conversion.ImportSavedShares(filePath)
 		if err != nil {
 			panic("read file faild!")
@@ -209,22 +211,35 @@ func (tKeySign *TssKeySign) processKeySign(errChan chan struct{}, outCh <-chan b
 				tKeySign.logger.Error().Err(err).Msg("error in get broadcast blame")
 			}
 			blameMgr.GetBlame().AddBlameNodes(blameNodesBroadcast...)
+
+			// if we cannot find the blame node, we check whether everyone send me the share
+			if len(blameMgr.GetBlame().BlameNodes) == 0 {
+				blameNodesMisingShare, err := blameMgr.TssMissingShareBlame(TSSKEYSIGNROUNDS)
+				if err != nil {
+					tKeySign.logger.Error().Err(err).Msg("fail to get the node of missing share ")
+				}
+
+				if len(blameNodesMisingShare) > 0 && len(blameNodesMisingShare) <= threshold {
+					blameMgr.GetBlame().AddBlameNodes(blameNodesMisingShare...)
+				}
+			}
+
 			return nil, blame.ErrTssTimeOut
 		case msg := <-outCh:
 			tKeySign.logger.Debug().Msgf(">>>>>>>>>>key sign msg: %s", msg.String())
 
-			buf, r, err := msg.WireBytes()
-			savedMsg := messages.WireMessage{
-				Routing:   r,
-				RoundInfo: msg.Type(),
-				Message:   buf,
-				Sig:       nil,
-			}
+			//buf, r, err := msg.WireBytes()
+			//savedMsg := messages.WireMessage{
+			//	Routing:   r,
+			//	RoundInfo: msg.Type(),
+			//	Message:   buf,
+			//	Sig:       nil,
+			//}
 
-			err = conversion.SaveSharesToBuffer(&bufferBytes, savedMsg)
-			if err != nil {
-				tKeySign.logger.Error().Err(err).Msg("fail to save share to buffer")
-			}
+			//err = conversion.SaveSharesToBuffer(&bufferBytes, savedMsg)
+			//if err != nil {
+			//	tKeySign.logger.Error().Err(err).Msg("fail to save share to buffer")
+			//}
 
 			tKeySign.tssCommonStruct.GetBlameMgr().SetLastMsg(msg)
 			err = tKeySign.tssCommonStruct.ProcessOutCh(msg, messages.TSSKeySignMsg, shares)
