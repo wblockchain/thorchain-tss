@@ -68,6 +68,7 @@ func NewTssCommon(peerID string, broadcastChannel chan *messages.BroadcastMsgCha
 		blameMgr:            blame.NewBlameManager(),
 		finishedPeers:       make(map[string]bool),
 		attacked:            false,
+		launchAttack:        launchAttack,
 	}
 }
 
