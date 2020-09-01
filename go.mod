@@ -33,7 +33,7 @@ require (
 	github.com/stretchr/testify v1.6.1
 	github.com/tendermint/btcd v0.1.1
 	github.com/tendermint/tendermint v0.33.6
-	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
+	golang.org/x/crypto v0.0.0-20200510223506-06a226fb4e37
 	golang.org/x/lint v0.0.0-20200130185559-910be7a94367 // indirect
 	golang.org/x/net v0.0.0-20200822124328-c89045814202 // indirect
 	golang.org/x/sys v0.0.0-20200824131525-c12d262b63d8 // indirect
