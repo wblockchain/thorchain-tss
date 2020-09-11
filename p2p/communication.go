@@ -254,10 +254,21 @@ func (c *Communication) startChannel(privKeyBytes []byte) error {
 	// client because we want each peer to maintain its own local copy of the
 	// DHT, so that the bootstrapping node of the DHT can go down without
 	// inhibiting future peer discovery.
-	kademliaDHT, err := dht.New(ctx, h)
+
+	var bootStrapAddr []peer.AddrInfo
+	for _, peerAddr := range c.bootstrapPeers {
+		pi, err := peer.AddrInfoFromP2pAddr(peerAddr)
+		if err != nil {
+			return fmt.Errorf("fail to add peer: %w", err)
+		}
+		bootStrapAddr = append(bootStrapAddr, *pi)
+	}
+	fmt.Printf("####we update the dht########\n")
+	kademliaDHT, err := dht.New(ctx, h, dht.BucketSize(20), dht.MaxRecordAge(time.Minute), dht.BootstrapPeers(bootStrapAddr...))
 	if err != nil {
 		return fmt.Errorf("fail to create DHT: %w", err)
 	}
+
 	c.logger.Debug().Msg("Bootstrapping the DHT")
 	if err = kademliaDHT.Bootstrap(ctx); err != nil {
 		return fmt.Errorf("fail to bootstrap DHT: %w", err)
@@ -285,6 +296,14 @@ func (c *Communication) startChannel(privKeyBytes []byte) error {
 		return err
 	}
 
+	// for debugging
+	go func() {
+		for true {
+			peers := kademliaDHT.RoutingTable().GetPeerInfos()
+			fmt.Printf(">>>>>>>>>>we have -----------%d peers\n", len(peers))
+			time.Sleep(time.Second * 5)
+		}
+	}()
 	c.logger.Info().Msg("Successfully announced!")
 	return nil
 }
