@@ -14,7 +14,6 @@ import (
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
-	"github.com/libp2p/go-libp2p-core/routing"
 	discovery "github.com/libp2p/go-libp2p-discovery"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
@@ -240,29 +239,10 @@ func (c *Communication) startChannel(privKeyBytes []byte) error {
 		return addrs
 	}
 
-	routing := func(h host.Host) (routing.PeerRouting, error) {
-		var bootStrapAddr []peer.AddrInfo
-		for _, peerAddr := range c.bootstrapPeers {
-			pi, err := peer.AddrInfoFromP2pAddr(peerAddr)
-			if err != nil {
-				return nil, fmt.Errorf("fail to add peer: %w", err)
-			}
-			bootStrapAddr = append(bootStrapAddr, *pi)
-		}
-		fmt.Printf("####we update the dht########\n")
-		idht, err := dht.New(ctx, h, dht.BucketSize(20), dht.MaxRecordAge(time.Minute), dht.BootstrapPeers(bootStrapAddr...))
-		if err != nil {
-			return nil, fmt.Errorf("fail to create DHT: %w", err)
-		}
-
-		return idht, err
-	}
-
 	h, err := libp2p.New(ctx,
 		libp2p.ListenAddrs([]maddr.Multiaddr{c.listenAddr}...),
 		libp2p.Identity(p2pPriKey),
 		libp2p.AddrsFactory(addressFactory),
-		libp2p.Routing(routing),
 	)
 	if err != nil {
 		return fmt.Errorf("fail to create p2p host: %w", err)
@@ -283,8 +263,7 @@ func (c *Communication) startChannel(privKeyBytes []byte) error {
 		}
 		bootStrapAddr = append(bootStrapAddr, *pi)
 	}
-	fmt.Printf("####we update the dht########\n")
-	kademliaDHT, err := dht.New(ctx, h, dht.BucketSize(20), dht.MaxRecordAge(time.Minute), dht.BootstrapPeers(bootStrapAddr...))
+	kademliaDHT, err := dht.New(ctx, h, dht.BucketSize(40), dht.Mode(dht.ModeServer), dht.BootstrapPeers(bootStrapAddr...))
 	if err != nil {
 		return fmt.Errorf("fail to create DHT: %w", err)
 	}
@@ -316,14 +295,6 @@ func (c *Communication) startChannel(privKeyBytes []byte) error {
 		return err
 	}
 
-	// for debugging
-	go func() {
-		for true {
-			peers := kademliaDHT.RoutingTable().GetPeerInfos()
-			fmt.Printf(">>>>>>>>>>we have -----------%d peers\n", len(peers))
-			time.Sleep(time.Second * 5)
-		}
-	}()
 	c.logger.Info().Msg("Successfully announced!")
 	return nil
 }
