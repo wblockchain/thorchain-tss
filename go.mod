@@ -3,7 +3,6 @@ module gitlab.com/thorchain/tss/go-tss
 go 1.14
 
 require (
-	github.com/Masterminds/semver v1.5.0
 	github.com/binance-chain/go-sdk v0.0.0-00010101000000-000000000000
 	github.com/binance-chain/tss-lib v0.0.0-00010101000000-000000000000
 	github.com/blang/semver v3.5.1+incompatible

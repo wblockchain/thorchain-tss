@@ -73,9 +73,15 @@ func (t *TssServer) Keygen(req keygen.Request) (keygen.Response, error) {
 
 		}
 
-		blameNodes, err := blameMgr.NodeSyncBlame(req.Keys, onlinePeers)
-		if err != nil {
-			t.logger.Err(errJoinParty).Msg("fail to get peers to blame")
+		var blameNodes blame.Blame
+		if len(onlinePeers) != 0 {
+			// we get the absent nodes for keygen
+			blameNodes, err = blameMgr.NodeSyncBlame(req.Keys, onlinePeers)
+			if err != nil {
+				t.logger.Err(errJoinParty).Msg("fail to get peers to blame")
+			}
+		} else {
+			blameNodes = blame.NewBlame("fail to run keygen party", nil)
 		}
 
 		leaderPubKey, err := conversion.GetPubKeyFromPeerID(leader)
