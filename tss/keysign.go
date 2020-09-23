@@ -27,6 +27,9 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 		return emptyResp, err
 	}
 
+	t.logger.Info().Msg(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+	t.logger.Info().Msgf(">>>>>>>>>>>>>>>>>msgID:%s>>>>>>>>>>>>>>>>", msgID)
+	t.logger.Info().Msg(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
 	keysignInstance := keysign.NewTssKeySign(
 		t.p2pCommunication.GetLocalPeerID(),
 		t.conf,
