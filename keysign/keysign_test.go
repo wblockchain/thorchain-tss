@@ -16,8 +16,8 @@ import (
 
 	"github.com/binance-chain/tss-lib/ecdsa/signing"
 	btss "github.com/binance-chain/tss-lib/tss"
+	golog "github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p-peerstore/addr"
-
 	"github.com/rs/zerolog/log"
 
 	"gitlab.com/thorchain/tss/go-tss/conversion"
@@ -105,7 +105,7 @@ var _ = Suite(&TssKeysignTestSuite{})
 func (s *TssKeysignTestSuite) SetUpSuite(c *C) {
 	conversion.SetupBech32Prefix()
 	common.InitLog("info", true, "keysign_test")
-
+	golog.SetLogLevel("tss-lib", "info")
 	for _, el := range testNodePrivkey {
 		priHexBytes, err := base64.StdEncoding.DecodeString(el)
 		c.Assert(err, IsNil)

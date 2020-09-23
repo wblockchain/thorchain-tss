@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/binance-chain/tss-lib/crypto"
+	"github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p-core/peer"
 	tcrypto "github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/crypto/secp256k1"
@@ -73,6 +74,7 @@ var _ = Suite(&TssKeygenTestSuite{})
 
 func (s *TssKeygenTestSuite) SetUpSuite(c *C) {
 	common.InitLog("info", true, "keygen_test")
+	log.SetLogLevel("tss-lib", "info")
 	conversion.SetupBech32Prefix()
 	for _, el := range testNodePrivkey {
 		priHexBytes, err := base64.StdEncoding.DecodeString(el)
