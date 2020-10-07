@@ -1,7 +1,6 @@
 package common
 
 import (
-	"bytes"
 	"crypto/elliptic"
 	"crypto/sha256"
 	"encoding/hex"
@@ -20,7 +19,6 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	tcrypto "github.com/tendermint/tendermint/crypto"
 
 	"gitlab.com/thorchain/tss/go-tss/blame"
 	"gitlab.com/thorchain/tss/go-tss/messages"

@@ -59,8 +59,16 @@ func (t *TssServer) generateSignature(msgID string, msgToSign []byte, req keysig
 		allParticipants = req.SignerPubKeys
 	}
 
+	sig, err := conversion.GenerateP2PSignature(t.privateKey, []byte(msgID))
+	if err != nil {
+		return keysign.Response{
+			Status: common.Fail,
+			Blame:  blame.NewBlame(blame.InternalError, []blame.Node{}),
+		}, errors.New("fail to generate the signature")
+	}
+
 	joinPartyStartTime := time.Now()
-	onlinePeers, leader, errJoinParty := t.joinParty(msgID, req.Version, req.BlockHeight, allParticipants, threshold, sigChan)
+	onlinePeers, leader, errJoinParty := t.joinParty(msgID, req.Version, sig, req.BlockHeight, allParticipants, threshold, sigChan)
 	joinPartyTime := time.Since(joinPartyStartTime)
 	if errJoinParty != nil {
 		// we received the signature from waiting for signature
@@ -271,17 +279,18 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 	// we received the generated verified signature, so we return
 	if errWait == nil {
 		t.updateKeySignResult(receivedSig, keysignTime)
+		t.logger.Info().Msgf("we received the signature for message %s", msgID)
 		return receivedSig, nil
 	}
 	// for this round, we are not the active signer
 	if errors.Is(errGen, p2p.ErrSignReceived) {
-
 		t.updateKeySignResult(receivedSig, keysignTime)
+		t.logger.Info().Msgf("we(not active signer) received the signature for message %s", msgID)
 		return receivedSig, nil
 	}
-
 	// we get the signature from our tss keysign
 	t.updateKeySignResult(generatedSig, keysignTime)
+	t.logger.Info().Msgf("we(active signer) generated the signature for message %s with status %v ", msgID, generatedSig.Status)
 	return generatedSig, errGen
 }
 

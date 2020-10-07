@@ -228,3 +228,23 @@ func (p *ConversionTestSuite) TestTssPubKey(c *C) {
 	c.Assert(pk, Equals, "thorpub1addwnpepq2dwek9hkrlxjxadrlmy9fr42gqyq6029q0hked46l3u6a9fxqel6tma5eu")
 	c.Assert(addr.String(), Equals, "bnb17l7cyxqzg4xymnl0alrhqwja276s3rns4256c2")
 }
+
+func (p *ConversionTestSuite) TestGetThreshold(c *C) {
+	_, err := GetThreshold(-2)
+	c.Assert(err, NotNil)
+	output, err := GetThreshold(4)
+	c.Assert(err, IsNil)
+	c.Assert(output, Equals, 2)
+	output, err = GetThreshold(9)
+	c.Assert(err, IsNil)
+	c.Assert(output, Equals, 5)
+	output, err = GetThreshold(10)
+	c.Assert(err, IsNil)
+	c.Assert(output, Equals, 6)
+	output, err = GetThreshold(99)
+	c.Assert(err, IsNil)
+	c.Assert(output, Equals, 65)
+	output, err = GetThreshold(2)
+	c.Assert(err, IsNil)
+	c.Assert(output, Equals, 1)
+}

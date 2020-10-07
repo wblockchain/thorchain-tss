@@ -17,8 +17,26 @@ message JoinPartyLeaderComm {
         UnknownPeer = 4;
     }
     string ID = 1; // unique hash id
-    string MsgType = 2; // unique hash id
+    string MsgType = 2; // unique message type
     ResponseType type = 3; // result
     repeated string PeerIDs = 4; // if Success , this will be the list of peers to form the ceremony, if fail , this will be the peers that are available
+
+}
+
+
+
+message JoinPartyLeaderCommBroadcast {
+    enum ResponseType {
+        Unknown = 0;
+        Success = 1;
+        Timeout = 2;
+        LeaderNotReady = 3;
+        UnknownPeer = 4;
+    }
+    string ID = 1; // unique hash id
+    string MsgType = 2; // unique message type
+    bytes ForwardSignatures= 3; // signature of the given message
+    ResponseType type = 4; // result
+    repeated string PeerIDs = 5; // if Success , this will be the list of peers to form the ceremony, if fail , this will be the peers that are available
 
 }

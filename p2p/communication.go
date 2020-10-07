@@ -26,8 +26,9 @@ import (
 )
 
 var (
-	joinPartyProtocol           protocol.ID = "/p2p/join-party"
-	joinPartyProtocolWithLeader protocol.ID = "/p2p/join-party-leader"
+	joinPartyProtocol                    protocol.ID = "/p2p/join-party"
+	joinPartyProtocolWithLeader          protocol.ID = "/p2p/join-party-leader"
+	joinPartyProtocolWithLeaderBroadcast protocol.ID = "/p2p/join-party-leader-broadcast"
 )
 
 // TSSProtocolID protocol id used for tss
@@ -201,7 +202,7 @@ func (c *Communication) bootStrapConnectivityCheck() error {
 	var onlineNodes uint32
 	var wg sync.WaitGroup
 	for _, el := range c.bootstrapPeers {
-		peer, err := peer.AddrInfoFromP2pAddr(el)
+		peerNode, err := peer.AddrInfoFromP2pAddr(el)
 		if err != nil {
 			c.logger.Error().Err(err).Msg("error in decode the bootstrap node, skip it")
 			continue

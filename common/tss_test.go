@@ -53,23 +53,6 @@ func (t *TssTestSuite) SetUpSuite(c *C) {
 	t.privKey = priKey
 }
 
-func (t *TssTestSuite) TestGetThreshold(c *C) {
-	_, err := conversion.GetThreshold(-2)
-	c.Assert(err, NotNil)
-	output, err := conversion.GetThreshold(4)
-	c.Assert(err, IsNil)
-	c.Assert(output, Equals, 2)
-	output, err = conversion.GetThreshold(9)
-	c.Assert(err, IsNil)
-	c.Assert(output, Equals, 5)
-	output, err = conversion.GetThreshold(10)
-	c.Assert(err, IsNil)
-	c.Assert(output, Equals, 6)
-	output, err = conversion.GetThreshold(99)
-	c.Assert(err, IsNil)
-	c.Assert(output, Equals, 65)
-}
-
 func (t *TssTestSuite) TestMsgToHashInt(c *C) {
 	input := []byte("whatever")
 	result, err := MsgToHashInt(input)

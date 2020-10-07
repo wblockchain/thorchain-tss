@@ -165,13 +165,13 @@ func (t *TssServer) requestToMsgId(request interface{}) (string, error) {
 	return common.MsgToHashString(dat)
 }
 
-func (t *TssServer) joinParty(msgID, version string, blockHeight int64, participants []string, threshold int, sigChan chan string) ([]peer.ID, string, error) {
+func (t *TssServer) joinParty(msgID, version string, sig []byte, blockHeight int64, participants []string, threshold int, sigChan chan string) ([]peer.ID, string, error) {
 	oldJoinParty, err := conversion.VersionLTCheck(version, messages.NEWJOINPARTYVERSION)
 	if err != nil {
 		return nil, "", fmt.Errorf("fail to parse the version with error:%w", err)
 	}
 	if oldJoinParty {
-		t.logger.Info().Msg("we apply the leadless join party")
+		t.logger.Info().Msg("we apply the leaderless join party")
 		peerIDs, err := conversion.GetPeerIDsFromPubKeys(participants)
 		if err != nil {
 			return nil, "NONE", fmt.Errorf("fail to convert pub key to peer id: %w", err)
@@ -183,7 +183,11 @@ func (t *TssServer) joinParty(msgID, version string, blockHeight int64, particip
 		onlines, err := t.partyCoordinator.JoinPartyWithRetry(msgID, peersIDStr)
 		return onlines, "NONE", err
 	} else {
-		t.logger.Info().Msg("we apply the join party with a leader")
+
+		isBroadcast, err := conversion.VersionGECheck(version, messages.NEWJOINPARTYVERSIONBroadcast)
+		if err != nil {
+			return nil, "", fmt.Errorf("fail to parse the version with error:%w", err)
+		}
 
 		if len(participants) == 0 {
 			t.logger.Error().Msg("we fail to have any participants or passed by request")
@@ -198,7 +202,7 @@ func (t *TssServer) joinParty(msgID, version string, blockHeight int64, particip
 			peersIDStr = append(peersIDStr, el.String())
 		}
 
-		return t.partyCoordinator.JoinPartyWithLeader(msgID, blockHeight, peersIDStr, threshold, sigChan)
+		return t.partyCoordinator.JoinPartyWithLeader(msgID, sig, blockHeight, peersIDStr, threshold, sigChan, isBroadcast)
 	}
 }
 

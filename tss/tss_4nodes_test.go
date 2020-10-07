@@ -22,6 +22,7 @@ import (
 	"gitlab.com/thorchain/tss/go-tss/conversion"
 	"gitlab.com/thorchain/tss/go-tss/keygen"
 	"gitlab.com/thorchain/tss/go-tss/keysign"
+	"gitlab.com/thorchain/tss/go-tss/messages"
 )
 
 const (
@@ -104,29 +105,29 @@ func hash(payload []byte) []byte {
 
 // we do for both join party schemes
 func (s *FourNodeTestSuite) Test4NodesTss(c *C) {
-	s.doTestKeygenAndKeySign(c, false)
+	s.doTestKeygenAndKeySign(c, "0.13.0")
 	time.Sleep(time.Second * 2)
-	s.doTestKeygenAndKeySign(c, true)
+	s.doTestKeygenAndKeySign(c, "0.14.0")
+	time.Sleep(time.Second * 2)
+	s.doTestKeygenAndKeySign(c, "0.15.0")
 
 	time.Sleep(time.Second * 2)
-	s.doTestFailJoinParty(c, false)
+	s.doTestFailJoinParty(c, "0.13.0")
 	time.Sleep(time.Second * 2)
-	s.doTestFailJoinParty(c, true)
-
+	s.doTestFailJoinParty(c, "0.14.0")
+	time.Sleep(time.Second * 4)
+	s.doTestFailJoinParty(c, "0.15.0")
+	//
 	time.Sleep(time.Second * 2)
-	s.doTestBlame(c, false)
-	time.Sleep(time.Second * 2)
-	s.doTestBlame(c, true)
+	// for this test, we stop the node when they doing the tss(has already pass the join party)
+	// do we ignore the test for new join party
+	s.doTestBlame(c)
 }
 
 // generate a new key
-func (s *FourNodeTestSuite) doTestKeygenAndKeySign(c *C, newJoinParty bool) {
+func (s *FourNodeTestSuite) doTestKeygenAndKeySign(c *C, ver string) {
 	var req keygen.Request
-	if newJoinParty {
-		req = keygen.NewRequest(testPubKeys, 10, "0.14.0")
-	} else {
-		req = keygen.NewRequest(testPubKeys, 10, "0.13.0")
-	}
+	req = keygen.NewRequest(testPubKeys, 10, ver)
 	wg := sync.WaitGroup{}
 	lock := &sync.Mutex{}
 	keygenResult := make(map[int]keygen.Response)
@@ -151,32 +152,26 @@ func (s *FourNodeTestSuite) doTestKeygenAndKeySign(c *C, newJoinParty bool) {
 		}
 	}
 
-	keysignReqWithErr := keysign.NewRequest(poolPubKey, "helloworld", 10, testPubKeys, "0.13.0")
-	if newJoinParty {
-		keysignReqWithErr = keysign.NewRequest(poolPubKey, "helloworld", 10, testPubKeys, "0.14.0")
-	}
+	keysignReqWithErr := keysign.NewRequest(poolPubKey, "helloworld", 10, testPubKeys, ver)
 
 	resp, err := s.servers[0].KeySign(keysignReqWithErr)
 	c.Assert(err, NotNil)
 	c.Assert(resp.S, Equals, "")
-	if !newJoinParty {
-		keysignReqWithErr1 := keysign.NewRequest(poolPubKey, base64.StdEncoding.EncodeToString(hash([]byte("helloworld"))), 10, testPubKeys[:1], "0.13.0")
+	if ver == "0.13.0" {
+		keysignReqWithErr1 := keysign.NewRequest(poolPubKey, base64.StdEncoding.EncodeToString(hash([]byte("helloworld"))), 10, testPubKeys[:1], ver)
 		resp, err = s.servers[0].KeySign(keysignReqWithErr1)
 		c.Assert(err, NotNil)
 		c.Assert(resp.S, Equals, "")
 	}
-	if !newJoinParty {
-		keysignReqWithErr2 := keysign.NewRequest(poolPubKey, base64.StdEncoding.EncodeToString(hash([]byte("helloworld"))), 10, nil, "0.13.0")
+	if ver == "0.13.0" {
+		keysignReqWithErr2 := keysign.NewRequest(poolPubKey, base64.StdEncoding.EncodeToString(hash([]byte("helloworld"))), 10, nil, ver)
 		resp, err = s.servers[0].KeySign(keysignReqWithErr2)
 		c.Assert(err, NotNil)
 		c.Assert(resp.S, Equals, "")
 	}
 	var keysignReq keysign.Request
-	if newJoinParty {
-		keysignReq = keysign.NewRequest(poolPubKey, base64.StdEncoding.EncodeToString(hash([]byte("helloworld"))), 10, testPubKeys, "0.14.0")
-	} else {
-		keysignReq = keysign.NewRequest(poolPubKey, base64.StdEncoding.EncodeToString(hash([]byte("helloworld"))), 10, testPubKeys, "0.13.0")
-	}
+	keysignReq = keysign.NewRequest(poolPubKey, base64.StdEncoding.EncodeToString(hash([]byte("helloworld"))), 10, testPubKeys, ver)
+
 	keysignResult := make(map[int]keysign.Response)
 	for i := 0; i < partyNum; i++ {
 		wg.Add(1)
@@ -198,11 +193,7 @@ func (s *FourNodeTestSuite) doTestKeygenAndKeySign(c *C, newJoinParty bool) {
 		}
 		c.Assert(signature, Equals, item.S+item.R)
 	}
-	if newJoinParty {
-		keysignReq = keysign.NewRequest(poolPubKey, base64.StdEncoding.EncodeToString(hash([]byte("helloworld"))), 10, nil, "0.14.0")
-	} else {
-		keysignReq = keysign.NewRequest(poolPubKey, base64.StdEncoding.EncodeToString(hash([]byte("helloworld"))), 10, testPubKeys[:3], "0.13.0")
-	}
+	keysignReq = keysign.NewRequest(poolPubKey, base64.StdEncoding.EncodeToString(hash([]byte("helloworld"))), 10, testPubKeys[:3], ver)
 	keysignResult1 := make(map[int]keysign.Response)
 	for i := 0; i < partyNum; i++ {
 		wg.Add(1)
@@ -226,18 +217,26 @@ func (s *FourNodeTestSuite) doTestKeygenAndKeySign(c *C, newJoinParty bool) {
 	}
 }
 
-func (s *FourNodeTestSuite) doTestFailJoinParty(c *C, newJoinParty bool) {
+func (s *FourNodeTestSuite) doTestFailJoinParty(c *C, ver string) {
 	// JoinParty should fail if there is a node that suppose to be in the keygen , but we didn't send request in
 	var req keygen.Request
-	if newJoinParty {
-		req = keygen.NewRequest(testPubKeys, 10, "0.14.0")
-	} else {
-		req = keygen.NewRequest(testPubKeys, 10, "0.13.0")
+	var blockHeight int64
+	switch ver {
+	case "0.13.0":
+		blockHeight = 10
+	case "0.14.0":
+		blockHeight = 11
+	case "0.15.0":
+		blockHeight = 12
 	}
+	req = keygen.NewRequest(testPubKeys, blockHeight, ver)
 	wg := sync.WaitGroup{}
 	lock := &sync.Mutex{}
 	keygenResult := make(map[int]keygen.Response)
 	// here we skip the first node
+	if ver == "0.14.0" || ver == "0.15.0" {
+		s.servers[2].conf.PartyTimeout = 10
+	}
 	for i := 1; i < partyNum; i++ {
 		wg.Add(1)
 		go func(idx int) {
@@ -255,27 +254,25 @@ func (s *FourNodeTestSuite) doTestFailJoinParty(c *C, newJoinParty bool) {
 	for _, item := range keygenResult {
 		c.Assert(item.PubKey, Equals, "")
 		c.Assert(item.Status, Equals, common.Fail)
-		var expectedFailNode string
-		if newJoinParty {
+		if ver == messages.NEWJOINPARTYVERSION {
 			c.Assert(item.Blame.BlameNodes, HasLen, 2)
-			expectedFailNode := []string{"thorpub1addwnpepqtdklw8tf3anjz7nn5fly3uvq2e67w2apn560s4smmrt9e3x52nt2svmmu3", "thorpub1addwnpepq2ryyje5zr09lq7gqptjwnxqsy2vcdngvwd6z7yt5yjcnyj8c8cn559xe69"}
+			expectedFailNode := []string{"thorpub1addwnpepqtdklw8tf3anjz7nn5fly3uvq2e67w2apn560s4smmrt9e3x52nt2svmmu3", "thorpub1addwnpepqfjcw5l4ay5t00c32mmlky7qrppepxzdlkcwfs2fd5u73qrwna0vzag3y4j"}
 			c.Assert(item.Blame.BlameNodes[0].Pubkey, Equals, expectedFailNode[0])
 			c.Assert(item.Blame.BlameNodes[1].Pubkey, Equals, expectedFailNode[1])
+			return
 		} else {
+			c.Assert(item.Blame.BlameNodes, HasLen, 1)
+			var expectedFailNode string
 			expectedFailNode = "thorpub1addwnpepqtdklw8tf3anjz7nn5fly3uvq2e67w2apn560s4smmrt9e3x52nt2svmmu3"
 			c.Assert(item.Blame.BlameNodes[0].Pubkey, Equals, expectedFailNode)
 		}
 	}
 }
 
-func (s *FourNodeTestSuite) doTestBlame(c *C, newJoinParty bool) {
+func (s *FourNodeTestSuite) doTestBlame(c *C) {
 	expectedFailNode := "thorpub1addwnpepqtdklw8tf3anjz7nn5fly3uvq2e67w2apn560s4smmrt9e3x52nt2svmmu3"
 	var req keygen.Request
-	if newJoinParty {
-		req = keygen.NewRequest(testPubKeys, 10, "0.14.0")
-	} else {
-		req = keygen.NewRequest(testPubKeys, 10, "0.13.0")
-	}
+	req = keygen.NewRequest(testPubKeys, 10, "0.13.0")
 	wg := sync.WaitGroup{}
 	lock := &sync.Mutex{}
 	keygenResult := make(map[int]keygen.Response)
@@ -291,8 +288,7 @@ func (s *FourNodeTestSuite) doTestBlame(c *C, newJoinParty bool) {
 		}(i)
 	}
 	// if we shutdown one server during keygen , he should be blamed
-
-	time.Sleep(time.Millisecond * 100)
+	time.Sleep(time.Millisecond * 200)
 	s.servers[0].Stop()
 	defer func() {
 		conf := common.TssConfig{
@@ -300,9 +296,8 @@ func (s *FourNodeTestSuite) doTestBlame(c *C, newJoinParty bool) {
 			KeySignTimeout:  60 * time.Second,
 			PreParamTimeout: 5 * time.Second,
 		}
-		s.servers[0] = s.getTssServer(c, 0, conf, s.bootstrapPeer)
+		s.servers[0] = s.getTssServer(c, 0, conf, "")
 		c.Assert(s.servers[0].Start(), IsNil)
-		c.Log("we start the first server again")
 	}()
 	wg.Wait()
 	c.Logf("result:%+v", keygenResult)

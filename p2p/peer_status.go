@@ -10,17 +10,23 @@ import (
 )
 
 type PeerStatus struct {
-	peersResponse  map[peer.ID]bool
-	peerStatusLock *sync.RWMutex
-	notify         chan bool
-	newFound       chan bool
-	leaderResponse *messages.JoinPartyLeaderComm
-	leader         string
-	threshold      int
-	reqCount       int
+	peersResponse           map[peer.ID]bool
+	peerStatusLock          *sync.RWMutex
+	notify                  chan string
+	newFound                chan bool
+	leaderResponse          *messages.JoinPartyLeaderComm
+	leaderResponseBroadcast *messages.JoinPartyLeaderCommBroadcast
+	leader                  string
+	threshold               int
+	waitingThreshold        int
+	reqCount                int
+	peerSigs                []*SigPack
+	msgID                   string
+	responseMsgMap          map[string]string
+	hasForwarded            bool
 }
 
-func NewPeerStatus(peerNodes []peer.ID, myPeerID peer.ID, leader string, threshold int) *PeerStatus {
+func NewPeerStatus(msgID string, peerNodes []peer.ID, myPeerID peer.ID, leader string, threshold, waitingThreshold int) *PeerStatus {
 	dat := make(map[peer.ID]bool)
 	for _, el := range peerNodes {
 		if el == myPeerID {
@@ -29,13 +35,18 @@ func NewPeerStatus(peerNodes []peer.ID, myPeerID peer.ID, leader string, thresho
 		dat[el] = false
 	}
 	peerStatus := &PeerStatus{
-		peersResponse:  dat,
-		peerStatusLock: &sync.RWMutex{},
-		notify:         make(chan bool, len(peerNodes)),
-		newFound:       make(chan bool, len(peerNodes)),
-		leader:         leader,
-		threshold:      threshold,
-		reqCount:       0,
+		peersResponse:    dat,
+		peerStatusLock:   &sync.RWMutex{},
+		notify:           make(chan string, 1),
+		newFound:         make(chan bool, len(peerNodes)),
+		leader:           leader,
+		threshold:        threshold,
+		waitingThreshold: waitingThreshold,
+		reqCount:         0,
+		peerSigs:         nil,
+		msgID:            msgID,
+		responseMsgMap:   make(map[string]string),
+		hasForwarded:     false,
 	}
 	return peerStatus
 }
@@ -43,6 +54,22 @@ func NewPeerStatus(peerNodes []peer.ID, myPeerID peer.ID, leader string, thresho
 func (ps *PeerStatus) getCoordinationStatus() bool {
 	_, offline := ps.getPeersStatus()
 	return len(offline) == 0
+}
+
+func (ps *PeerStatus) storeSignatures(signature []*SigPack) {
+	ps.peerStatusLock.Lock()
+	defer ps.peerStatusLock.Unlock()
+	ps.peerSigs = append(ps.peerSigs, signature[:]...)
+}
+
+func (ps *PeerStatus) getSignatures() []*SigPack {
+	ps.peerStatusLock.Lock()
+	defer ps.peerStatusLock.Unlock()
+	retVal := make([]*SigPack, len(ps.peerSigs))
+	copy(retVal, ps.peerSigs)
+	// drop the previous storage
+	ps.peerSigs = nil
+	return retVal
 }
 
 func (ps *PeerStatus) getPeersStatus() ([]peer.ID, []peer.ID) {

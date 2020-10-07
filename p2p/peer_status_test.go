@@ -37,7 +37,7 @@ func (s *PeerStatusTestSuite) TestPeerStatus(c *C) {
 	peers := generateRandomPeers(c, 5)
 	sortPeers(peers)
 
-	peerStatus := NewPeerStatus(peers, peers[0], peers[0].String(), 2)
+	peerStatus := NewPeerStatus("12", peers, peers[0], peers[0].String(), 2, 0)
 
 	ret, err := peerStatus.updatePeer(peers[2])
 	c.Assert(err, IsNil)

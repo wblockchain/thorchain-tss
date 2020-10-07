@@ -9,6 +9,7 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/libp2p/go-libp2p-core/crypto"
+	ic "github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	tcrypto "github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/crypto/secp256k1"
@@ -68,22 +69,31 @@ func GetPubKeysFromPeerIDs(peers []string) ([]string, error) {
 }
 
 // GetPubKeyFromPeerID extract the pub key from PeerID
-func GetPubKeyFromPeerID(pID string) (string, error) {
+func GetP2PPubKeyFromPeerID(pID string) (ic.PubKey, error) {
 	peerID, err := peer.Decode(pID)
 	if err != nil {
-		return "", fmt.Errorf("fail to decode peer id: %w", err)
+		return nil, fmt.Errorf("fail to decode peer id: %w", err)
 	}
 	pk, err := peerID.ExtractPublicKey()
 	if err != nil {
-		return "", fmt.Errorf("fail to extract pub key from peer id: %w", err)
+		return nil, err
 	}
-	rawBytes, err := pk.Raw()
+	return pk, nil
+}
+
+// GetPubKeyFromPeerID extract the pub key from PeerID
+func GetPubKeyFromPeerID(pID string) (string, error) {
+	pk, err := GetP2PPubKeyFromPeerID(pID)
 	if err != nil {
-		return "", fmt.Errorf("faail to get pub key raw bytes: %w", err)
+		return "", fmt.Errorf("fail to get p2p pub key : %w", err)
 	}
-	var pubkey secp256k1.PubKeySecp256k1
-	copy(pubkey[:], rawBytes)
-	return sdk.Bech32ifyPubKey(sdk.Bech32PubKeyTypeAccPub, pubkey)
+	rawKey, err := pk.Raw()
+	if err != nil {
+		return "", fmt.Errorf("fail to get pub key raw bytes: %w", err)
+	}
+	var pubKey secp256k1.PubKeySecp256k1
+	copy(pubKey[:], rawKey)
+	return sdk.Bech32ifyPubKey(sdk.Bech32PubKeyTypeAccPub, pubKey)
 }
 
 func GetPriKey(priKeyString string) (tcrypto.PrivKey, error) {

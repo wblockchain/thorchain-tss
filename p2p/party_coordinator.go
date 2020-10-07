@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -53,6 +54,7 @@ func NewPartyCoordinator(host host.Host, timeout time.Duration) *PartyCoordinato
 	}
 	host.SetStreamHandler(joinPartyProtocol, pc.HandleStream)
 	host.SetStreamHandler(joinPartyProtocolWithLeader, pc.HandleStreamWithLeader)
+	host.SetStreamHandler(joinPartyProtocolWithLeaderBroadcast, pc.HandleStreamWithLeaderBroadcast)
 	return pc
 }
 
@@ -63,10 +65,7 @@ func (pc *PartyCoordinator) Stop() {
 	close(pc.stopChan)
 }
 
-func (pc *PartyCoordinator) processRespMsg(respMsg *messages.JoinPartyLeaderComm, stream network.Stream) {
-	pc.streamMgr.AddStream(respMsg.ID, stream)
-
-	remotePeer := stream.Conn().RemotePeer().String()
+func (pc *PartyCoordinator) processRespMsg(respMsg *messages.JoinPartyLeaderComm, stream network.Stream, remotePeer string) {
 	pc.joinPartyGroupLock.Lock()
 	peerGroup, ok := pc.peersGroup[respMsg.ID]
 	pc.joinPartyGroupLock.Unlock()
@@ -76,12 +75,7 @@ func (pc *PartyCoordinator) processRespMsg(respMsg *messages.JoinPartyLeaderComm
 	}
 	if remotePeer == peerGroup.leader {
 		peerGroup.leaderResponse = respMsg
-		peerGroup.notify <- true
-		err := WriteStreamWithBuffer([]byte("done"), stream)
-		if err != nil {
-			pc.logger.Error().Err(err).Msgf("fail to write the reply to peer: %s", remotePeer)
-			return
-		}
+		peerGroup.notify <- "taskDone"
 	} else {
 		pc.logger.Info().Msgf("this party(%s) is not the leader(%s) as expected", remotePeer, peerGroup.leader)
 	}
@@ -89,7 +83,6 @@ func (pc *PartyCoordinator) processRespMsg(respMsg *messages.JoinPartyLeaderComm
 }
 
 func (pc *PartyCoordinator) processReqMsg(requestMsg *messages.JoinPartyLeaderComm, stream network.Stream) {
-	pc.streamMgr.AddStream(requestMsg.ID, stream)
 	pc.joinPartyGroupLock.Lock()
 	peerGroup, ok := pc.peersGroup[requestMsg.ID]
 	pc.joinPartyGroupLock.Unlock()
@@ -104,8 +97,35 @@ func (pc *PartyCoordinator) processReqMsg(requestMsg *messages.JoinPartyLeaderCo
 		return
 	}
 	if partyFormed {
-		peerGroup.notify <- true
+		peerGroup.notify <- "taskDone"
 	}
+}
+
+func (pc *PartyCoordinator) getRequestPeers(msgID string, marshaledSignatures []byte) []peer.ID {
+	var signatures []*SigPack
+	var verifiedPeers []peer.ID
+	err := json.Unmarshal(marshaledSignatures, &signatures)
+	if err != nil {
+		pc.logger.Error().Err(err).Msg("fail to unmarshal the signature data")
+		return nil
+	}
+	for _, el := range signatures {
+		pid := el.PeerID
+		sig := el.Sig
+		pk, err := conversion.GetP2PPubKeyFromPeerID(pid.String())
+		if err != nil {
+			pc.logger.Error().Err(err).Msg("fail to convert the peerID to public key")
+			continue
+		}
+
+		ret, err := pk.Verify([]byte(msgID), sig)
+		if ret {
+			verifiedPeers = append(verifiedPeers, el.PeerID)
+			continue
+		}
+		pc.logger.Error().Err(err).Msgf("fail to verify the request signature of peer %s skipped", el.PeerID.String())
+	}
+	return verifiedPeers
 }
 
 func (pc *PartyCoordinator) HandleStream(stream network.Stream) {
@@ -118,13 +138,14 @@ func (pc *PartyCoordinator) HandleStream(stream network.Stream) {
 		pc.streamMgr.AddStream("UNKNOWN", stream)
 		return
 	}
+
 	var msg messages.JoinPartyRequest
 	if err := proto.Unmarshal(payload, &msg); err != nil {
 		logger.Err(err).Msg("fail to unmarshal join party request")
 		pc.streamMgr.AddStream("UNKNOWN", stream)
 		return
 	}
-	pc.streamMgr.AddStream(msg.ID, stream)
+	defer pc.streamMgr.AddStream(msg.ID, stream)
 	pc.joinPartyGroupLock.Lock()
 	peerGroup, ok := pc.peersGroup[msg.ID]
 	pc.joinPartyGroupLock.Unlock()
@@ -168,12 +189,15 @@ func (pc *PartyCoordinator) HandleStreamWithLeader(stream network.Stream) {
 		pc.streamMgr.AddStream("UNKNOWN", stream)
 		return
 	}
+
+	defer pc.streamMgr.AddStream(msg.ID, stream)
 	switch msg.MsgType {
 	case "request":
 		pc.processReqMsg(&msg, stream)
 		return
 	case "response":
-		pc.processRespMsg(&msg, stream)
+		remotePeer = stream.Conn().RemotePeer()
+		pc.processRespMsg(&msg, stream, remotePeer.String())
 		err := WriteStreamWithBuffer([]byte("done"), stream)
 		if err != nil {
 			pc.logger.Error().Err(err).Msgf("fail to send response to leader")
@@ -181,7 +205,6 @@ func (pc *PartyCoordinator) HandleStreamWithLeader(stream network.Stream) {
 		return
 	default:
 		logger.Err(err).Msg("fail to process this message")
-		pc.streamMgr.AddStream("UNKNOWN", stream)
 		return
 	}
 }
@@ -198,9 +221,14 @@ func (pc *PartyCoordinator) createJoinPartyGroups(messageID, leader string, peer
 		pc.logger.Error().Err(err).Msg("fail to parse peer id")
 		return nil, err
 	}
+	waitingThreshold, err := conversion.GetThreshold(threshold + 1)
+	if err != nil {
+		pc.logger.Error().Err(err).Msg("fail to calculte the threshold")
+		return nil, err
+	}
 	pc.joinPartyGroupLock.Lock()
 	defer pc.joinPartyGroupLock.Unlock()
-	peerStatus := NewPeerStatus(pIDs, pc.host.ID(), leader, threshold)
+	peerStatus := NewPeerStatus(messageID, pIDs, pc.host.ID(), leader, threshold, waitingThreshold)
 	pc.peersGroup[messageID] = peerStatus
 	return peerStatus, nil
 }
@@ -217,13 +245,7 @@ func (pc *PartyCoordinator) getPeerIDs(ids []string) ([]peer.ID, error) {
 	return result, nil
 }
 
-func (pc *PartyCoordinator) sendResponseToAll(msg *messages.JoinPartyLeaderComm, peers []peer.ID) {
-	msg.MsgType = "response"
-	msgSend, err := proto.Marshal(msg)
-	if err != nil {
-		pc.logger.Error().Msg("fail to marshal the message")
-		return
-	}
+func (pc *PartyCoordinator) sendResponseToAll(msgSend []byte, msgID string, peers []peer.ID, p2pProtocol protocol.ID) {
 	var wg sync.WaitGroup
 	wg.Add(len(peers))
 	for _, el := range peers {
@@ -232,7 +254,7 @@ func (pc *PartyCoordinator) sendResponseToAll(msg *messages.JoinPartyLeaderComm,
 			if peer == pc.host.ID() {
 				return
 			}
-			if err := pc.sendMsgToPeer(msgSend, msg.ID, peer, joinPartyProtocolWithLeader, true); err != nil {
+			if err := pc.sendMsgToPeer(msgSend, msgID, peer, p2pProtocol, true); err != nil {
 				pc.logger.Error().Err(err).Msg("error in send the join party request to peer")
 			}
 		}(el)
@@ -311,14 +333,13 @@ func (pc *PartyCoordinator) sendMsgToPeer(msgBuf []byte, msgID string, remotePee
 	if err != nil {
 		return fmt.Errorf("fail to write message to stream:%w", err)
 	}
-
-	if needResponse {
+	// we need to check applydeadline here as the unicast do not support tss
+	if needResponse && ApplyDeadline {
 		_, err := ReadStreamWithBuffer(stream)
 		if err != nil {
-			pc.logger.Error().Err(err).Msgf("fail to get the ")
+			pc.logger.Error().Err(err).Msgf("fail to get the response from peer %s\n", remotePeer)
 		}
 	}
-
 	return nil
 }
 
@@ -363,11 +384,11 @@ func (pc *PartyCoordinator) joinPartyMember(msgID string, leader string, thresho
 		// now we wait for the leader to notify us who we do the keygen/keysign with
 		select {
 		case <-peerGroup.notify:
-			pc.logger.Debug().Msg("we have receive the response from the leader")
+			pc.logger.Debug().Msg("we have received the response from the leader")
 			close(done)
 			return
 
-		case <-time.After(pc.timeout):
+		case <-time.After(pc.timeout + time.Second*2):
 			// timeout
 			close(done)
 			pc.logger.Error().Msg("the leader has not reply us")
@@ -411,7 +432,53 @@ func (pc *PartyCoordinator) joinPartyMember(msgID string, leader string, thresho
 	return pIDs, ErrJoinPartyTimeout
 }
 
-func (pc *PartyCoordinator) joinPartyLeader(msgID string, peers []string, threshold int, sigChan chan string) ([]peer.ID, error) {
+func (pc *PartyCoordinator) sendToPeers(msgID string, sig []byte, threshold int, tssNodes []string, allPeers []peer.ID, p2pProtocol protocol.ID) error {
+	var sendData []byte
+	var err error
+	signature := SigPack{
+		PeerID: pc.host.ID(),
+		Sig:    sig,
+	}
+	sigBytes, err := json.Marshal([]*SigPack{&signature})
+	if err != nil {
+		return errors.New("leader fail to create the signature")
+	}
+	if p2pProtocol == joinPartyProtocolWithLeaderBroadcast {
+		msg := messages.JoinPartyLeaderCommBroadcast{
+			ID:                msgID,
+			Type:              messages.JoinPartyLeaderCommBroadcast_Success,
+			PeerIDs:           tssNodes,
+			MsgType:           "response",
+			ForwardSignatures: sigBytes,
+		}
+
+		if len(tssNodes) < threshold+1 {
+			msg.Type = messages.JoinPartyLeaderCommBroadcast_Timeout
+		}
+		sendData, err = proto.Marshal(&msg)
+		if err != nil {
+			return err
+		}
+	} else {
+		msg := messages.JoinPartyLeaderComm{
+			ID:      msgID,
+			Type:    messages.JoinPartyLeaderComm_Success,
+			PeerIDs: tssNodes,
+			MsgType: "response",
+		}
+		if len(tssNodes) < threshold+1 {
+			msg.Type = messages.JoinPartyLeaderComm_Timeout
+		}
+		sendData, err = proto.Marshal(&msg)
+		if err != nil {
+			return err
+		}
+	}
+	pc.sendResponseToAll(sendData, msgID, allPeers, p2pProtocol)
+	return nil
+}
+
+func (pc *PartyCoordinator) joinPartyLeader(msgID string, sig []byte, peers []string, threshold int, sigChan chan string, p2pProtocol protocol.ID) ([]peer.ID, error) {
 	peerGroup, err := pc.createJoinPartyGroups(msgID, pc.host.ID().String(), peers, threshold)
 	if err != nil {
 		pc.logger.Error().Err(err).Msg("fail to create the join party group")
@@ -454,37 +521,96 @@ func (pc *PartyCoordinator) joinPartyLeader(msgID string, peers []string, thresh
 	for i, el := range onlinePeers {
 		tssNodes[i] = el.String()
 	}
-
-	msg := messages.JoinPartyLeaderComm{
-		ID:      msgID,
-		Type:    messages.JoinPartyLeaderComm_Success,
-		PeerIDs: tssNodes,
-	}
-	// we put ourselves(leader) in the online list, so need threshold +1
-	if len(onlinePeers) < threshold+1 {
-		// we notify the failure of the join party to everyone
-		msg.Type = messages.JoinPartyLeaderComm_Timeout
-		pc.sendResponseToAll(&msg, allPeers)
+	err = pc.sendToPeers(msgID, sig, threshold, tssNodes, allPeers, p2pProtocol)
+	if err != nil {
+		pc.logger.Error().Err(err).Msg("fail to send response to peers")
 		return onlinePeers, ErrJoinPartyTimeout
 	}
-	// we notify all the peers who to run keygen/keysign
-	// if a nodes is not in the list, it means he is not selected by the leader to run the tss
-	pc.sendResponseToAll(&msg, allPeers)
+	if len(tssNodes) < threshold+1 {
+		return onlinePeers, ErrJoinPartyTimeout
+	}
+
 	return onlinePeers, nil
 }
 
-func (pc *PartyCoordinator) JoinPartyWithLeader(msgID string, blockHeight int64, peers []string, threshold int, signChan chan string) ([]peer.ID, string, error) {
+func (pc *PartyCoordinator) JoinPartyWithLeader(msgID string, sig []byte, blockHeight int64, peers []string, threshold int, signChan chan string, isBroadcast bool) ([]peer.ID, string, error) {
+	var onlines []peer.ID
+	var err error
 	leader, err := LeaderNode(msgID, blockHeight, peers)
 	if err != nil {
 		return nil, "", err
 	}
 	if pc.host.ID().String() == leader {
-		onlines, err := pc.joinPartyLeader(msgID, peers, threshold, signChan)
+		var joinPartyProtocol protocol.ID
+		if isBroadcast {
+			pc.logger.Info().Msg("we(leader) apply broadcast join party.")
+			joinPartyProtocol = joinPartyProtocolWithLeaderBroadcast
+		} else {
+			joinPartyProtocol = joinPartyProtocolWithLeader
+		}
+		onlines, err := pc.joinPartyLeader(msgID, sig, peers, threshold, signChan, joinPartyProtocol)
 		return onlines, leader, err
 	}
 	// now we are just the normal peer
-	onlines, err := pc.joinPartyMember(msgID, leader, threshold, signChan)
-	return onlines, leader, err
+	if isBroadcast {
+		pc.logger.Info().Msg("we apply broadcast join party with a leader")
+		onlines, receivedBroadcast, err := pc.joinPartyMemberBroadcast(msgID, sig, leader, peers, threshold, signChan)
+		if err == nil {
+			return onlines, leader, err
+		} else {
+			// the following code is for the keygen blame, as keysign we always blame the leader given 2/3 honest node
+			// will always be online.
+			// for the broadcast join party, if a leader complain a node is offline, we need to check whether we have
+			// received the request of that node, if we have received that request, it indicates the leader or that
+			// node tells a lie. if the leader is malicious, so more than 2/3 nodes will blame him. if "that" node skip
+			// sending msg to me, while send to leader, it is fine, as the join party can still start. if he send skip
+			// the leader, I will forward this request to leader.
+			receivedBroadcast = append(receivedBroadcast, pc.host.ID())
+			var offlinePeers []string
+			for _, i := range peers {
+				found := false
+				for _, j := range onlines {
+					if i == j.String() {
+						found = true
+						break
+					}
+				}
+				if !found {
+					offlinePeers = append(offlinePeers, i)
+				}
+			}
+			// if we have the request of any of the offline nodes, we just make the leader to be blame in tss
+			found := false
+			for _, i := range offlinePeers {
+				for _, j := range receivedBroadcast {
+					if i == j.String() {
+						found = true
+						break
+					}
+				}
+			}
+			// we now create the online nodes to have the leader be blamed
+			if found {
+				var nodesWithoutLeader []peer.ID
+				for _, el := range peers {
+					if el != leader {
+						n, err := peer.Decode(el)
+						if err != nil {
+							pc.logger.Error().Err(err).Msg("fail to decode the peer ID")
+							continue
+						}
+						nodesWithoutLeader = append(nodesWithoutLeader, n)
+					}
+				}
+				return nodesWithoutLeader, leader, err
+			}
+			return onlines, leader, err
+		}
+	} else {
+		pc.logger.Info().Msg("we apply join party with a leader")
+		onlines, err = pc.joinPartyMember(msgID, leader, threshold, signChan)
+		return onlines, leader, err
+	}
 }
 
 // JoinPartyWithRetry this method provide the functionality to join party with retry and back off
@@ -526,7 +652,7 @@ func (pc *PartyCoordinator) JoinPartyWithRetry(msgID string, peers []string) ([]
 		defer wg.Done()
 		for {
 			select {
-			case <-peerGroup.notify:
+			case <-peerGroup.newFound:
 				pc.logger.Debug().Msg("we have found the new peer")
 				if peerGroup.getCoordinationStatus() {
 					close(done)
