@@ -1,14 +1,19 @@
 package conversion
 
 import (
+	"bytes"
 	"errors"
 	"math/rand"
 
 	"github.com/blang/semver"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	atypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	p2pcrypto "github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/crypto/secp256k1"
+
+	tcrypto "github.com/tendermint/tendermint/crypto"
 )
 
 // GetRandomPubKey for test
@@ -52,4 +57,36 @@ func VersionLTCheck(currentVer, expectedVer string) (bool, error) {
 		return false, errors.New("fail to parse the current version")
 	}
 	return v.LT(c), nil
+}
+
+// as we want to make the p2p signature verification independent from the tss, so we generate the signature
+// that suitable for the public key verification derived from the peer ID.
+func GenerateP2PSignature(privKey tcrypto.PrivKey, msg []byte) ([]byte, error) {
+	privKeyRaw, err := GetPriKeyRawBytes(privKey)
+	if err != nil {
+		return nil, err
+	}
+	p2pPriKey, err := p2pcrypto.UnmarshalSecp256k1PrivateKey(privKeyRaw)
+	if err != nil {
+		return nil, err
+	}
+	sig, err := p2pPriKey.Sign(msg)
+	if err != nil {
+		return nil, err
+	}
+	return sig, nil
+}
+
+func GenerateSignature(msg []byte, msgID string, privKey crypto.PrivKey) ([]byte, error) {
+	var dataForSigning bytes.Buffer
+	dataForSigning.Write(msg)
+	dataForSigning.WriteString(msgID)
+	return privKey.Sign(dataForSigning.Bytes())
+}
+
+func VerifySignature(pubKey crypto.PubKey, message, sig []byte, msgID string) bool {
+	var dataForSign bytes.Buffer
+	dataForSign.Write(message)
+	dataForSign.WriteString(msgID)
+	return pubKey.VerifyBytes(dataForSign.Bytes(), sig)
 }

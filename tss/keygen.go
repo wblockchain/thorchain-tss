@@ -49,9 +49,15 @@ func (t *TssServer) Keygen(req keygen.Request) (keygen.Response, error) {
 	sigChan := make(chan string)
 
 	blameMgr := keygenInstance.GetTssCommonStruct().GetBlameMgr()
-	onlinePeers, leader, errJoinParty := t.joinParty(msgID, req.Version, req.BlockHeight, req.Keys, len(req.Keys)-1, sigChan)
+
+	sig, err := conversion.GenerateP2PSignature(t.privateKey, []byte(msgID))
+	if err != nil {
+		t.logger.Error().Err(err).Msg("fail to get the signature for join party")
+		return keygen.Response{}, err
+	}
+	onlinePeers, leader, errJoinParty := t.joinParty(msgID, req.Version, sig, req.BlockHeight, req.Keys, len(req.Keys)-1, sigChan)
 	if errJoinParty != nil {
-		// this indicate we are processing the leaderness join party
+		// this indicate we are processing the leaderless join party
 		if leader == "NONE" {
 			if onlinePeers == nil {
 				t.logger.Error().Err(err).Msg("error before we start join party")

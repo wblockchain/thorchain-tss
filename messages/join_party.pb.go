@@ -80,6 +80,61 @@ func (JoinPartyLeaderComm_ResponseType) EnumDescriptor() ([]byte, []int) {
 	return file_join_party_proto_rawDescGZIP(), []int{1, 0}
 }
 
+type JoinPartyLeaderCommBroadcast_ResponseType int32
+
+const (
+	JoinPartyLeaderCommBroadcast_Unknown        JoinPartyLeaderCommBroadcast_ResponseType = 0
+	JoinPartyLeaderCommBroadcast_Success        JoinPartyLeaderCommBroadcast_ResponseType = 1
+	JoinPartyLeaderCommBroadcast_Timeout        JoinPartyLeaderCommBroadcast_ResponseType = 2
+	JoinPartyLeaderCommBroadcast_LeaderNotReady JoinPartyLeaderCommBroadcast_ResponseType = 3
+	JoinPartyLeaderCommBroadcast_UnknownPeer    JoinPartyLeaderCommBroadcast_ResponseType = 4
+)
+
+// Enum value maps for JoinPartyLeaderCommBroadcast_ResponseType.
+var (
+	JoinPartyLeaderCommBroadcast_ResponseType_name = map[int32]string{
+		0: "Unknown",
+		1: "Success",
+		2: "Timeout",
+		3: "LeaderNotReady",
+		4: "UnknownPeer",
+	}
+	JoinPartyLeaderCommBroadcast_ResponseType_value = map[string]int32{
+		"Unknown":        0,
+		"Success":        1,
+		"Timeout":        2,
+		"LeaderNotReady": 3,
+		"UnknownPeer":    4,
+	}
+)
+
+func (x JoinPartyLeaderCommBroadcast_ResponseType) Enum() *JoinPartyLeaderCommBroadcast_ResponseType {
+	p := new(JoinPartyLeaderCommBroadcast_ResponseType)
+	*p = x
+	return p
+}
+
+func (x JoinPartyLeaderCommBroadcast_ResponseType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (JoinPartyLeaderCommBroadcast_ResponseType) Descriptor() protoreflect.EnumDescriptor {
+	return file_join_party_proto_enumTypes[1].Descriptor()
+}
+
+func (JoinPartyLeaderCommBroadcast_ResponseType) Type() protoreflect.EnumType {
+	return &file_join_party_proto_enumTypes[1]
+}
+
+func (x JoinPartyLeaderCommBroadcast_ResponseType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use JoinPartyLeaderCommBroadcast_ResponseType.Descriptor instead.
+func (JoinPartyLeaderCommBroadcast_ResponseType) EnumDescriptor() ([]byte, []int) {
+	return file_join_party_proto_rawDescGZIP(), []int{2, 0}
+}
+
 type JoinPartyRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -133,7 +188,7 @@ type JoinPartyLeaderComm struct {
 	unknownFields protoimpl.UnknownFields
 
 	ID      string                           `protobuf:"bytes,1,opt,name=ID,proto3" json:"ID,omitempty"`                                                     // unique hash id
-	MsgType string                           `protobuf:"bytes,2,opt,name=MsgType,proto3" json:"MsgType,omitempty"`                                           // unique hash id
+	MsgType string                           `protobuf:"bytes,2,opt,name=MsgType,proto3" json:"MsgType,omitempty"`                                           // unique message type
 	Type    JoinPartyLeaderComm_ResponseType `protobuf:"varint,3,opt,name=type,proto3,enum=messages.JoinPartyLeaderComm_ResponseType" json:"type,omitempty"` // result
 	PeerIDs []string                         `protobuf:"bytes,4,rep,name=PeerIDs,proto3" json:"PeerIDs,omitempty"`                                           // if Success , this will be the list of peers to form the ceremony, if fail , this will be the peers that are available
 }
@@ -198,6 +253,85 @@ func (x *JoinPartyLeaderComm) GetPeerIDs() []string {
 	return nil
 }
 
+type JoinPartyLeaderCommBroadcast struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	ID                string                                    `protobuf:"bytes,1,opt,name=ID,proto3" json:"ID,omitempty"`                                                              // unique hash id
+	MsgType           string                                    `protobuf:"bytes,2,opt,name=MsgType,proto3" json:"MsgType,omitempty"`                                                    // unique message type
+	ForwardSignatures []byte                                    `protobuf:"bytes,3,opt,name=ForwardSignatures,proto3" json:"ForwardSignatures,omitempty"`                                // signature of the given message
+	Type              JoinPartyLeaderCommBroadcast_ResponseType `protobuf:"varint,4,opt,name=type,proto3,enum=messages.JoinPartyLeaderCommBroadcast_ResponseType" json:"type,omitempty"` // result
+	PeerIDs           []string                                  `protobuf:"bytes,5,rep,name=PeerIDs,proto3" json:"PeerIDs,omitempty"`                                                    // if Success , this will be the list of peers to form the ceremony, if fail , this will be the peers that are available
+}
+
+func (x *JoinPartyLeaderCommBroadcast) Reset() {
+	*x = JoinPartyLeaderCommBroadcast{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_join_party_proto_msgTypes[2]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *JoinPartyLeaderCommBroadcast) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*JoinPartyLeaderCommBroadcast) ProtoMessage() {}
+
+func (x *JoinPartyLeaderCommBroadcast) ProtoReflect() protoreflect.Message {
+	mi := &file_join_party_proto_msgTypes[2]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use JoinPartyLeaderCommBroadcast.ProtoReflect.Descriptor instead.
+func (*JoinPartyLeaderCommBroadcast) Descriptor() ([]byte, []int) {
+	return file_join_party_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *JoinPartyLeaderCommBroadcast) GetID() string {
+	if x != nil {
+		return x.ID
+	}
+	return ""
+}
+
+func (x *JoinPartyLeaderCommBroadcast) GetMsgType() string {
+	if x != nil {
+		return x.MsgType
+	}
+	return ""
+}
+
+func (x *JoinPartyLeaderCommBroadcast) GetForwardSignatures() []byte {
+	if x != nil {
+		return x.ForwardSignatures
+	}
+	return nil
+}
+
+func (x *JoinPartyLeaderCommBroadcast) GetType() JoinPartyLeaderCommBroadcast_ResponseType {
+	if x != nil {
+		return x.Type
+	}
+	return JoinPartyLeaderCommBroadcast_Unknown
+}
+
+func (x *JoinPartyLeaderCommBroadcast) GetPeerIDs() []string {
+	if x != nil {
+		return x.PeerIDs
+	}
+	return nil
+}
+
 var File_join_party_proto protoreflect.FileDescriptor
 
 var file_join_party_proto_rawDesc = []byte{
@@ -220,10 +354,30 @@ var file_join_party_proto_rawDesc = []byte{
 	0x63, 0x65, 0x73, 0x73, 0x10, 0x01, 0x12, 0x0b, 0x0a, 0x07, 0x54, 0x69, 0x6d, 0x65, 0x6f, 0x75,
 	0x74, 0x10, 0x02, 0x12, 0x12, 0x0a, 0x0e, 0x4c, 0x65, 0x61, 0x64, 0x65, 0x72, 0x4e, 0x6f, 0x74,
 	0x52, 0x65, 0x61, 0x64, 0x79, 0x10, 0x03, 0x12, 0x0f, 0x0a, 0x0b, 0x55, 0x6e, 0x6b, 0x6e, 0x6f,
-	0x77, 0x6e, 0x50, 0x65, 0x65, 0x72, 0x10, 0x04, 0x42, 0x2a, 0x5a, 0x28, 0x67, 0x69, 0x74, 0x6c,
-	0x61, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x74, 0x68, 0x6f, 0x72, 0x63, 0x68, 0x61, 0x69, 0x6e,
-	0x2f, 0x74, 0x73, 0x73, 0x2f, 0x67, 0x6f, 0x2d, 0x74, 0x73, 0x73, 0x2f, 0x6d, 0x65, 0x73, 0x73,
-	0x61, 0x67, 0x65, 0x73, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x77, 0x6e, 0x50, 0x65, 0x65, 0x72, 0x10, 0x04, 0x22, 0xb5, 0x02, 0x0a, 0x1c, 0x4a, 0x6f, 0x69,
+	0x6e, 0x50, 0x61, 0x72, 0x74, 0x79, 0x4c, 0x65, 0x61, 0x64, 0x65, 0x72, 0x43, 0x6f, 0x6d, 0x6d,
+	0x42, 0x72, 0x6f, 0x61, 0x64, 0x63, 0x61, 0x73, 0x74, 0x12, 0x0e, 0x0a, 0x02, 0x49, 0x44, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x49, 0x44, 0x12, 0x18, 0x0a, 0x07, 0x4d, 0x73, 0x67,
+	0x54, 0x79, 0x70, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x4d, 0x73, 0x67, 0x54,
+	0x79, 0x70, 0x65, 0x12, 0x2c, 0x0a, 0x11, 0x46, 0x6f, 0x72, 0x77, 0x61, 0x72, 0x64, 0x53, 0x69,
+	0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x73, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x11,
+	0x46, 0x6f, 0x72, 0x77, 0x61, 0x72, 0x64, 0x53, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65,
+	0x73, 0x12, 0x47, 0x0a, 0x04, 0x74, 0x79, 0x70, 0x65, 0x18, 0x04, 0x20, 0x01, 0x28, 0x0e, 0x32,
+	0x33, 0x2e, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x73, 0x2e, 0x4a, 0x6f, 0x69, 0x6e, 0x50,
+	0x61, 0x72, 0x74, 0x79, 0x4c, 0x65, 0x61, 0x64, 0x65, 0x72, 0x43, 0x6f, 0x6d, 0x6d, 0x42, 0x72,
+	0x6f, 0x61, 0x64, 0x63, 0x61, 0x73, 0x74, 0x2e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
+	0x54, 0x79, 0x70, 0x65, 0x52, 0x04, 0x74, 0x79, 0x70, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x50, 0x65,
+	0x65, 0x72, 0x49, 0x44, 0x73, 0x18, 0x05, 0x20, 0x03, 0x28, 0x09, 0x52, 0x07, 0x50, 0x65, 0x65,
+	0x72, 0x49, 0x44, 0x73, 0x22, 0x5a, 0x0a, 0x0c, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
+	0x54, 0x79, 0x70, 0x65, 0x12, 0x0b, 0x0a, 0x07, 0x55, 0x6e, 0x6b, 0x6e, 0x6f, 0x77, 0x6e, 0x10,
+	0x00, 0x12, 0x0b, 0x0a, 0x07, 0x53, 0x75, 0x63, 0x63, 0x65, 0x73, 0x73, 0x10, 0x01, 0x12, 0x0b,
+	0x0a, 0x07, 0x54, 0x69, 0x6d, 0x65, 0x6f, 0x75, 0x74, 0x10, 0x02, 0x12, 0x12, 0x0a, 0x0e, 0x4c,
+	0x65, 0x61, 0x64, 0x65, 0x72, 0x4e, 0x6f, 0x74, 0x52, 0x65, 0x61, 0x64, 0x79, 0x10, 0x03, 0x12,
+	0x0f, 0x0a, 0x0b, 0x55, 0x6e, 0x6b, 0x6e, 0x6f, 0x77, 0x6e, 0x50, 0x65, 0x65, 0x72, 0x10, 0x04,
+	0x42, 0x2a, 0x5a, 0x28, 0x67, 0x69, 0x74, 0x6c, 0x61, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x74,
+	0x68, 0x6f, 0x72, 0x63, 0x68, 0x61, 0x69, 0x6e, 0x2f, 0x74, 0x73, 0x73, 0x2f, 0x67, 0x6f, 0x2d,
+	0x74, 0x73, 0x73, 0x2f, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x73, 0x62, 0x06, 0x70, 0x72,
+	0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -238,20 +392,23 @@ func file_join_party_proto_rawDescGZIP() []byte {
 	return file_join_party_proto_rawDescData
 }
 
-var file_join_party_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_join_party_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_join_party_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_join_party_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_join_party_proto_goTypes = []interface{}{
-	(JoinPartyLeaderComm_ResponseType)(0), // 0: messages.JoinPartyLeaderComm.ResponseType
-	(*JoinPartyRequest)(nil),              // 1: messages.JoinPartyRequest
-	(*JoinPartyLeaderComm)(nil),           // 2: messages.JoinPartyLeaderComm
+	(JoinPartyLeaderComm_ResponseType)(0),          // 0: messages.JoinPartyLeaderComm.ResponseType
+	(JoinPartyLeaderCommBroadcast_ResponseType)(0), // 1: messages.JoinPartyLeaderCommBroadcast.ResponseType
+	(*JoinPartyRequest)(nil),                       // 2: messages.JoinPartyRequest
+	(*JoinPartyLeaderComm)(nil),                    // 3: messages.JoinPartyLeaderComm
+	(*JoinPartyLeaderCommBroadcast)(nil),           // 4: messages.JoinPartyLeaderCommBroadcast
 }
 var file_join_party_proto_depIdxs = []int32{
 	0, // 0: messages.JoinPartyLeaderComm.type:type_name -> messages.JoinPartyLeaderComm.ResponseType
-	1, // [1:1] is the sub-list for method output_type
-	1, // [1:1] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	1, // 1: messages.JoinPartyLeaderCommBroadcast.type:type_name -> messages.JoinPartyLeaderCommBroadcast.ResponseType
+	2, // [2:2] is the sub-list for method output_type
+	2, // [2:2] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_join_party_proto_init() }
@@ -284,14 +441,26 @@ func file_join_party_proto_init() {
 				return nil
 			}
 		}
+		file_join_party_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*JoinPartyLeaderCommBroadcast); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_join_party_proto_rawDesc,
-			NumEnums:      1,
-			NumMessages:   2,
+			NumEnums:      2,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -82,7 +82,7 @@ func TestPartyCoordinator(t *testing.T) {
 func TestPartyCoordinatorTimeOut(t *testing.T) {
 	ApplyDeadline = false
 	timeout := time.Second
-	hosts := setupHosts(t, 4)
+	hosts, _ := setupHosts(t, 4)
 	var pcs []*PartyCoordinator
 	var peers []string
 	for _, el := range hosts {

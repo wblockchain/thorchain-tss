@@ -18,6 +18,7 @@ type PeerStatus struct {
 	leader         string
 	threshold      int
 	reqCount       int
+	peerSigs       []*SigPack
 }
 
 func NewPeerStatus(peerNodes []peer.ID, myPeerID peer.ID, leader string, threshold int) *PeerStatus {
@@ -36,6 +37,7 @@ func NewPeerStatus(peerNodes []peer.ID, myPeerID peer.ID, leader string, thresho
 		leader:         leader,
 		threshold:      threshold,
 		reqCount:       0,
+		peerSigs:       nil,
 	}
 	return peerStatus
 }
@@ -43,6 +45,22 @@ func NewPeerStatus(peerNodes []peer.ID, myPeerID peer.ID, leader string, thresho
 func (ps *PeerStatus) getCoordinationStatus() bool {
 	_, offline := ps.getPeersStatus()
 	return len(offline) == 0
+}
+
+func (ps *PeerStatus) storeSignatures(signature []*SigPack) {
+	ps.peerStatusLock.Lock()
+	defer ps.peerStatusLock.Unlock()
+	ps.peerSigs = signature
+}
+
+func (ps *PeerStatus) getSignatures() []*SigPack {
+	ps.peerStatusLock.Lock()
+	defer ps.peerStatusLock.Unlock()
+	retVal := make([]*SigPack, len(ps.peerSigs))
+	copy(retVal, ps.peerSigs)
+	// drop the previous storage
+	ps.peerSigs = nil
+	return retVal
 }
 
 func (ps *PeerStatus) getPeersStatus() ([]peer.ID, []peer.ID) {

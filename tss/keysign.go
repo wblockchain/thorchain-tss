@@ -58,7 +58,16 @@ func (t *TssServer) generateSignature(msgID string, msgToSign []byte, req keysig
 	if oldJoinParty {
 		allParticipants = req.SignerPubKeys
 	}
-	onlinePeers, leader, errJoinParty := t.joinParty(msgID, req.Version, req.BlockHeight, allParticipants, threshold, sigChan)
+
+	sig, err := conversion.GenerateP2PSignature(t.privateKey, []byte(msgID))
+	if err != nil {
+		return keysign.Response{
+			Status: common.Fail,
+			Blame:  blame.NewBlame(blame.InternalError, []blame.Node{}),
+		}, errors.New("fail to generate the signature")
+	}
+
+	onlinePeers, leader, errJoinParty := t.joinParty(msgID, req.Version, sig, req.BlockHeight, allParticipants, threshold, sigChan)
 	if errJoinParty != nil {
 		// we received the signature from waiting for signature
 		if errors.Is(errJoinParty, p2p.ErrSignReceived) {

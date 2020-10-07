@@ -359,7 +359,7 @@ func (t *TssCommon) ProcessOutCh(msg btss.Message, msgType messages.THORChainTSS
 		return fmt.Errorf("fail to get wire bytes: %w", err)
 	}
 
-	sig, err := generateSignature(buf, t.msgID, t.privateKey)
+	sig, err := conversion.GenerateSignature(buf, t.msgID, t.privateKey)
 	if err != nil {
 		t.logger.Error().Err(err).Msg("fail to generate the share's signature")
 		return err
@@ -586,7 +586,7 @@ func (t *TssCommon) processTSSMsg(wireMsg *messages.WireMessage, msgType message
 	keyBytes := dataOwner.GetKey()
 	var pk secp256k1.PubKeySecp256k1
 	copy(pk[:], keyBytes)
-	ok = verifySignature(pk, wireMsg.Message, wireMsg.Sig, t.msgID)
+	ok = conversion.VerifySignature(pk, wireMsg.Message, wireMsg.Sig, t.msgID)
 	if !ok {
 		t.logger.Error().Msg("fail to verify the signature")
 		return errors.New("signature verify failed")

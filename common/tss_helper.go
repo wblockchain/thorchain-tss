@@ -1,7 +1,6 @@
 package common
 
 import (
-	"bytes"
 	"crypto/elliptic"
 	"crypto/sha256"
 	"encoding/hex"
@@ -22,7 +21,6 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	tcrypto "github.com/tendermint/tendermint/crypto"
 
 	"gitlab.com/thorchain/tss/go-tss/blame"
 	"gitlab.com/thorchain/tss/go-tss/messages"
@@ -84,29 +82,15 @@ func InitLog(level string, pretty bool, serviceValue string) {
 	log.Logger = log.Output(out).With().Str("service", serviceValue).Logger()
 }
 
-func generateSignature(msg []byte, msgID string, privKey tcrypto.PrivKey) ([]byte, error) {
-	var dataForSigning bytes.Buffer
-	dataForSigning.Write(msg)
-	dataForSigning.WriteString(msgID)
-	return privKey.Sign(dataForSigning.Bytes())
-}
-
-func verifySignature(pubKey tcrypto.PubKey, message, sig []byte, msgID string) bool {
-	var dataForSign bytes.Buffer
-	dataForSign.Write(message)
-	dataForSign.WriteString(msgID)
-	return pubKey.VerifyBytes(dataForSign.Bytes(), sig)
-}
-
 func getHighestFreq(confirmedList map[string]string) (string, int, error) {
 	if len(confirmedList) == 0 {
 		return "", 0, errors.New("empty input")
 	}
 	freq := make(map[string]int, len(confirmedList))
 	hashPeerMap := make(map[string]string, len(confirmedList))
-	for peer, n := range confirmedList {
+	for peerID, n := range confirmedList {
 		freq[n]++
-		hashPeerMap[n] = peer
+		hashPeerMap[n] = peerID
 	}
 
 	sFreq := make([][2]string, 0, len(freq))

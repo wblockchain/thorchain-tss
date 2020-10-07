@@ -164,7 +164,7 @@ func (t *TssServer) requestToMsgId(request interface{}) (string, error) {
 	return common.MsgToHashString(dat)
 }
 
-func (t *TssServer) joinParty(msgID, version string, blockHeight int64, participants []string, threshold int, sigChan chan string) ([]peer.ID, string, error) {
+func (t *TssServer) joinParty(msgID, version string, sig []byte, blockHeight int64, participants []string, threshold int, sigChan chan string) ([]peer.ID, string, error) {
 	oldJoinParty, err := conversion.VersionLTCheck(version, messages.NEWJOINPARTYVERSION)
 	if err != nil {
 		return nil, "", fmt.Errorf("fail to parse the version with error:%w", err)
@@ -197,7 +197,7 @@ func (t *TssServer) joinParty(msgID, version string, blockHeight int64, particip
 			peersIDStr = append(peersIDStr, el.String())
 		}
 
-		return t.partyCoordinator.JoinPartyWithLeader(msgID, blockHeight, peersIDStr, threshold, sigChan)
+		return t.partyCoordinator.JoinPartyWithLeader(msgID, sig, blockHeight, peersIDStr, threshold, sigChan)
 	}
 }
 

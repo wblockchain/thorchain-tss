@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/magiconair/properties/assert"
+	"github.com/tendermint/tendermint/crypto/secp256k1"
 )
 
 func TestVersionCheck(t *testing.T) {
@@ -43,4 +44,15 @@ func TestVersionCheck(t *testing.T) {
 	ret, err = VersionLTCheck(currentVer, expectedVer)
 	assert.Equal(t, err, nil)
 	assert.Equal(t, ret, false)
+}
+
+func TestMsgSignAndVerification(t *testing.T) {
+	msg := []byte("hello")
+	msgID := "123"
+	sk := secp256k1.GenPrivKey()
+	sig, err := GenerateSignature(msg, msgID, sk)
+	assert.Equal(t, err, nil)
+	assert.Equal(t, err, nil)
+	ret := VerifySignature(sk.PubKey(), msg, sig, msgID)
+	assert.Equal(t, ret, true)
 }

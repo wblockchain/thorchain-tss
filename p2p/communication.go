@@ -25,8 +25,9 @@ import (
 )
 
 var (
-	joinPartyProtocol           protocol.ID = "/p2p/join-party"
-	joinPartyProtocolWithLeader protocol.ID = "/p2p/join-party-leader"
+	joinPartyProtocol                    protocol.ID = "/p2p/join-party"
+	joinPartyProtocolWithLeader          protocol.ID = "/p2p/join-party-leader"
+	joinPartyProtocolWithLeaderBroadcast protocol.ID = "/p2p/join-party-leader-broadcast"
 )
 
 // TSSProtocolID protocol id used for tss
@@ -200,13 +201,13 @@ func (c *Communication) bootStrapConnectivityCheck() error {
 	defer cancel()
 
 	for _, el := range c.bootstrapPeers {
-		peer, err := peer.AddrInfoFromP2pAddr(el)
+		peerNode, err := peer.AddrInfoFromP2pAddr(el)
 		if err != nil {
 			c.logger.Error().Err(err).Msg("error in decode the bootstrap node, skip it")
 			continue
 		}
 
-		outChan := ping.Ping(ctx, c.host, peer.ID)
+		outChan := ping.Ping(ctx, c.host, peerNode.ID)
 
 		for {
 			ret, ok := <-outChan
@@ -214,7 +215,7 @@ func (c *Communication) bootStrapConnectivityCheck() error {
 				break
 			}
 			if ret.Error == nil {
-				c.logger.Debug().Msgf("connect to peer %v with RTT %v\n", peer.ID, ret.RTT)
+				c.logger.Debug().Msgf("connect to peer %v with RTT %v\n", peerNode.ID, ret.RTT)
 				return nil
 			}
 		}
