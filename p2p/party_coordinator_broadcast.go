@@ -45,6 +45,12 @@ func (pc *PartyCoordinator) HandleStreamWithLeaderBroadcast(stream network.Strea
 		pc.processBroadcastReqMsg(&msg, stream)
 		return
 	case "response":
+		// firstly, we verify the signature to ensure the online node list is sent by the leader.
+		requestPeers := pc.getRequestPeers(msg.ID, msg.ForwardSignatures)
+		if requestPeers == nil {
+			pc.logger.Warn().Msg("this response message cannot be verified")
+			return
+		}
 		// to make it compatible, we convert to the leader version
 		convertedMsg := messages.JoinPartyLeaderComm{
 			ID:      msg.ID,
@@ -52,7 +58,11 @@ func (pc *PartyCoordinator) HandleStreamWithLeaderBroadcast(stream network.Strea
 			PeerIDs: msg.PeerIDs,
 			Type:    messages.JoinPartyLeaderComm_ResponseType(msg.Type),
 		}
-		pc.processRespMsg(&convertedMsg, stream)
+		isForwarded := false
+		if requestPeers[0].String() != stream.Conn().RemotePeer().String() {
+			isForwarded = true
+		}
+		pc.processRespMsg(&msg, &convertedMsg, stream, requestPeers[0].String(), isForwarded)
 		return
 	default:
 		logger.Err(err).Msg("fail to process this message")
@@ -72,7 +82,7 @@ func generateMSgForSending(msgID string, sig []byte, forwarded []*SigPack, pid p
 	if err != nil {
 		return nil, nil, err
 	}
-	thisSigMarshaled, err := json.Marshal([]SigPack{thisSig})
+	thisSigMarshaled, err := json.Marshal([]*SigPack{&thisSig})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -109,7 +119,7 @@ func (pc *PartyCoordinator) broadcastMsgToAll(msgID string, msgPeerSend, msgLead
 			if peerID == pc.host.ID() {
 				return
 			}
-			if peerID == leader {
+			if peerID == leader && len(msgLeaderSend) != 0 {
 				if err := pc.sendMsgToPeer(msgLeaderSend, msgID, peerID, joinPartyProtocolWithLeaderBroadcast); err != nil {
 					pc.logger.Error().Err(err).Msg("error in send the join party request to peer")
 				}
@@ -131,6 +141,10 @@ func (pc *PartyCoordinator) joinPartyMemberBroadcast(msgID string, sig []byte, l
 			return nil, errors.New("fail to decode the peer ID")
 		}
 		allPeers = append(allPeers, p)
+	}
+	leaderID, err := peer.Decode(leader)
+	if err != nil {
+		return nil, errors.New("fail to decode the peer ID")
 	}
 
 	peerGroup, err := pc.createJoinPartyGroups(msgID, leader, []string{leader}, threshold)
@@ -205,6 +219,14 @@ func (pc *PartyCoordinator) joinPartyMemberBroadcast(msgID string, sig []byte, l
 		return nil, ErrSignReceived
 	}
 
+	// now we forward the response to peers
+	if peerGroup.leaderResponseBroadcast != nil {
+		sentData, err := proto.Marshal(peerGroup.leaderResponseBroadcast)
+		if err != nil {
+			pc.logger.Error().Err(err).Msg("fail to marshal the response to send")
+		}
+		pc.broadcastMsgToAll(msgID, sentData, nil, leaderID, allPeers)
+	}
 	onlineNodes := peerGroup.leaderResponse.PeerIDs
 	// we trust the returned nodes returned by the leader, if tss fail, the leader
 	// also will get blamed.

@@ -10,18 +10,20 @@ import (
 )
 
 type PeerStatus struct {
-	peersResponse  map[peer.ID]bool
-	peerStatusLock *sync.RWMutex
-	notify         chan bool
-	newFound       chan bool
-	leaderResponse *messages.JoinPartyLeaderComm
-	leader         string
-	threshold      int
-	reqCount       int
-	peerSigs       []*SigPack
+	peersResponse           map[peer.ID]bool
+	peerStatusLock          *sync.RWMutex
+	notify                  chan bool
+	newFound                chan bool
+	leaderResponse          *messages.JoinPartyLeaderComm
+	leaderResponseBroadcast *messages.JoinPartyLeaderCommBroadcast
+	leader                  string
+	threshold               int
+	reqCount                int
+	peerSigs                []*SigPack
+	msgID                   string
 }
 
-func NewPeerStatus(peerNodes []peer.ID, myPeerID peer.ID, leader string, threshold int) *PeerStatus {
+func NewPeerStatus(msgID string, peerNodes []peer.ID, myPeerID peer.ID, leader string, threshold int) *PeerStatus {
 	dat := make(map[peer.ID]bool)
 	for _, el := range peerNodes {
 		if el == myPeerID {
@@ -38,6 +40,7 @@ func NewPeerStatus(peerNodes []peer.ID, myPeerID peer.ID, leader string, thresho
 		threshold:      threshold,
 		reqCount:       0,
 		peerSigs:       nil,
+		msgID:          msgID,
 	}
 	return peerStatus
 }
@@ -50,7 +53,7 @@ func (ps *PeerStatus) getCoordinationStatus() bool {
 func (ps *PeerStatus) storeSignatures(signature []*SigPack) {
 	ps.peerStatusLock.Lock()
 	defer ps.peerStatusLock.Unlock()
-	ps.peerSigs = signature
+	ps.peerSigs = append(ps.peerSigs, signature[:]...)
 }
 
 func (ps *PeerStatus) getSignatures() []*SigPack {

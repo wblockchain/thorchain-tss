@@ -17,7 +17,7 @@ import (
 	"gitlab.com/thorchain/tss/go-tss/conversion"
 )
 
-func setupHosts(t *testing.T, n int) ([]host.Host, map[peer.ID]tnet.Identity) {
+func setupHosts(t *testing.T, n int) ([]host.Host, map[peer.ID]tnet.Identity, mocknet.Mocknet) {
 	mn := mocknet.New(context.Background())
 	var hosts []host.Host
 	ids := make(map[peer.ID]tnet.Identity)
@@ -39,7 +39,7 @@ func setupHosts(t *testing.T, n int) ([]host.Host, map[peer.ID]tnet.Identity) {
 	if err := mn.ConnectAllButSelf(); err != nil {
 		t.Error(err)
 	}
-	return hosts, ids
+	return hosts, ids, mn
 }
 
 func leaderAppearsLastTest(t *testing.T, msgID string, peers []string, pcs []*PartyCoordinator, ids map[peer.ID]tnet.Identity) {
@@ -74,6 +74,57 @@ func leaderAppearsLastTest(t *testing.T, msgID string, peers []string, pcs []*Pa
 		assert.Nil(t, err)
 		assert.Len(t, onlinePeers, 4)
 	}(pcs[0])
+	wg.Wait()
+}
+
+func avoidSendingToLeader(t *testing.T, mn mocknet.Mocknet, msgID string, peers []string, pcs []*PartyCoordinator, ids map[peer.ID]tnet.Identity) {
+	// we assume that node 2,3 cannot communicate with the leader need the relay of node 1
+	mn.UnlinkPeers(pcs[0].host.ID(), pcs[2].host.ID())
+	mn.UnlinkPeers(pcs[0].host.ID(), pcs[3].host.ID())
+	mn.DisconnectPeers(pcs[0].host.ID(), pcs[2].host.ID())
+	mn.DisconnectPeers(pcs[0].host.ID(), pcs[3].host.ID())
+	pcs[0].timeout = time.Second * 7
+	pcs[1].timeout = time.Second * 7
+	defer func() {
+		mn.LinkPeers(pcs[0].host.ID(), pcs[2].host.ID())
+		mn.LinkPeers(pcs[0].host.ID(), pcs[3].host.ID())
+		mn.ConnectPeers(pcs[0].host.ID(), pcs[2].host.ID())
+		mn.ConnectPeers(pcs[0].host.ID(), pcs[3].host.ID())
+		pcs[0].timeout = time.Second * 5
+		pcs[1].timeout = time.Second * 5
+	}()
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	// we start the leader firstly
+	go func(coordinator *PartyCoordinator) {
+		defer wg.Done()
+		privKey := ids[coordinator.host.ID()]
+		sig, err := privKey.PrivateKey().Sign([]byte(msgID))
+		assert.Nil(t, err)
+		// we simulate different nodes join at different time
+		sigChan := make(chan string)
+		onlinePeers, _, err := coordinator.JoinPartyWithLeader(msgID, sig, 10, peers, 3, sigChan)
+		assert.Nil(t, err)
+		assert.Len(t, onlinePeers, 4)
+	}(pcs[0])
+	time.Sleep(time.Second)
+	for i, el := range pcs[1:] {
+		wg.Add(1)
+		go func(idx int, coordinator *PartyCoordinator) {
+			defer wg.Done()
+			var onlinePeers []peer.ID
+			privKey := ids[coordinator.host.ID()]
+			sig, err := privKey.PrivateKey().Sign([]byte(msgID))
+			assert.Nil(t, err)
+			// we simulate different nodes join at different time
+			time.Sleep(time.Millisecond * time.Duration(rand.Int()%100))
+			sigChan := make(chan string)
+			onlinePeers, _, err = coordinator.JoinPartyWithLeader(msgID, sig, 10, peers, 3, sigChan)
+			assert.Nil(t, err)
+			assert.Len(t, onlinePeers, 4)
+		}(i, el)
+	}
 	wg.Wait()
 }
 
@@ -114,7 +165,7 @@ func leaderAppersFirstTest(t *testing.T, msgID string, peers []string, pcs []*Pa
 
 func TestNewPartyCoordinator(t *testing.T) {
 	ApplyDeadline = false
-	hosts, ids := setupHosts(t, 4)
+	hosts, ids, mn := setupHosts(t, 4)
 	var pcs []*PartyCoordinator
 	var peers []string
 	timeout := time.Second * 5
@@ -150,12 +201,13 @@ func TestNewPartyCoordinator(t *testing.T) {
 	// now we test the leader appears firstly and the the members
 	leaderAppersFirstTest(t, msgID, peers, pcs, ids)
 	leaderAppearsLastTest(t, msgID, peers, pcs, ids)
+	avoidSendingToLeader(t, mn, msgID, peers, pcs, ids)
 }
 
 func TestNewPartyCoordinatorTimeOut(t *testing.T) {
 	ApplyDeadline = false
 	timeout := time.Second * 3
-	hosts, ids := setupHosts(t, 4)
+	hosts, ids, _ := setupHosts(t, 4)
 	var pcs []*PartyCoordinator
 	var peers []string
 	for _, el := range hosts {
