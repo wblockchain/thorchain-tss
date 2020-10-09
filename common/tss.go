@@ -306,7 +306,7 @@ func (t *TssCommon) ProcessOneMessage(wrappedMsg *messages.WrappedMessage, peerI
 }
 
 func (t *TssCommon) getMsgHash(localCacheItem *LocalCacheItem, threshold int) (string, error) {
-	hash, freq, err := getHighestFreq(localCacheItem.ConfirmedList)
+	hash, freq, err := conversion.GetHighestFreq(localCacheItem.ConfirmedList)
 	if err != nil {
 		t.logger.Error().Err(err).Msg("fail to get the hash freq")
 		return "", blame.ErrHashCheck

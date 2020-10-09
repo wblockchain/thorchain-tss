@@ -65,7 +65,7 @@ func (pc *PartyCoordinator) Stop() {
 	close(pc.stopChan)
 }
 
-func (pc *PartyCoordinator) processRespMsg(broadcastMsg *messages.JoinPartyLeaderCommBroadcast, respMsg *messages.JoinPartyLeaderComm, stream network.Stream, remotePeer string, isForward bool) {
+func (pc *PartyCoordinator) processRespMsg(respMsg *messages.JoinPartyLeaderComm, stream network.Stream, remotePeer string) {
 	pc.streamMgr.AddStream(respMsg.ID, stream)
 	pc.joinPartyGroupLock.Lock()
 	peerGroup, ok := pc.peersGroup[respMsg.ID]
@@ -76,14 +76,11 @@ func (pc *PartyCoordinator) processRespMsg(broadcastMsg *messages.JoinPartyLeade
 	}
 	if remotePeer == peerGroup.leader {
 		peerGroup.leaderResponse = respMsg
-		peerGroup.notify <- true
+		peerGroup.notify <- "taskDone"
 		err := WriteStreamWithBuffer([]byte("done"), stream)
 		if err != nil {
 			pc.logger.Error().Err(err).Msgf("fail to write the reply to peer: %s", remotePeer)
 			return
-		}
-		if !isForward {
-			peerGroup.leaderResponseBroadcast = broadcastMsg
 		}
 	} else {
 		pc.logger.Info().Msgf("this party(%s) is not the leader(%s) as expected", remotePeer, peerGroup.leader)
@@ -107,7 +104,7 @@ func (pc *PartyCoordinator) processReqMsg(requestMsg *messages.JoinPartyLeaderCo
 		return
 	}
 	if partyFormed {
-		peerGroup.notify <- true
+		peerGroup.notify <- "taskDone"
 	}
 }
 
@@ -147,6 +144,7 @@ func (pc *PartyCoordinator) processBroadcastReqMsg(requestMsg *messages.JoinPart
 		pc.logger.Info().Msg("this party is not ready")
 		return
 	}
+	requestPeers := pc.getRequestPeers(peerGroup.msgID, requestMsg.ForwardSignatures)
 	// if we are not the leader, we store this request and will forward it later
 	if pc.host.ID().String() != peerGroup.leader {
 		var signatures []*SigPack
@@ -155,9 +153,14 @@ func (pc *PartyCoordinator) processBroadcastReqMsg(requestMsg *messages.JoinPart
 			pc.logger.Error().Err(err).Msg("fail to unmarshal the signature data")
 		}
 		peerGroup.storeSignatures(signatures)
+		peerGroup.peerStatusLock.Lock()
+		for _, el := range requestPeers {
+			peerGroup.peersResponse[el] = true
+		}
+		peerGroup.peerStatusLock.Unlock()
+		return
 	}
 	// we verify whether the request is send from the peer and get the request peer list
-	requestPeers := pc.getRequestPeers(peerGroup.msgID, requestMsg.ForwardSignatures)
 	// as the leader, we store this requests
 	for _, remotePeer := range requestPeers {
 		partyFormed, err := peerGroup.updatePeer(remotePeer)
@@ -166,7 +169,7 @@ func (pc *PartyCoordinator) processBroadcastReqMsg(requestMsg *messages.JoinPart
 			return
 		}
 		if partyFormed {
-			peerGroup.notify <- true
+			peerGroup.notify <- "taskDone"
 			// once party formed, we do not care about the rest of the requests
 			return
 		}
@@ -239,7 +242,7 @@ func (pc *PartyCoordinator) HandleStreamWithLeader(stream network.Stream) {
 		return
 	case "response":
 		remotePeer = stream.Conn().RemotePeer()
-		pc.processRespMsg(nil, &msg, stream, remotePeer.String(), false)
+		pc.processRespMsg(&msg, stream, remotePeer.String())
 		return
 	default:
 		logger.Err(err).Msg("fail to process this message")
@@ -554,6 +557,7 @@ func (pc *PartyCoordinator) joinPartyLeader(msgID string, sig []byte, peers []st
 		pc.logger.Error().Err(err).Msg("fail to send response to peers")
 		return onlinePeers, ErrJoinPartyTimeout
 	}
+
 	if len(tssNodes) < threshold+1 {
 		return onlinePeers, ErrJoinPartyTimeout
 	}
@@ -561,21 +565,34 @@ func (pc *PartyCoordinator) joinPartyLeader(msgID string, sig []byte, peers []st
 	return onlinePeers, nil
 }
 
-func (pc *PartyCoordinator) JoinPartyWithLeader(msgID string, sig []byte, blockHeight int64, peers []string, threshold int, signChan chan string) ([]peer.ID, string, error) {
+func (pc *PartyCoordinator) JoinPartyWithLeader(msgID string, sig []byte, blockHeight int64, peers []string, threshold int, signChan chan string, isBroadcast bool) ([]peer.ID, string, error) {
+	var onlines []peer.ID
+	var err error
 	leader, err := LeaderNode(msgID, blockHeight, peers)
 	if err != nil {
 		return nil, "", err
 	}
 	if pc.host.ID().String() == leader {
-		// fixme we apply the new version
-		onlines, err := pc.joinPartyLeader(msgID, sig, peers, threshold, signChan, joinPartyProtocolWithLeaderBroadcast)
+
+		var joinPartyProtocol protocol.ID
+		if isBroadcast {
+			joinPartyProtocol = joinPartyProtocolWithLeaderBroadcast
+		} else {
+			joinPartyProtocol = joinPartyProtocolWithLeader
+		}
+		onlines, err := pc.joinPartyLeader(msgID, sig, peers, threshold, signChan, joinPartyProtocol)
 		return onlines, leader, err
 	}
 	// now we are just the normal peer
-	// onlines, err := pc.joinPartyMember(msgID, leader, threshold, signChan)
-	onlines, err := pc.joinPartyMemberBroadcast(msgID, sig, leader, peers, threshold, signChan)
-
-	return onlines, leader, err
+	if isBroadcast {
+		pc.logger.Info().Msg("we apply broadcast join party with a leader")
+		onlines, _, err := pc.joinPartyMemberBroadcast(msgID, sig, leader, peers, threshold, signChan)
+		return onlines, leader, err
+	} else {
+		pc.logger.Info().Msg("we apply join party with a leader")
+		onlines, err = pc.joinPartyMember(msgID, leader, threshold, signChan)
+		return onlines, leader, err
+	}
 }
 
 // JoinPartyWithRetry this method provide the functionality to join party with retry and back off

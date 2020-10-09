@@ -12,7 +12,7 @@ import (
 type PeerStatus struct {
 	peersResponse           map[peer.ID]bool
 	peerStatusLock          *sync.RWMutex
-	notify                  chan bool
+	notify                  chan string
 	newFound                chan bool
 	leaderResponse          *messages.JoinPartyLeaderComm
 	leaderResponseBroadcast *messages.JoinPartyLeaderCommBroadcast
@@ -21,6 +21,8 @@ type PeerStatus struct {
 	reqCount                int
 	peerSigs                []*SigPack
 	msgID                   string
+	responseMsgMap          map[string]string
+	hasForwarded            bool
 }
 
 func NewPeerStatus(msgID string, peerNodes []peer.ID, myPeerID peer.ID, leader string, threshold int) *PeerStatus {
@@ -34,13 +36,15 @@ func NewPeerStatus(msgID string, peerNodes []peer.ID, myPeerID peer.ID, leader s
 	peerStatus := &PeerStatus{
 		peersResponse:  dat,
 		peerStatusLock: &sync.RWMutex{},
-		notify:         make(chan bool, len(peerNodes)),
+		notify:         make(chan string, 1),
 		newFound:       make(chan bool, len(peerNodes)),
 		leader:         leader,
 		threshold:      threshold,
 		reqCount:       0,
 		peerSigs:       nil,
 		msgID:          msgID,
+		responseMsgMap: make(map[string]string),
+		hasForwarded:   false,
 	}
 	return peerStatus
 }

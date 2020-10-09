@@ -22,26 +22,6 @@ type tssHelpSuite struct{}
 
 var _ = Suite(&tssHelpSuite{})
 
-func (t *tssHelpSuite) TestGetHashToBroadcast(c *C) {
-	testMap := make(map[string]string)
-	_, _, err := getHighestFreq(testMap)
-	c.Assert(err, NotNil)
-	_, _, err = getHighestFreq(nil)
-	c.Assert(err, NotNil)
-	testMap["1"] = "aa"
-	testMap["2"] = "aa"
-	testMap["3"] = "aa"
-	testMap["4"] = "ab"
-	testMap["5"] = "bb"
-	testMap["6"] = "bb"
-	testMap["7"] = "bc"
-	testMap["8"] = "cd"
-	val, freq, err := getHighestFreq(testMap)
-	c.Assert(err, IsNil)
-	c.Assert(val, Equals, "aa")
-	c.Assert(freq, Equals, 3)
-}
-
 func (t *tssHelpSuite) TestMsgToHashString(c *C) {
 	out, err := MsgToHashString([]byte("hello"))
 	c.Assert(err, IsNil)

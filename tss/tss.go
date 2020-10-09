@@ -182,7 +182,11 @@ func (t *TssServer) joinParty(msgID, version string, sig []byte, blockHeight int
 		onlines, err := t.partyCoordinator.JoinPartyWithRetry(msgID, peersIDStr)
 		return onlines, "NONE", err
 	} else {
-		t.logger.Info().Msg("we apply the join party with a leader")
+
+		isBroadcast, err := conversion.VersionLTCheck(version, messages.NEWJOINPARTYVERSIONBroadcast)
+		if err != nil {
+			return nil, "", fmt.Errorf("fail to parse the version with error:%w", err)
+		}
 
 		if len(participants) == 0 {
 			t.logger.Error().Msg("we fail to have any participants or passed by request")
@@ -197,7 +201,7 @@ func (t *TssServer) joinParty(msgID, version string, sig []byte, blockHeight int
 			peersIDStr = append(peersIDStr, el.String())
 		}
 
-		return t.partyCoordinator.JoinPartyWithLeader(msgID, sig, blockHeight, peersIDStr, threshold, sigChan)
+		return t.partyCoordinator.JoinPartyWithLeader(msgID, sig, blockHeight, peersIDStr, threshold, sigChan, isBroadcast)
 	}
 }
 
