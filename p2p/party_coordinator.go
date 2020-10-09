@@ -77,11 +77,6 @@ func (pc *PartyCoordinator) processRespMsg(respMsg *messages.JoinPartyLeaderComm
 	if remotePeer == peerGroup.leader {
 		peerGroup.leaderResponse = respMsg
 		peerGroup.notify <- "taskDone"
-		err := WriteStreamWithBuffer([]byte("done"), stream)
-		if err != nil {
-			pc.logger.Error().Err(err).Msgf("fail to write the reply to peer: %s", remotePeer)
-			return
-		}
 	} else {
 		pc.logger.Info().Msgf("this party(%s) is not the leader(%s) as expected", remotePeer, peerGroup.leader)
 	}
@@ -153,11 +148,6 @@ func (pc *PartyCoordinator) processBroadcastReqMsg(requestMsg *messages.JoinPart
 			pc.logger.Error().Err(err).Msg("fail to unmarshal the signature data")
 		}
 		peerGroup.storeSignatures(signatures)
-		peerGroup.peerStatusLock.Lock()
-		for _, el := range requestPeers {
-			peerGroup.peersResponse[el] = true
-		}
-		peerGroup.peerStatusLock.Unlock()
 		return
 	}
 	// we verify whether the request is send from the peer and get the request peer list
@@ -186,6 +176,15 @@ func (pc *PartyCoordinator) HandleStream(stream network.Stream) {
 		pc.streamMgr.AddStream("UNKNOWN", stream)
 		return
 	}
+
+	defer func() {
+		err := WriteStreamWithBuffer([]byte("peer reply"), stream)
+		if err != nil {
+			pc.logger.Error().Err(err).Msgf("fail to write the reply to peer: %s", remotePeer)
+			return
+		}
+	}()
+
 	var msg messages.JoinPartyRequest
 	if err := proto.Unmarshal(payload, &msg); err != nil {
 		logger.Err(err).Msg("fail to unmarshal join party request")
@@ -221,6 +220,14 @@ func (pc *PartyCoordinator) HandleStreamWithLeader(stream network.Stream) {
 		pc.streamMgr.AddStream("UNKNOWN", stream)
 		return
 	}
+
+	defer func() {
+		err := WriteStreamWithBuffer([]byte("peer reply"), stream)
+		if err != nil {
+			pc.logger.Error().Err(err).Msgf("fail to write the reply to peer: %s", remotePeer)
+			return
+		}
+	}()
 
 	var msgLeaderless messages.JoinPartyRequest
 	if err := proto.Unmarshal(payload, &msgLeaderless); err != nil {
@@ -369,6 +376,11 @@ func (pc *PartyCoordinator) sendMsgToPeer(msgBuf []byte, msgID string, remotePee
 	err = WriteStreamWithBuffer(msgBuf, stream)
 	if err != nil {
 		return fmt.Errorf("fail to write message to stream:%w", err)
+	}
+
+	_, err = ReadStreamWithBuffer(stream)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -576,6 +588,7 @@ func (pc *PartyCoordinator) JoinPartyWithLeader(msgID string, sig []byte, blockH
 
 		var joinPartyProtocol protocol.ID
 		if isBroadcast {
+			pc.logger.Info().Msg("we(leader) apply broadcast join party.")
 			joinPartyProtocol = joinPartyProtocolWithLeaderBroadcast
 		} else {
 			joinPartyProtocol = joinPartyProtocolWithLeader
@@ -586,8 +599,60 @@ func (pc *PartyCoordinator) JoinPartyWithLeader(msgID string, sig []byte, blockH
 	// now we are just the normal peer
 	if isBroadcast {
 		pc.logger.Info().Msg("we apply broadcast join party with a leader")
-		onlines, _, err := pc.joinPartyMemberBroadcast(msgID, sig, leader, peers, threshold, signChan)
-		return onlines, leader, err
+		onlines, receivedBroadcast, err := pc.joinPartyMemberBroadcast(msgID, sig, leader, peers, threshold, signChan)
+		if err == nil {
+			return onlines, leader, err
+		} else {
+			// the following code is for the keygen blame, as keysign we always blame the leader given 2/3 honest node
+			// will always be online.
+			// for the broadcast join party, if a leader complain a node is offline, we need to check whether we have
+			// received the request of that node, if we have received that request, it indicates the leader or that
+			// node tells a lie. if the leader is malicious, so more than 2/3 nodes will blame him. if "that" node skip
+			// sending msg to me, while send to leader, it is fine, as the join party can still start. if he send skip
+			// the leader, I will forward this request to leader.
+			receivedBroadcast = append(receivedBroadcast, pc.host.ID())
+			var offlinePeers []string
+			for _, i := range peers {
+				found := false
+				for _, j := range onlines {
+					if i == j.String() {
+						found = true
+						break
+					}
+				}
+				if !found {
+					offlinePeers = append(offlinePeers, i)
+				}
+			}
+			// if we have the request of any of the offline nodes, we just make the leader to be blame in tss
+			fmt.Printf("---------offlines are %v\n", offlinePeers)
+			fmt.Printf("---------received are %v\n", receivedBroadcast)
+			found := false
+			for _, i := range offlinePeers {
+				for _, j := range receivedBroadcast {
+					if i == j.String() {
+						found = true
+						break
+					}
+				}
+			}
+			// we now create the online nodes to have the leader be blamed
+			if found {
+				var nodesWithoutLeader []peer.ID
+				for _, el := range peers {
+					if el != leader {
+						n, err := peer.Decode(el)
+						if err != nil {
+							pc.logger.Error().Err(err).Msg("fail to decode the peer ID")
+							continue
+						}
+						nodesWithoutLeader = append(nodesWithoutLeader, n)
+					}
+				}
+				return nodesWithoutLeader, leader, err
+			}
+			return onlines, leader, err
+		}
 	} else {
 		pc.logger.Info().Msg("we apply join party with a leader")
 		onlines, err = pc.joinPartyMember(msgID, leader, threshold, signChan)
@@ -634,7 +699,7 @@ func (pc *PartyCoordinator) JoinPartyWithRetry(msgID string, peers []string) ([]
 		defer wg.Done()
 		for {
 			select {
-			case <-peerGroup.notify:
+			case <-peerGroup.newFound:
 				pc.logger.Debug().Msg("we have found the new peer")
 				if peerGroup.getCoordinationStatus() {
 					close(done)

@@ -61,6 +61,18 @@ func VersionLTCheck(currentVer, expectedVer string) (bool, error) {
 	return v.LT(c), nil
 }
 
+func VersionGECheck(currentVer, expectedVer string) (bool, error) {
+	c, err := semver.Make(expectedVer)
+	if err != nil {
+		return false, errors.New("fail to parse the expected version")
+	}
+	v, err := semver.Make(currentVer)
+	if err != nil {
+		return false, errors.New("fail to parse the current version")
+	}
+	return v.GE(c), nil
+}
+
 // as we want to make the p2p signature verification independent from the tss, so we generate the signature
 // that suitable for the public key verification derived from the peer ID.
 func GenerateP2PSignature(privKey tcrypto.PrivKey, msg []byte) ([]byte, error) {

@@ -170,7 +170,7 @@ func (t *TssServer) joinParty(msgID, version string, sig []byte, blockHeight int
 		return nil, "", fmt.Errorf("fail to parse the version with error:%w", err)
 	}
 	if oldJoinParty {
-		t.logger.Info().Msg("we apply the leadness join party")
+		t.logger.Info().Msg("we apply the leaderless join party")
 		peerIDs, err := conversion.GetPeerIDsFromPubKeys(participants)
 		if err != nil {
 			return nil, "NONE", fmt.Errorf("fail to convert pub key to peer id: %w", err)
@@ -183,7 +183,7 @@ func (t *TssServer) joinParty(msgID, version string, sig []byte, blockHeight int
 		return onlines, "NONE", err
 	} else {
 
-		isBroadcast, err := conversion.VersionLTCheck(version, messages.NEWJOINPARTYVERSIONBroadcast)
+		isBroadcast, err := conversion.VersionGECheck(version, messages.NEWJOINPARTYVERSIONBroadcast)
 		if err != nil {
 			return nil, "", fmt.Errorf("fail to parse the version with error:%w", err)
 		}

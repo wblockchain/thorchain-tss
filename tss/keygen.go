@@ -79,6 +79,27 @@ func (t *TssServer) Keygen(req keygen.Request) (keygen.Response, error) {
 
 		}
 
+		ret, err := conversion.VersionLTCheck(req.Version, messages.NEWJOINPARTYVERSIONBroadcast)
+		if err != nil {
+			t.logger.Error().Err(err).Msg("fail to compare the version")
+			return keygen.Response{
+				Status: common.Fail,
+				Blame:  blame.NewBlame(blame.InternalError, []blame.Node{}),
+			}, nil
+		}
+
+		// this is for the broadcast join party
+		if !ret {
+			var blameNodes blame.Blame
+			blameNodes, err = blameMgr.NodeSyncBlame(req.Keys, onlinePeers)
+			if err != nil {
+				t.logger.Err(errJoinParty).Msg("fail to get peers to blame")
+			}
+			return keygen.Response{
+				Status: common.Fail,
+				Blame:  blameNodes,
+			}, nil
+		}
 		var blameLeader blame.Blame
 		var blameNodes blame.Blame
 		blameNodes, err = blameMgr.NodeSyncBlame(req.Keys, onlinePeers)

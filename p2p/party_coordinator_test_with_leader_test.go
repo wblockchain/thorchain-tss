@@ -285,13 +285,21 @@ func TestNewPartyCoordinatorBroadcastTimeOut(t *testing.T) {
 	// we test the leader is offline
 	for _, el := range pcs[1:] {
 		wg.Add(1)
+		expectedOnline := []string{pcs[1].host.ID().String(), pcs[2].host.ID().String(), pcs[3].host.ID().String()}
+		sort.Strings(expectedOnline)
 		go func(coordinator *PartyCoordinator) {
 			defer wg.Done()
 			privKey := ids[coordinator.host.ID()]
 			sig, err := privKey.PrivateKey().Sign([]byte(msgID))
 			assert.Nil(t, err)
 			sigChan := make(chan string)
-			_, _, err = coordinator.JoinPartyWithLeader(msgID, sig, 10, peers, 3, sigChan, true)
+			onlines, _, err := coordinator.JoinPartyWithLeader(msgID, sig, 10, peers, 3, sigChan, true)
+			var result []string
+			for _, el := range onlines {
+				result = append(result, el.String())
+			}
+			sort.Strings(result)
+			assert.EqualValues(t, expectedOnline, result)
 			assert.Equal(t, err, ErrLeaderNotReady)
 		}(el)
 
