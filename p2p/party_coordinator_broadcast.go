@@ -58,8 +58,10 @@ func (pc *PartyCoordinator) responseIntegrityCheck(broadcastMsg *messages.JoinPa
 			return nil, errors.New("fail to decode")
 
 		}
+		pc.logger.Warn().Msgf("---->we need %d nodes while we have %d", peerGroup.threshold-1, freq)
 		return &retMsg, nil
 	}
+	pc.logger.Warn().Msgf("---->we need %d nodes while we have %d", peerGroup.threshold-1, freq)
 	return nil, errors.New("not enough response")
 }
 
@@ -84,21 +86,13 @@ func (pc *PartyCoordinator) HandleStreamWithLeaderBroadcast(stream network.Strea
 	remotePeer := stream.Conn().RemotePeer()
 	logger := pc.logger.With().Str("remote peer", remotePeer.String()).Logger()
 	logger.Debug().Msg("reading from join party request")
-
+	fmt.Printf("00000000000000----->we receive from %s\n", remotePeer.String())
 	payload, err := ReadStreamWithBuffer(stream)
 	if err != nil {
 		logger.Err(err).Msgf("fail to read payload from stream")
 		pc.streamMgr.AddStream("UNKNOWN", stream)
 		return
 	}
-
-	defer func() {
-		err := WriteStreamWithBuffer([]byte("peer reply"), stream)
-		if err != nil {
-			pc.logger.Error().Err(err).Msgf("fail to write the reply to peer: %s", remotePeer)
-			return
-		}
-	}()
 
 	var msg messages.JoinPartyLeaderCommBroadcast
 	err = proto.Unmarshal(payload, &msg)
@@ -107,28 +101,34 @@ func (pc *PartyCoordinator) HandleStreamWithLeaderBroadcast(stream network.Strea
 		pc.streamMgr.AddStream("UNKNOWN", stream)
 		return
 	}
+	pc.streamMgr.AddStream(msg.ID, stream)
 	switch msg.MsgType {
 	case "request":
 		pc.processBroadcastReqMsg(&msg, stream)
+		pc.streamMgr.AddStream(msg.ID, stream)
 		return
 	case "response":
 		// firstly, we verify the signature to ensure the online node list is sent by the leader.
 		requestPeers := pc.getRequestPeers(msg.ID, msg.ForwardSignatures)
 		if requestPeers == nil {
 			pc.logger.Warn().Msg("this response message cannot be verified")
+			pc.streamMgr.AddStream(msg.ID, stream)
 			return
 		}
 		// the leader do not need to process his own message
 		if requestPeers[0] == pc.host.ID() {
+			pc.streamMgr.AddStream(msg.ID, stream)
 			return
 		}
 		err := pc.forwardMsg(&msg)
 		if err != nil {
+			pc.streamMgr.AddStream(msg.ID, stream)
 			return
 		}
 
 		respMsg, err := pc.responseIntegrityCheck(&msg, stream.Conn().RemotePeer())
 		if err != nil {
+			pc.streamMgr.AddStream(msg.ID, stream)
 			return
 		}
 		// to make it compatible, we convert to the leader version
@@ -139,10 +139,11 @@ func (pc *PartyCoordinator) HandleStreamWithLeaderBroadcast(stream network.Strea
 			Type:    messages.JoinPartyLeaderComm_ResponseType(msg.Type),
 		}
 		pc.processRespMsg(&convertedMsg, stream, requestPeers[0].String())
+		pc.streamMgr.AddStream(msg.ID, stream)
 		return
 	default:
 		logger.Err(err).Msg("fail to process this message")
-		pc.streamMgr.AddStream("UNKNOWN", stream)
+		pc.streamMgr.AddStream(msg.ID, stream)
 		return
 	}
 }
@@ -293,9 +294,8 @@ func (pc *PartyCoordinator) joinPartyMemberBroadcast(msgID string, sig []byte, l
 				default:
 					pc.logger.Info().Msg("unknow notice")
 				}
-				continue
 			// for the broadcast join party, we need extra time for non leader nodes to exchange and check their response
-			case <-time.After(pc.timeout + time.Second*3):
+			case <-time.After(pc.timeout + time.Second*4):
 				// timeout
 				close(done)
 				pc.logger.Error().Msg("the leader has not reply us")
@@ -346,6 +346,8 @@ func (pc *PartyCoordinator) joinPartyMemberBroadcast(msgID string, sig []byte, l
 	if peerGroup.leaderResponse.Type == messages.JoinPartyLeaderComm_Success {
 		return pIDs, peersIGet, nil
 	}
-	pc.logger.Error().Msg("leader response with join party timeout")
+	if peerGroup.leaderResponse.Type == messages.JoinPartyLeaderComm_Timeout {
+		pc.logger.Error().Msg("leader response with join party timeout")
+	}
 	return pIDs, peersIGet, ErrJoinPartyTimeout
 }
