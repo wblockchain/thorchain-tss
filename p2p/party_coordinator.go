@@ -206,7 +206,6 @@ func (pc *PartyCoordinator) HandleStreamWithLeader(stream network.Stream) {
 	remotePeer := stream.Conn().RemotePeer()
 	logger := pc.logger.With().Str("remote peer", remotePeer.String()).Logger()
 	logger.Debug().Msg("reading from join party request")
-	fmt.Printf("--reading from----->>>> %v\n", remotePeer)
 	payload, err := ReadStreamWithBuffer(stream)
 	if err != nil {
 		logger.Err(err).Msgf("fail to read payload from stream")
@@ -414,7 +413,7 @@ func (pc *PartyCoordinator) joinPartyMember(msgID string, leader string, thresho
 			close(done)
 			return
 
-		case <-time.After(pc.timeout + time.Second*4):
+		case <-time.After(pc.timeout + time.Second*2):
 			// timeout
 			close(done)
 			pc.logger.Error().Msg("the leader has not reply us")
@@ -500,7 +499,6 @@ func (pc *PartyCoordinator) sendToPeers(msgID string, sig []byte, threshold int,
 			return err
 		}
 	}
-	fmt.Printf("we send with protocol------>%s\n", p2pProtocol)
 	pc.sendResponseToAll(sendData, msgID, allPeers, p2pProtocol)
 	return nil
 }
@@ -553,8 +551,8 @@ func (pc *PartyCoordinator) joinPartyLeader(msgID string, sig []byte, peers []st
 		pc.logger.Error().Err(err).Msg("fail to send response to peers")
 		return onlinePeers, ErrJoinPartyTimeout
 	}
-	time.Sleep(time.Second * 3)
-	fmt.Printf("####leader(%s) has sent the result####\n", pc.host.ID().String())
+	// leader need to wait for a few seconds to ensure his message has been sent
+	time.Sleep(time.Second * 2)
 	if len(tssNodes) < threshold+1 {
 		return onlinePeers, ErrJoinPartyTimeout
 	}
@@ -569,9 +567,7 @@ func (pc *PartyCoordinator) JoinPartyWithLeader(msgID string, sig []byte, blockH
 	if err != nil {
 		return nil, "", err
 	}
-	fmt.Printf(">>>>we(%s) take (%s) as leader\n", pc.host.ID().String(), leader)
 	if pc.host.ID().String() == leader {
-		fmt.Printf("################my timeout =%v\n", pc.timeout)
 		var joinPartyProtocol protocol.ID
 		if isBroadcast {
 			pc.logger.Info().Msg("we(leader) apply broadcast join party.")
@@ -611,8 +607,6 @@ func (pc *PartyCoordinator) JoinPartyWithLeader(msgID string, sig []byte, blockH
 				}
 			}
 			// if we have the request of any of the offline nodes, we just make the leader to be blame in tss
-			fmt.Printf("---------offlines are %v\n", offlinePeers)
-			fmt.Printf("---------received are %v\n", receivedBroadcast)
 			found := false
 			for _, i := range offlinePeers {
 				for _, j := range receivedBroadcast {

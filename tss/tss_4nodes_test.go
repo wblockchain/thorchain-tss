@@ -104,23 +104,23 @@ func hash(payload []byte) []byte {
 
 // we do for both join party schemes
 func (s *FourNodeTestSuite) Test4NodesTss(c *C) {
-	// s.doTestKeygenAndKeySign(c, "0.13.0")
-	// time.Sleep(time.Second * 2)
-	// s.doTestKeygenAndKeySign(c, "0.14.0")
-	// time.Sleep(time.Second * 2)
-	// s.doTestKeygenAndKeySign(c, "0.15.0")
+	s.doTestKeygenAndKeySign(c, "0.13.0")
+	time.Sleep(time.Second * 2)
+	s.doTestKeygenAndKeySign(c, "0.14.0")
+	time.Sleep(time.Second * 2)
+	s.doTestKeygenAndKeySign(c, "0.15.0")
 
-	// time.Sleep(time.Second * 2)
-	// s.doTestFailJoinParty(c, "0.13.0")
-	// time.Sleep(time.Second * 2)
-	// s.doTestFailJoinParty(c, "0.14.0")
-	// time.Sleep(time.Second * 4)
+	time.Sleep(time.Second * 2)
+	s.doTestFailJoinParty(c, "0.13.0")
+	time.Sleep(time.Second * 2)
+	s.doTestFailJoinParty(c, "0.14.0")
+	time.Sleep(time.Second * 4)
 	s.doTestFailJoinParty(c, "0.15.0")
 	//
-	//time.Sleep(time.Second * 2)
+	time.Sleep(time.Second * 2)
 	// for this test, we stop the node when they doing the tss(has already pass the join party)
 	// do we ignore the test for new join party
-	//s.doTestBlame(c)
+	s.doTestBlame(c)
 }
 
 // generate a new key

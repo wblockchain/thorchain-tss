@@ -86,7 +86,6 @@ func (pc *PartyCoordinator) HandleStreamWithLeaderBroadcast(stream network.Strea
 	remotePeer := stream.Conn().RemotePeer()
 	logger := pc.logger.With().Str("remote peer", remotePeer.String()).Logger()
 	logger.Debug().Msg("reading from join party request")
-	fmt.Printf("00000000000000----->we receive from %s\n", remotePeer.String())
 	payload, err := ReadStreamWithBuffer(stream)
 	if err != nil {
 		logger.Err(err).Msgf("fail to read payload from stream")
@@ -292,10 +291,10 @@ func (pc *PartyCoordinator) joinPartyMemberBroadcast(msgID string, sig []byte, l
 					}
 					pc.logger.Error().Msg("empty message for forwarding")
 				default:
-					pc.logger.Info().Msg("unknow notice")
+					pc.logger.Info().Msg("unknown notice")
 				}
 			// for the broadcast join party, we need extra time for non leader nodes to exchange and check their response
-			case <-time.After(pc.timeout + time.Second*4):
+			case <-time.After(pc.timeout + time.Second*2):
 				// timeout
 				close(done)
 				pc.logger.Error().Msg("the leader has not reply us")
