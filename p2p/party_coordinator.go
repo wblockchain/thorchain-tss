@@ -551,8 +551,6 @@ func (pc *PartyCoordinator) joinPartyLeader(msgID string, sig []byte, peers []st
 		pc.logger.Error().Err(err).Msg("fail to send response to peers")
 		return onlinePeers, ErrJoinPartyTimeout
 	}
-	// leader need to wait for a few seconds to ensure his message has been sent
-	time.Sleep(time.Second * 2)
 	if len(tssNodes) < threshold+1 {
 		return onlinePeers, ErrJoinPartyTimeout
 	}
@@ -576,6 +574,10 @@ func (pc *PartyCoordinator) JoinPartyWithLeader(msgID string, sig []byte, blockH
 			joinPartyProtocol = joinPartyProtocolWithLeader
 		}
 		onlines, err := pc.joinPartyLeader(msgID, sig, peers, threshold, signChan, joinPartyProtocol)
+		if err != nil {
+			// leader need to wait for a few seconds to ensure his message has been sent if error happens
+			time.Sleep(time.Second * 2)
+		}
 		return onlines, leader, err
 	}
 	// now we are just the normal peer

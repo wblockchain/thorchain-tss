@@ -58,7 +58,6 @@ func (pc *PartyCoordinator) responseIntegrityCheck(broadcastMsg *messages.JoinPa
 			return nil, errors.New("fail to decode")
 
 		}
-		pc.logger.Warn().Msgf("---->we need %d nodes while we have %d", peerGroup.threshold-1, freq)
 		return &retMsg, nil
 	}
 	pc.logger.Warn().Msgf("---->we need %d nodes while we have %d", peerGroup.threshold-1, freq)
