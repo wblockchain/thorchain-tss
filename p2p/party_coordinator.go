@@ -236,6 +236,10 @@ func (pc *PartyCoordinator) HandleStreamWithLeader(stream network.Stream) {
 	case "response":
 		remotePeer = stream.Conn().RemotePeer()
 		pc.processRespMsg(&msg, stream, remotePeer.String())
+		err := WriteStreamWithBuffer([]byte("done"), stream)
+		if err != nil {
+			pc.logger.Error().Err(err).Msgf("fail to send response to leader")
+		}
 		pc.streamMgr.AddStream(msg.ID, stream)
 		return
 	default:
@@ -285,7 +289,7 @@ func (pc *PartyCoordinator) sendResponseToAll(msgSend []byte, msgID string, peer
 			if peer == pc.host.ID() {
 				return
 			}
-			if err := pc.sendMsgToPeer(msgSend, msgID, peer, p2pProtocol); err != nil {
+			if err := pc.sendMsgToPeer(msgSend, msgID, peer, p2pProtocol, true); err != nil {
 				pc.logger.Error().Err(err).Msg("error in send the join party request to peer")
 			}
 		}(el)
@@ -301,7 +305,7 @@ func (pc *PartyCoordinator) sendRequestToLeader(msg *messages.JoinPartyLeaderCom
 		return err
 	}
 
-	if err := pc.sendMsgToPeer(msgSend, msg.ID, leader, joinPartyProtocolWithLeader); err != nil {
+	if err := pc.sendMsgToPeer(msgSend, msg.ID, leader, joinPartyProtocolWithLeader, false); err != nil {
 		pc.logger.Error().Err(err).Msg("error in send the join party request to leader")
 		return errors.New("fail to send request to leader")
 	}
@@ -318,7 +322,7 @@ func (pc *PartyCoordinator) sendRequestToAll(msgID string, msgSend []byte, peers
 			if peer == pc.host.ID() {
 				return
 			}
-			if err := pc.sendMsgToPeer(msgSend, msgID, peer, joinPartyProtocol); err != nil {
+			if err := pc.sendMsgToPeer(msgSend, msgID, peer, joinPartyProtocol, false); err != nil {
 				pc.logger.Error().Err(err).Msg("error in send the join party request to peer")
 			}
 		}(el)
@@ -326,7 +330,7 @@ func (pc *PartyCoordinator) sendRequestToAll(msgID string, msgSend []byte, peers
 	wg.Wait()
 }
 
-func (pc *PartyCoordinator) sendMsgToPeer(msgBuf []byte, msgID string, remotePeer peer.ID, protoc protocol.ID) error {
+func (pc *PartyCoordinator) sendMsgToPeer(msgBuf []byte, msgID string, remotePeer peer.ID, protoc protocol.ID, needResponse bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*4)
 	defer cancel()
 	var stream network.Stream
@@ -365,6 +369,14 @@ func (pc *PartyCoordinator) sendMsgToPeer(msgBuf []byte, msgID string, remotePee
 	if err != nil {
 		return fmt.Errorf("fail to write message to stream:%w", err)
 	}
+
+	if needResponse {
+		_, err := ReadStreamWithBuffer(stream)
+		if err != nil {
+			pc.logger.Error().Err(err).Msgf("fail to get the ")
+		}
+	}
+
 	return nil
 }
 
@@ -574,10 +586,6 @@ func (pc *PartyCoordinator) JoinPartyWithLeader(msgID string, sig []byte, blockH
 			joinPartyProtocol = joinPartyProtocolWithLeader
 		}
 		onlines, err := pc.joinPartyLeader(msgID, sig, peers, threshold, signChan, joinPartyProtocol)
-		if err != nil {
-			// leader need to wait for a few seconds to ensure his message has been sent if error happens
-			time.Sleep(time.Second * 2)
-		}
 		return onlines, leader, err
 	}
 	// now we are just the normal peer

@@ -195,7 +195,7 @@ func (pc *PartyCoordinator) broadcastMsgToAll(msgID string, peerSignatures []*Si
 				return
 			}
 			if peerID == leader && len(msgLeaderSend) != 0 {
-				if err := pc.sendMsgToPeer(msgLeaderSend, msgID, peerID, joinPartyProtocolWithLeaderBroadcast); err != nil {
+				if err := pc.sendMsgToPeer(msgLeaderSend, msgID, peerID, joinPartyProtocolWithLeaderBroadcast, false); err != nil {
 					pc.logger.Error().Err(err).Msg("error in send the join party request to peer")
 					return
 				}
@@ -208,7 +208,7 @@ func (pc *PartyCoordinator) broadcastMsgToAll(msgID string, peerSignatures []*Si
 
 				return
 			}
-			if err := pc.sendMsgToPeer(msgPeerSend, msgID, peerID, joinPartyProtocolWithLeaderBroadcast); err != nil {
+			if err := pc.sendMsgToPeer(msgPeerSend, msgID, peerID, joinPartyProtocolWithLeaderBroadcast, false); err != nil {
 				pc.logger.Error().Err(err).Msg("error in send the join party request to peer")
 			}
 		}(el)
