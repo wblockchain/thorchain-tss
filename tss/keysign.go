@@ -268,13 +268,15 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 
 	// we received the generated verified signature, so we return
 	if errWait == nil {
+		t.logger.Info().Msgf("we received the signature for message %s", msgID)
 		return receivedSig, nil
 	}
 	// for this round, we are not the active signer
 	if errors.Is(errGen, p2p.ErrSignReceived) {
+		t.logger.Info().Msgf("we(not active signer) received the signature for message %s", msgID)
 		return receivedSig, nil
 	}
-
+	t.logger.Info().Msgf("we(active signer) generated the signature for message %s with status %v ", msgID, common.Success)
 	return generatedSig, errGen
 }
 
