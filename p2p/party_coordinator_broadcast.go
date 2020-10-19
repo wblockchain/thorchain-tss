@@ -45,7 +45,7 @@ func (pc *PartyCoordinator) responseIntegrityCheck(broadcastMsg *messages.JoinPa
 		pc.logger.Error().Err(err).Msg("fail to get the freq of the response message")
 		return nil, err
 	}
-	if freq >= peerGroup.threshold-1 {
+	if freq >= peerGroup.waitingThreshold {
 		msgRaw, err := hex.DecodeString(value)
 		if err != nil {
 			pc.logger.Error().Err(err).Msg("fail to decode the hexed response message")
@@ -60,7 +60,7 @@ func (pc *PartyCoordinator) responseIntegrityCheck(broadcastMsg *messages.JoinPa
 		}
 		return &retMsg, nil
 	}
-	pc.logger.Warn().Msgf("---->we need %d nodes while we have %d", peerGroup.threshold-1, freq)
+	pc.logger.Warn().Msgf("---->we need %d nodes while we have %d", peerGroup.waitingThreshold, freq)
 	return nil, errors.New("not enough response")
 }
 
@@ -78,6 +78,42 @@ func (pc *PartyCoordinator) forwardMsg(msg *messages.JoinPartyLeaderCommBroadcas
 		peerGroup.hasForwarded = true
 	}
 	return nil
+}
+
+func (pc *PartyCoordinator) processBroadcastReqMsg(requestMsg *messages.JoinPartyLeaderCommBroadcast, stream network.Stream) {
+	pc.streamMgr.AddStream(requestMsg.ID, stream)
+	pc.joinPartyGroupLock.Lock()
+	peerGroup, ok := pc.peersGroup[requestMsg.ID]
+	pc.joinPartyGroupLock.Unlock()
+	if !ok {
+		pc.logger.Info().Msg("this party is not ready")
+		return
+	}
+	requestPeers := pc.getRequestPeers(peerGroup.msgID, requestMsg.ForwardSignatures)
+	// if we are not the leader, we store this request and will forward it later
+	if pc.host.ID().String() != peerGroup.leader {
+		var signatures []*SigPack
+		err := json.Unmarshal(requestMsg.ForwardSignatures, &signatures)
+		if err != nil {
+			pc.logger.Error().Err(err).Msg("fail to unmarshal the signature data")
+		}
+		peerGroup.storeSignatures(signatures)
+		return
+	}
+	// we verify whether the request is send from the peer and get the request peer list
+	// as the leader, we store this requests
+	for _, remotePeer := range requestPeers {
+		partyFormed, err := peerGroup.updatePeer(remotePeer)
+		if err != nil {
+			pc.logger.Error().Err(err).Msg("receive msg from unknown peer")
+			return
+		}
+		if partyFormed {
+			peerGroup.notify <- "taskDone"
+			// once party formed, we do not care about the rest of the requests
+			return
+		}
+	}
 }
 
 // hHandleStreamWithLeaderBroadcast handle party coordinate stream

@@ -130,42 +130,6 @@ func (pc *PartyCoordinator) getRequestPeers(msgID string, marshaledSignatures []
 	return verifiedPeers
 }
 
-func (pc *PartyCoordinator) processBroadcastReqMsg(requestMsg *messages.JoinPartyLeaderCommBroadcast, stream network.Stream) {
-	pc.streamMgr.AddStream(requestMsg.ID, stream)
-	pc.joinPartyGroupLock.Lock()
-	peerGroup, ok := pc.peersGroup[requestMsg.ID]
-	pc.joinPartyGroupLock.Unlock()
-	if !ok {
-		pc.logger.Info().Msg("this party is not ready")
-		return
-	}
-	requestPeers := pc.getRequestPeers(peerGroup.msgID, requestMsg.ForwardSignatures)
-	// if we are not the leader, we store this request and will forward it later
-	if pc.host.ID().String() != peerGroup.leader {
-		var signatures []*SigPack
-		err := json.Unmarshal(requestMsg.ForwardSignatures, &signatures)
-		if err != nil {
-			pc.logger.Error().Err(err).Msg("fail to unmarshal the signature data")
-		}
-		peerGroup.storeSignatures(signatures)
-		return
-	}
-	// we verify whether the request is send from the peer and get the request peer list
-	// as the leader, we store this requests
-	for _, remotePeer := range requestPeers {
-		partyFormed, err := peerGroup.updatePeer(remotePeer)
-		if err != nil {
-			pc.logger.Error().Err(err).Msg("receive msg from unknown peer")
-			return
-		}
-		if partyFormed {
-			peerGroup.notify <- "taskDone"
-			// once party formed, we do not care about the rest of the requests
-			return
-		}
-	}
-}
-
 func (pc *PartyCoordinator) HandleStream(stream network.Stream) {
 	remotePeer := stream.Conn().RemotePeer()
 	logger := pc.logger.With().Str("remote peer", remotePeer.String()).Logger()
@@ -261,9 +225,14 @@ func (pc *PartyCoordinator) createJoinPartyGroups(messageID, leader string, peer
 		pc.logger.Error().Err(err).Msg("fail to parse peer id")
 		return nil, err
 	}
+	waitingThreshold, err := conversion.GetThreshold(threshold + 1)
+	if err != nil {
+		pc.logger.Error().Err(err).Msg("fail to calculte the threshold")
+		return nil, err
+	}
 	pc.joinPartyGroupLock.Lock()
 	defer pc.joinPartyGroupLock.Unlock()
-	peerStatus := NewPeerStatus(messageID, pIDs, pc.host.ID(), leader, threshold)
+	peerStatus := NewPeerStatus(messageID, pIDs, pc.host.ID(), leader, threshold, waitingThreshold)
 	pc.peersGroup[messageID] = peerStatus
 	return peerStatus, nil
 }

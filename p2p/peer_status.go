@@ -18,6 +18,7 @@ type PeerStatus struct {
 	leaderResponseBroadcast *messages.JoinPartyLeaderCommBroadcast
 	leader                  string
 	threshold               int
+	waitingThreshold        int
 	reqCount                int
 	peerSigs                []*SigPack
 	msgID                   string
@@ -25,7 +26,7 @@ type PeerStatus struct {
 	hasForwarded            bool
 }
 
-func NewPeerStatus(msgID string, peerNodes []peer.ID, myPeerID peer.ID, leader string, threshold int) *PeerStatus {
+func NewPeerStatus(msgID string, peerNodes []peer.ID, myPeerID peer.ID, leader string, threshold, waitingThreshold int) *PeerStatus {
 	dat := make(map[peer.ID]bool)
 	for _, el := range peerNodes {
 		if el == myPeerID {
@@ -34,17 +35,18 @@ func NewPeerStatus(msgID string, peerNodes []peer.ID, myPeerID peer.ID, leader s
 		dat[el] = false
 	}
 	peerStatus := &PeerStatus{
-		peersResponse:  dat,
-		peerStatusLock: &sync.RWMutex{},
-		notify:         make(chan string, 1),
-		newFound:       make(chan bool, len(peerNodes)),
-		leader:         leader,
-		threshold:      threshold,
-		reqCount:       0,
-		peerSigs:       nil,
-		msgID:          msgID,
-		responseMsgMap: make(map[string]string),
-		hasForwarded:   false,
+		peersResponse:    dat,
+		peerStatusLock:   &sync.RWMutex{},
+		notify:           make(chan string, 1),
+		newFound:         make(chan bool, len(peerNodes)),
+		leader:           leader,
+		threshold:        threshold,
+		waitingThreshold: waitingThreshold,
+		reqCount:         0,
+		peerSigs:         nil,
+		msgID:            msgID,
+		responseMsgMap:   make(map[string]string),
+		hasForwarded:     false,
 	}
 	return peerStatus
 }
