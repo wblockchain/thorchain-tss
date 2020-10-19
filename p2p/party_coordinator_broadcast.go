@@ -60,7 +60,7 @@ func (pc *PartyCoordinator) responseIntegrityCheck(broadcastMsg *messages.JoinPa
 		}
 		return &retMsg, nil
 	}
-	pc.logger.Warn().Msgf("---->we need %d nodes while we have %d", peerGroup.waitingThreshold, freq)
+	pc.logger.Debug().Msgf("we need %d nodes while we have %d", peerGroup.waitingThreshold, freq)
 	return nil, errors.New("not enough response")
 }
 

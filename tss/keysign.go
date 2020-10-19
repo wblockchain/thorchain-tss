@@ -276,7 +276,7 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 		t.logger.Info().Msgf("we(not active signer) received the signature for message %s", msgID)
 		return receivedSig, nil
 	}
-	t.logger.Info().Msgf("we(active signer) generated the signature for message %s with status %v ", msgID, common.Success)
+	t.logger.Info().Msgf("we(active signer) generated the signature for message %s with status %v ", msgID, generatedSig.Status)
 	return generatedSig, errGen
 }
 

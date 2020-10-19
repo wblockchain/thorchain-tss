@@ -332,8 +332,7 @@ func (pc *PartyCoordinator) sendMsgToPeer(msgBuf []byte, msgID string, remotePee
 			pc.logger.Error().Err(err).Msg("fail to close stream")
 		}
 	}()
-	// pc.logger.Debug().Msgf("open stream to (%s) successfully", remotePeer)
-	pc.logger.Info().Msgf("(%s)open stream to (%s) successfully", pc.host.ID().String(), remotePeer)
+	pc.logger.Debug().Msgf("open stream to (%s) successfully", remotePeer)
 	err = WriteStreamWithBuffer(msgBuf, stream)
 	if err != nil {
 		return fmt.Errorf("fail to write message to stream:%w", err)
