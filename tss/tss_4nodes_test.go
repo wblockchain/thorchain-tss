@@ -228,7 +228,6 @@ func (s *FourNodeTestSuite) doTestFailJoinParty(c *C, ver string) {
 	case "0.15.0":
 		blockHeight = 12
 	}
-	fmt.Printf("block height is %d\n", blockHeight)
 	req = keygen.NewRequest(testPubKeys, blockHeight, ver)
 	wg := sync.WaitGroup{}
 	lock := &sync.Mutex{}

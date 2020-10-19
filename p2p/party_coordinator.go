@@ -337,14 +337,13 @@ func (pc *PartyCoordinator) sendMsgToPeer(msgBuf []byte, msgID string, remotePee
 	if err != nil {
 		return fmt.Errorf("fail to write message to stream:%w", err)
 	}
-
-	if needResponse {
+	// we need to check applydeadline here as the unicast do not support tss
+	if needResponse && ApplyDeadline {
 		_, err := ReadStreamWithBuffer(stream)
 		if err != nil {
 			pc.logger.Error().Err(err).Msgf("fail to get the ")
 		}
 	}
-
 	return nil
 }
 
@@ -389,7 +388,7 @@ func (pc *PartyCoordinator) joinPartyMember(msgID string, leader string, thresho
 		// now we wait for the leader to notify us who we do the keygen/keysign with
 		select {
 		case <-peerGroup.notify:
-			pc.logger.Debug().Msg("we have receive the response from the leader")
+			pc.logger.Debug().Msg("we have received the response from the leader")
 			close(done)
 			return
 

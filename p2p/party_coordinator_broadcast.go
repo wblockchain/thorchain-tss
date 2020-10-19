@@ -312,7 +312,7 @@ func (pc *PartyCoordinator) joinPartyMemberBroadcast(msgID string, sig []byte, l
 			case ret := <-peerGroup.notify:
 				switch ret {
 				case "taskDone":
-					pc.logger.Debug().Msg("we have receive the response from the leader")
+					pc.logger.Debug().Msg("we have received the response from the leader")
 					close(done)
 					return
 				case "forward":
@@ -350,7 +350,6 @@ func (pc *PartyCoordinator) joinPartyMemberBroadcast(msgID string, sig []byte, l
 			peersIGet = append(peersIGet, peerID)
 		}
 	}
-
 	peerGroup.peerStatusLock.Unlock()
 	if peerGroup.leaderResponse == nil {
 		leaderPk, err := conversion.GetPubKeyFromPeerID(leader)
