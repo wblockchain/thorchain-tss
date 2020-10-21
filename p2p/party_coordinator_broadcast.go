@@ -252,7 +252,7 @@ func (pc *PartyCoordinator) broadcastMsgToAll(msgID string, peerSignatures []*Si
 	wg.Wait()
 }
 
-func (pc *PartyCoordinator) joinPartyMemberBroadcast(msgID string, sig []byte, leader string, allNodes []string, threshold int, sigChan chan string) ([]peer.ID, []peer.ID, error) {
+func (pc *PartyCoordinator) joinPartyMemberBroadcast(msgID string, sig, sigWrong []byte, leader string, allNodes []string, threshold int, sigChan chan string) ([]peer.ID, []peer.ID, error) {
 	var allPeers []peer.ID
 	for _, el := range allNodes {
 		p, err := peer.Decode(el)
