@@ -6,6 +6,7 @@ import (
 
 	"github.com/libp2p/go-libp2p-core/peer"
 
+	"gitlab.com/thorchain/tss/go-tss/conversion"
 	"gitlab.com/thorchain/tss/go-tss/messages"
 )
 
@@ -59,7 +60,17 @@ func (ps *PeerStatus) getCoordinationStatus() bool {
 func (ps *PeerStatus) storeSignatures(signature []*SigPack) {
 	ps.peerStatusLock.Lock()
 	defer ps.peerStatusLock.Unlock()
-	ps.peerSigs = append(ps.peerSigs, signature[:]...)
+	for _, el := range signature {
+		pk, err := conversion.GetP2PPubKeyFromPeerID(el.PeerID.String())
+		if err != nil {
+			continue
+		}
+		ret, _ := pk.Verify([]byte(ps.msgID), el.Sig)
+		if ret {
+			ps.peerSigs = append(ps.peerSigs, el)
+			continue
+		}
+	}
 }
 
 func (ps *PeerStatus) getSignatures() []*SigPack {

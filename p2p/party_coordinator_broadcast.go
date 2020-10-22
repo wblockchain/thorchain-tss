@@ -88,7 +88,6 @@ func (pc *PartyCoordinator) processBroadcastReqMsg(requestMsg *messages.JoinPart
 		pc.logger.Info().Msg("this party is not ready")
 		return
 	}
-	requestPeers := pc.getRequestPeers(peerGroup.msgID, requestMsg.ForwardSignatures)
 	// if we are not the leader, we store this request and will forward it later
 	if pc.host.ID().String() != peerGroup.leader {
 		var signatures []*SigPack
@@ -99,6 +98,7 @@ func (pc *PartyCoordinator) processBroadcastReqMsg(requestMsg *messages.JoinPart
 		peerGroup.storeSignatures(signatures)
 		return
 	}
+	requestPeers := pc.getRequestPeers(peerGroup.msgID, requestMsg.ForwardSignatures)
 	// we verify whether the request is send from the peer and get the request peer list
 	// as the leader, we store this requests
 	for _, remotePeer := range requestPeers {
