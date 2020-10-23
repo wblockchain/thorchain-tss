@@ -15,7 +15,6 @@ func LeaderNode(msgID string, blockHeight int64, pIDs []string) (string, error) 
 	}
 	keyStore := make(map[string]string)
 	hashes := make([]string, len(pIDs))
-	sort.Strings(pIDs)
 	for i, el := range pIDs {
 		sum := sha256.Sum256([]byte(msgID + strconv.FormatInt(blockHeight, 10) + el))
 		encodedSum := hex.EncodeToString(sum[:])

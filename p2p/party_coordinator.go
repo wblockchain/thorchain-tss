@@ -102,7 +102,7 @@ func (pc *PartyCoordinator) processReqMsg(requestMsg *messages.JoinPartyLeaderCo
 }
 
 func (pc *PartyCoordinator) getRequestPeers(msgID string, marshaledSignatures []byte) []peer.ID {
-	var signatures []*SigPack
+	var signatures []SigPack
 	var verifiedPeers []peer.ID
 	err := json.Unmarshal(marshaledSignatures, &signatures)
 	if err != nil {
@@ -387,7 +387,8 @@ func (pc *PartyCoordinator) joinPartyMember(msgID string, leader string, thresho
 			pc.logger.Debug().Msg("we have received the response from the leader")
 			close(done)
 			return
-
+			// when join party fails, we need to have extra time for peers to receive and exchange the results
+			// of who should been blamed before they quit.
 		case <-time.After(pc.timeout + time.Second*2):
 			// timeout
 			close(done)
@@ -439,7 +440,7 @@ func (pc *PartyCoordinator) sendToPeers(msgID string, sig []byte, threshold int,
 		PeerID: pc.host.ID(),
 		Sig:    sig,
 	}
-	sigBytes, err := json.Marshal([]*SigPack{&signature})
+	sigBytes, err := json.Marshal([]SigPack{signature})
 	if err != nil {
 		return errors.New("leader fail to create the signature")
 	}
@@ -557,55 +558,55 @@ func (pc *PartyCoordinator) JoinPartyWithLeader(msgID string, sig []byte, blockH
 		onlines, receivedBroadcast, err := pc.joinPartyMemberBroadcast(msgID, sig, leader, peers, threshold, signChan)
 		if err == nil {
 			return onlines, leader, err
-		} else {
-			// the following code is for the keygen blame, as keysign we always blame the leader given 2/3 honest node
-			// will always be online.
-			// for the broadcast join party, if a leader complain a node is offline, we need to check whether we have
-			// received the request of that node, if we have received that request, it indicates the leader or that
-			// node tells a lie. if the leader is malicious, so more than 2/3 nodes will blame him. if "that" node skip
-			// sending msg to me, while send to leader, it is fine, as the join party can still start. if he send skip
-			// the leader, I will forward this request to leader.
-			receivedBroadcast = append(receivedBroadcast, pc.host.ID())
-			var offlinePeers []string
-			for _, i := range peers {
-				found := false
-				for _, j := range onlines {
-					if i == j.String() {
-						found = true
-						break
-					}
-				}
-				if !found {
-					offlinePeers = append(offlinePeers, i)
-				}
-			}
-			// if we have the request of any of the offline nodes, we just make the leader to be blame in tss
-			found := false
-			for _, i := range offlinePeers {
-				for _, j := range receivedBroadcast {
-					if i == j.String() {
-						found = true
-						break
-					}
-				}
-			}
-			// we now create the online nodes to have the leader be blamed
-			if found {
-				var nodesWithoutLeader []peer.ID
-				for _, el := range peers {
-					if el != leader {
-						n, err := peer.Decode(el)
-						if err != nil {
-							pc.logger.Error().Err(err).Msg("fail to decode the peer ID")
-							continue
-						}
-						nodesWithoutLeader = append(nodesWithoutLeader, n)
-					}
-				}
-				return nodesWithoutLeader, leader, err
-			}
-			return onlines, leader, err
 		}
+		// the following code is for the keygen blame, as keysign we always blame the leader given 2/3 honest node
+		// will always be online.
+		// for the broadcast join party, if a leader complain a node is offline, we need to check whether we have
+		// received the request of that node, if we have received that request, it indicates the leader or that
+		// node tells a lie. if the leader is malicious, so more than 2/3 nodes will blame him. if "that" node skip
+		// sending msg to me, while send to leader, it is fine, as the join party can still start. if he send skip
+		// the leader, I will forward this request to leader.
+		receivedBroadcast = append(receivedBroadcast, pc.host.ID())
+		var offlinePeers []string
+		for _, i := range peers {
+			found := false
+			for _, j := range onlines {
+				if i == j.String() {
+					found = true
+					break
+				}
+			}
+			if !found {
+				offlinePeers = append(offlinePeers, i)
+			}
+		}
+		// if we have the request of any of the offline nodes, we just make the leader to be blame in tss
+		found := false
+		for _, i := range offlinePeers {
+			for _, j := range receivedBroadcast {
+				if i == j.String() {
+					found = true
+					break
+				}
+			}
+		}
+		// we now create the online nodes to have the leader be blamed
+		if found {
+			var nodesWithoutLeader []peer.ID
+			for _, el := range peers {
+				if el != leader {
+					n, err := peer.Decode(el)
+					if err != nil {
+						pc.logger.Error().Err(err).Msg("fail to decode the peer ID")
+						continue
+					}
+					nodesWithoutLeader = append(nodesWithoutLeader, n)
+				}
+			}
+			return nodesWithoutLeader, leader, err
+		}
+		return onlines, leader, err
+
 	} else {
 		pc.logger.Info().Msg("we apply join party with a leader")
 		onlines, err = pc.joinPartyMember(msgID, leader, threshold, signChan)

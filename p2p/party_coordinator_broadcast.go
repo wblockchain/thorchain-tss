@@ -90,10 +90,11 @@ func (pc *PartyCoordinator) processBroadcastReqMsg(requestMsg *messages.JoinPart
 	}
 	// if we are not the leader, we store this request and will forward it later
 	if pc.host.ID().String() != peerGroup.leader {
-		var signatures []*SigPack
+		var signatures []SigPack
 		err := json.Unmarshal(requestMsg.ForwardSignatures, &signatures)
 		if err != nil {
 			pc.logger.Error().Err(err).Msg("fail to unmarshal the signature data")
+			return
 		}
 		peerGroup.storeSignatures(signatures)
 		return
@@ -180,18 +181,18 @@ func (pc *PartyCoordinator) HandleStreamWithLeaderBroadcast(stream network.Strea
 	}
 }
 
-func generateMSgForSending(msgID string, sig []byte, forwarded []*SigPack, pid peer.ID) ([]byte, []byte, error) {
+func generateMSgForSending(msgID string, sig []byte, forwarded []SigPack, pid peer.ID) ([]byte, []byte, error) {
 	thisSig := SigPack{
 		sig,
 		pid,
 	}
 	// we put ourself first then the forwarded msg to enable the leader process our request firstly
-	sendSignatures := append([]*SigPack{&thisSig}, forwarded[:]...)
+	sendSignatures := append([]SigPack{thisSig}, forwarded...)
 	signaturesMarshaledForLeader, err := json.Marshal(sendSignatures)
 	if err != nil {
 		return nil, nil, err
 	}
-	thisSigMarshaled, err := json.Marshal([]*SigPack{&thisSig})
+	thisSigMarshaled, err := json.Marshal([]SigPack{thisSig})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -219,7 +220,7 @@ func generateMSgForSending(msgID string, sig []byte, forwarded []*SigPack, pid p
 	return marshaledMsgPeer, marshaledMsgLeader, nil
 }
 
-func (pc *PartyCoordinator) broadcastMsgToAll(msgID string, peerSignatures []*SigPack, peerGroup *PeerStatus, msgPeerSend, msgLeaderSend []byte, leader peer.ID, peers []peer.ID) {
+func (pc *PartyCoordinator) broadcastMsgToAll(msgID string, peerSignatures []SigPack, peerGroup *PeerStatus, msgPeerSend, msgLeaderSend []byte, leader peer.ID, peers []peer.ID) {
 	var wg sync.WaitGroup
 	wg.Add(len(peers))
 	for _, el := range peers {
@@ -326,7 +327,8 @@ func (pc *PartyCoordinator) joinPartyMemberBroadcast(msgID string, sig []byte, l
 				default:
 					pc.logger.Info().Msg("unknown notice")
 				}
-			// for the broadcast join party, we need extra time for non leader nodes to exchange and check their response
+			// when join party fails, we need to have extra time for peers to receive and exchange the results
+			// of who should been blamed before they quit.
 			case <-time.After(pc.timeout + time.Second*2):
 				// timeout
 				close(done)

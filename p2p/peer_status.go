@@ -21,7 +21,7 @@ type PeerStatus struct {
 	threshold               int
 	waitingThreshold        int
 	reqCount                int
-	peerSigs                []*SigPack
+	peerSigs                []SigPack
 	msgID                   string
 	responseMsgMap          map[string]string
 	hasForwarded            bool
@@ -57,7 +57,7 @@ func (ps *PeerStatus) getCoordinationStatus() bool {
 	return len(offline) == 0
 }
 
-func (ps *PeerStatus) storeSignatures(signature []*SigPack) {
+func (ps *PeerStatus) storeSignatures(signature []SigPack) {
 	ps.peerStatusLock.Lock()
 	defer ps.peerStatusLock.Unlock()
 	for _, el := range signature {
@@ -73,12 +73,11 @@ func (ps *PeerStatus) storeSignatures(signature []*SigPack) {
 	}
 }
 
-func (ps *PeerStatus) getSignatures() []*SigPack {
+func (ps *PeerStatus) getSignatures() []SigPack {
 	ps.peerStatusLock.Lock()
 	defer ps.peerStatusLock.Unlock()
-	retVal := make([]*SigPack, len(ps.peerSigs))
-	copy(retVal, ps.peerSigs)
 	// drop the previous storage
+	retVal := ps.peerSigs
 	ps.peerSigs = nil
 	return retVal
 }
