@@ -59,6 +59,19 @@ type FourNodeTestSuite struct {
 
 var _ = Suite(&FourNodeTestSuite{})
 
+func (s *FourNodeTestSuite) SetUpSuite(c *C) {
+	folderPath := path.Join(os.TempDir(), "tss_4nodes_test")
+	if _, err := os.Stat(folderPath); os.IsNotExist(err) {
+		err := os.Mkdir(folderPath, os.ModePerm)
+		c.Assert(err, IsNil)
+	}
+}
+
+func (s *FourNodeTestSuite) TearDownSuite(c *C) {
+	err := os.RemoveAll(path.Join(os.TempDir(), "tss_4nodes_test"))
+	c.Assert(err, IsNil)
+}
+
 // setup four nodes for test
 func (s *FourNodeTestSuite) SetUpTest(c *C) {
 	common.InitLog("info", true, "four_nodes_test")
@@ -319,7 +332,7 @@ func (s *FourNodeTestSuite) TearDownTest(c *C) {
 		s.servers[i].Stop()
 	}
 	for i := 0; i < partyNum; i++ {
-		tempFilePath := path.Join(os.TempDir(), strconv.Itoa(i))
+		tempFilePath := path.Join(os.TempDir(), "tss_4nodes_test", strconv.Itoa(i))
 		os.RemoveAll(tempFilePath)
 
 	}
@@ -328,7 +341,7 @@ func (s *FourNodeTestSuite) TearDownTest(c *C) {
 func (s *FourNodeTestSuite) getTssServer(c *C, index int, conf common.TssConfig, bootstrap string) *TssServer {
 	priKey, err := conversion.GetPriKey(testPriKeyArr[index])
 	c.Assert(err, IsNil)
-	baseHome := path.Join(os.TempDir(), strconv.Itoa(index))
+	baseHome := path.Join(os.TempDir(), "tss_4nodes_test", strconv.Itoa(index))
 	if _, err := os.Stat(baseHome); os.IsNotExist(err) {
 		err := os.Mkdir(baseHome, os.ModePerm)
 		c.Assert(err, IsNil)
