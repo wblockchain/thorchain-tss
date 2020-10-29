@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -40,7 +41,7 @@ func setupHostsLocally(t *testing.T, n int) []host.Host {
 }
 
 func TestPartyCoordinator(t *testing.T) {
-	ApplyDeadline = false
+	atomic.StoreInt32(&ApplyDeadline, 0)
 	hosts := setupHostsLocally(t, 4)
 	var pcs []PartyCoordinator
 	var peers []string
@@ -80,7 +81,7 @@ func TestPartyCoordinator(t *testing.T) {
 }
 
 func TestPartyCoordinatorTimeOut(t *testing.T) {
-	ApplyDeadline = false
+	atomic.StoreInt32(&ApplyDeadline, 0)
 	timeout := time.Second
 	hosts, _, _ := setupHosts(t, 4)
 	var pcs []*PartyCoordinator

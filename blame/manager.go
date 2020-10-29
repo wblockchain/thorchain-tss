@@ -10,29 +10,31 @@ import (
 )
 
 type Manager struct {
-	logger          zerolog.Logger
-	blame           *Blame
-	lastUnicastPeer map[string][]peer.ID
-	shareMgr        *ShareMgr
-	roundMgr        *RoundMgr
-	partyInfo       *PartyInfo
-	PartyIDtoP2PID  map[string]peer.ID
-	lastMsgLocker   *sync.RWMutex
-	lastMsg         btss.Message
-	acceptedShares  *sync.Map
+	logger            zerolog.Logger
+	blame             *Blame
+	lastUnicastPeer   map[string][]peer.ID
+	unicastPeerLocker *sync.Mutex
+	shareMgr          *ShareMgr
+	roundMgr          *RoundMgr
+	partyInfo         *PartyInfo
+	PartyIDtoP2PID    map[string]peer.ID
+	lastMsgLocker     *sync.RWMutex
+	lastMsg           btss.Message
+	acceptedShares    *sync.Map
 }
 
 func NewBlameManager() *Manager {
 	return &Manager{
-		logger:          log.With().Str("module", "blame_manager").Logger(),
-		partyInfo:       nil,
-		PartyIDtoP2PID:  make(map[string]peer.ID),
-		lastUnicastPeer: make(map[string][]peer.ID),
-		shareMgr:        NewTssShareMgr(),
-		roundMgr:        NewTssRoundMgr(),
-		blame:           &Blame{},
-		lastMsgLocker:   &sync.RWMutex{},
-		acceptedShares:  &sync.Map{},
+		logger:            log.With().Str("module", "blame_manager").Logger(),
+		partyInfo:         nil,
+		PartyIDtoP2PID:    make(map[string]peer.ID),
+		lastUnicastPeer:   make(map[string][]peer.ID),
+		unicastPeerLocker: &sync.Mutex{},
+		shareMgr:          NewTssShareMgr(),
+		roundMgr:          NewTssRoundMgr(),
+		blame:             &Blame{},
+		lastMsgLocker:     &sync.RWMutex{},
+		acceptedShares:    &sync.Map{},
 	}
 }
 
@@ -73,6 +75,8 @@ func (m *Manager) SetPartyInfo(party btss.Party, partyIDMap map[string]*btss.Par
 }
 
 func (m *Manager) SetLastUnicastPeer(peerID peer.ID, roundInfo string) {
+	m.unicastPeerLocker.Lock()
+	defer m.unicastPeerLocker.Unlock()
 	l, ok := m.lastUnicastPeer[roundInfo]
 	if !ok {
 		peerList := []peer.ID{peerID}

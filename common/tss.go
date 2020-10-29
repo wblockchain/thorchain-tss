@@ -37,6 +37,7 @@ type TssCommon struct {
 	broadcastChannel    chan *messages.BroadcastMsgChan
 	TssMsg              chan *p2p.Message
 	P2PPeers            []peer.ID // most of tss message are broadcast, we store the peers ID to avoid iterating
+	PeersLocker         *sync.RWMutex
 	msgID               string
 	privateKey          tcrypto.PrivKey
 	taskDone            chan struct{}
@@ -57,6 +58,7 @@ func NewTssCommon(peerID string, broadcastChannel chan *messages.BroadcastMsgCha
 		broadcastChannel:    broadcastChannel,
 		TssMsg:              make(chan *p2p.Message),
 		P2PPeers:            nil,
+		PeersLocker:         &sync.RWMutex{},
 		msgID:               msgID,
 		localPeerID:         peerID,
 		privateKey:          privKey,
@@ -382,7 +384,9 @@ func (t *TssCommon) ProcessOutCh(msg btss.Message, msgType messages.THORChainTSS
 	}
 	peerIDs := make([]peer.ID, 0)
 	if len(r.To) == 0 {
+		t.PeersLocker.RLock()
 		peerIDs = t.P2PPeers
+		t.PeersLocker.RUnlock()
 	} else {
 		for _, each := range r.To {
 			peerID, ok := t.PartyIDtoP2PID[each.Id]
@@ -548,12 +552,14 @@ func (t *TssCommon) receiverBroadcastHashToPeers(wireMsg *messages.WireMessage, 
 	if !ok {
 		return errors.New("error in find the data owner peerID")
 	}
+	t.PeersLocker.RLock()
 	for _, el := range t.P2PPeers {
 		if el == dataOwnerPeerID {
 			continue
 		}
 		peerIDs = append(peerIDs, el)
 	}
+	t.PeersLocker.RUnlock()
 	msgVerType := getBroadcastMessageType(msgType)
 	key := wireMsg.GetCacheKey()
 	msgHash, err := conversion.BytesToHashString(wireMsg.Message)

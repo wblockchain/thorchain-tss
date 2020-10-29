@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/host"
@@ -74,7 +75,9 @@ func (pc *PartyCoordinator) processRespMsg(respMsg *messages.JoinPartyLeaderComm
 		return
 	}
 	if remotePeer == peerGroup.leader {
+		peerGroup.peerStatusLock.Lock()
 		peerGroup.leaderResponse = respMsg
+		peerGroup.peerStatusLock.Unlock()
 		peerGroup.notify <- "taskDone"
 	} else {
 		pc.logger.Info().Msgf("this party(%s) is not the leader(%s) as expected", remotePeer, peerGroup.leader)
@@ -333,8 +336,9 @@ func (pc *PartyCoordinator) sendMsgToPeer(msgBuf []byte, msgID string, remotePee
 	if err != nil {
 		return fmt.Errorf("fail to write message to stream:%w", err)
 	}
+	applyDeadline := atomic.LoadInt32(&ApplyDeadline)
 	// we need to check applydeadline here as the unicast do not support tss
-	if needResponse && ApplyDeadline {
+	if needResponse && (applyDeadline == 1) {
 		_, err := ReadStreamWithBuffer(stream)
 		if err != nil {
 			pc.logger.Error().Err(err).Msgf("fail to get the response from peer %s\n", remotePeer)
@@ -485,7 +489,9 @@ func (pc *PartyCoordinator) joinPartyLeader(msgID string, sig []byte, peers []st
 		pc.logger.Error().Err(err).Msg("fail to create the join party group")
 		return nil, err
 	}
+	peerGroup.peerStatusLock.Lock()
 	peerGroup.leader = pc.host.ID().String()
+	peerGroup.peerStatusLock.Unlock()
 	allPeers, err := pc.getPeerIDs(peers)
 	if err != nil {
 		pc.logger.Error().Err(err).Msg("fail to parse peer id")
@@ -559,6 +565,7 @@ func (pc *PartyCoordinator) JoinPartyWithLeader(msgID string, sig []byte, blockH
 		if err == nil {
 			return onlines, leader, err
 		}
+
 		// the following code is for the keygen blame, as keysign we always blame the leader given 2/3 honest node
 		// will always be online.
 		// for the broadcast join party, if a leader complain a node is offline, we need to check whether we have

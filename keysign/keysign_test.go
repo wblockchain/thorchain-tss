@@ -322,7 +322,9 @@ func rejectSendToOnePeer(c *C, tssKeySign *TssKeySign, stopChan chan struct{}, t
 					sort.Slice(peersID, func(i, j int) bool {
 						return peersID[i].String() > peersID[j].String()
 					})
+					tssKeySign.tssCommonStruct.PeersLocker.Lock()
 					tssKeySign.tssCommonStruct.P2PPeers = targetPeers
+					tssKeySign.tssCommonStruct.PeersLocker.Unlock()
 					return
 				}
 			}

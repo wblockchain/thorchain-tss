@@ -37,7 +37,6 @@ func (pc *PartyCoordinator) responseIntegrityCheck(broadcastMsg *messages.JoinPa
 	}
 	encodedBroadcastMsg := hex.EncodeToString(msg)
 	peerGroup.peerStatusLock.Lock()
-
 	defer peerGroup.peerStatusLock.Unlock()
 	peerGroup.responseMsgMap[src.String()] = encodedBroadcastMsg
 	value, freq, err := conversion.GetHighestFreq(peerGroup.responseMsgMap)
@@ -72,10 +71,15 @@ func (pc *PartyCoordinator) forwardMsg(msg *messages.JoinPartyLeaderCommBroadcas
 		pc.logger.Info().Msgf("message ID from unknown peer")
 		return errors.New("unknown sender")
 	}
-	if peerGroup.hasForwarded == false {
+	peerGroup.peerStatusLock.RLock()
+	hasForwarded := peerGroup.hasForwarded
+	peerGroup.peerStatusLock.RUnlock()
+	if hasForwarded == false {
+		peerGroup.peerStatusLock.Lock()
 		peerGroup.leaderResponseBroadcast = msg
-		peerGroup.notify <- "forward"
 		peerGroup.hasForwarded = true
+		peerGroup.peerStatusLock.Unlock()
+		peerGroup.notify <- "forward"
 	}
 	return nil
 }
@@ -89,7 +93,11 @@ func (pc *PartyCoordinator) processBroadcastReqMsg(requestMsg *messages.JoinPart
 		return
 	}
 	// if we are not the leader, we store this request and will forward it later
-	if pc.host.ID().String() != peerGroup.leader {
+	peerGroup.peerStatusLock.RLock()
+	leader := peerGroup.leader
+	peerGroupMsgID := peerGroup.msgID
+	peerGroup.peerStatusLock.RUnlock()
+	if pc.host.ID().String() != leader {
 		var signatures []SigPack
 		err := json.Unmarshal(requestMsg.ForwardSignatures, &signatures)
 		if err != nil {
@@ -99,7 +107,7 @@ func (pc *PartyCoordinator) processBroadcastReqMsg(requestMsg *messages.JoinPart
 		peerGroup.storeSignatures(signatures)
 		return
 	}
-	requestPeers := pc.getRequestPeers(peerGroup.msgID, requestMsg.ForwardSignatures)
+	requestPeers := pc.getRequestPeers(peerGroupMsgID, requestMsg.ForwardSignatures)
 	// we verify whether the request is send from the peer and get the request peer list
 	// as the leader, we store this requests
 	for _, remotePeer := range requestPeers {
@@ -269,9 +277,9 @@ func (pc *PartyCoordinator) joinPartyMemberBroadcast(msgID string, sig []byte, l
 	if err != nil {
 		return nil, nil, fmt.Errorf("fail to create join party:%w", err)
 	}
-
-	peerGroup.leader = leader
+	peerGroup.peerStatusLock.Lock()
 	peerGroup.peersResponse[leaderID] = true
+	peerGroup.peerStatusLock.Unlock()
 	var wg sync.WaitGroup
 	done := make(chan struct{})
 	wg.Add(1)
@@ -316,8 +324,11 @@ func (pc *PartyCoordinator) joinPartyMemberBroadcast(msgID string, sig []byte, l
 					return
 				case "forward":
 					// now we forward the response to peers
-					if peerGroup.leaderResponseBroadcast != nil {
-						sentData, err := proto.Marshal(peerGroup.leaderResponseBroadcast)
+					peerGroup.peerStatusLock.RLock()
+					leaderResponseBroadcast := peerGroup.leaderResponseBroadcast
+					peerGroup.peerStatusLock.RUnlock()
+					if leaderResponseBroadcast != nil {
+						sentData, err := proto.Marshal(leaderResponseBroadcast)
 						if err != nil {
 							pc.logger.Error().Err(err).Msg("fail to marshal the response to send")
 						}
@@ -345,13 +356,14 @@ func (pc *PartyCoordinator) joinPartyMemberBroadcast(msgID string, sig []byte, l
 
 	var peersIGet []peer.ID
 	peerGroup.peerStatusLock.Lock()
+	defer peerGroup.peerStatusLock.Unlock()
 	for peerID, val := range peerGroup.peersResponse {
 		if val {
 			peersIGet = append(peersIGet, peerID)
 		}
 	}
-	peerGroup.peerStatusLock.Unlock()
-	if peerGroup.leaderResponse == nil {
+	leaderResponse := peerGroup.leaderResponse
+	if leaderResponse == nil {
 		leaderPk, err := conversion.GetPubKeyFromPeerID(leader)
 		if err != nil {
 			pc.logger.Error().Msg("leader is not reachable")
@@ -364,7 +376,7 @@ func (pc *PartyCoordinator) joinPartyMemberBroadcast(msgID string, sig []byte, l
 		return nil, nil, ErrSignReceived
 	}
 
-	onlineNodes := peerGroup.leaderResponse.PeerIDs
+	onlineNodes := leaderResponse.PeerIDs
 	// we trust the returned nodes returned by the leader, if tss fail, the leader
 	// also will get blamed.
 	pIDs, err := pc.getPeerIDs(onlineNodes)
@@ -376,10 +388,10 @@ func (pc *PartyCoordinator) joinPartyMemberBroadcast(msgID string, sig []byte, l
 	if len(pIDs) < threshold {
 		return pIDs, peersIGet, errors.New("not enough peer")
 	}
-	if peerGroup.leaderResponse.Type == messages.JoinPartyLeaderComm_Success {
+	if leaderResponse.Type == messages.JoinPartyLeaderComm_Success {
 		return pIDs, peersIGet, nil
 	}
-	if peerGroup.leaderResponse.Type == messages.JoinPartyLeaderComm_Timeout {
+	if leaderResponse.Type == messages.JoinPartyLeaderComm_Timeout {
 		pc.logger.Error().Msg("leader response with join party timeout")
 	}
 	return pIDs, peersIGet, ErrJoinPartyTimeout

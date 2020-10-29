@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -150,7 +151,7 @@ func TestReadLength(t *testing.T) {
 		},
 	}
 	for _, tc := range testCases {
-		ApplyDeadline = true
+		atomic.StoreInt32(&ApplyDeadline, 1)
 		t.Run(tc.name, func(st *testing.T) {
 			stream := tc.streamProvider()
 			l, err := ReadStreamWithBuffer(stream)
@@ -194,7 +195,7 @@ func TestReadPayload(t *testing.T) {
 		},
 	}
 	for _, tc := range testCases {
-		ApplyDeadline = true
+		atomic.StoreInt32(&ApplyDeadline, 1)
 		t.Run(tc.name, func(st *testing.T) {
 			stream := tc.streamProvider()
 			l, err := ReadStreamWithBuffer(stream)

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/network"
@@ -22,7 +23,7 @@ const (
 
 // applyDeadline will be true , and only disable it when we are doing test
 // the reason being the p2p network , mocknet, mock stream doesn't support SetReadDeadline ,SetWriteDeadline feature
-var ApplyDeadline = true
+var ApplyDeadline = int32(1)
 
 type StreamMgr struct {
 	unusedStreams map[string][]network.Stream
@@ -75,7 +76,8 @@ func (sm *StreamMgr) AddStream(msgID string, stream network.Stream) {
 
 // ReadStreamWithBuffer read data from the given stream
 func ReadStreamWithBuffer(stream network.Stream) ([]byte, error) {
-	if ApplyDeadline {
+	applyDeadline := atomic.LoadInt32(&ApplyDeadline)
+	if applyDeadline == 1 {
 		if err := stream.SetReadDeadline(time.Now().Add(TimeoutReadPayload)); nil != err {
 			if errReset := stream.Reset(); errReset != nil {
 				return nil, errReset
@@ -106,7 +108,8 @@ func WriteStreamWithBuffer(msg []byte, stream network.Stream) error {
 	length := uint32(len(msg))
 	lengthBytes := make([]byte, LengthHeader)
 	binary.LittleEndian.PutUint32(lengthBytes, length)
-	if ApplyDeadline {
+	applyDeadline := atomic.LoadInt32(&ApplyDeadline)
+	if applyDeadline == 1 {
 		if err := stream.SetWriteDeadline(time.Now().Add(TimeoutWritePayload)); nil != err {
 			if errReset := stream.Reset(); errReset != nil {
 				return errReset

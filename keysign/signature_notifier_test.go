@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -26,7 +27,7 @@ func TestSignatureNotifierHappyPath(t *testing.T) {
 	assert.Nil(t, err)
 	messageID, err := common.MsgToHashString(buf)
 	assert.Nil(t, err)
-	p2p.ApplyDeadline = false
+	atomic.StoreInt32(&p2p.ApplyDeadline, 0)
 	id1 := tnet.RandIdentityOrFatal(t)
 	id2 := tnet.RandIdentityOrFatal(t)
 	id3 := tnet.RandIdentityOrFatal(t)

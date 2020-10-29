@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -159,7 +160,7 @@ func leaderAppersFirstTest(t *testing.T, msgID string, peers []string, pcs []*Pa
 }
 
 func TestNewPartyCoordinator(t *testing.T) {
-	ApplyDeadline = false
+	atomic.StoreInt32(&ApplyDeadline, 0)
 	hosts, ids, _ := setupHosts(t, 4)
 	var pcs []*PartyCoordinator
 	var peers []string
@@ -203,7 +204,7 @@ func TestNewPartyCoordinator(t *testing.T) {
 }
 
 func TestNewPartyCoordinatorBroadcast(t *testing.T) {
-	ApplyDeadline = false
+	atomic.StoreInt32(&ApplyDeadline, 0)
 	hosts, ids, mn := setupHosts(t, 4)
 	var pcs []*PartyCoordinator
 	var peers []string
@@ -242,7 +243,7 @@ func TestNewPartyCoordinatorBroadcast(t *testing.T) {
 }
 
 func TestNewPartyCoordinatorBroadcastTimeOut(t *testing.T) {
-	ApplyDeadline = false
+	atomic.StoreInt32(&ApplyDeadline, 0)
 	timeout := time.Second * 3
 	hosts, ids, _ := setupHosts(t, 4)
 	var pcs []*PartyCoordinator
@@ -333,7 +334,7 @@ func TestNewPartyCoordinatorBroadcastTimeOut(t *testing.T) {
 }
 
 func TestNewPartyCoordinatorTimeOut(t *testing.T) {
-	ApplyDeadline = false
+	atomic.StoreInt32(&ApplyDeadline, 0)
 	timeout := time.Second * 3
 	hosts, ids, _ := setupHosts(t, 4)
 	var pcs []*PartyCoordinator
@@ -415,7 +416,7 @@ func TestNewPartyCoordinatorTimeOut(t *testing.T) {
 }
 
 func TestGetPeerIDs(t *testing.T) {
-	ApplyDeadline = false
+	atomic.StoreInt32(&ApplyDeadline, 0)
 	id1 := tnet.RandIdentityOrFatal(t)
 	mn := mocknet.New(context.Background())
 	// add peers to mock net

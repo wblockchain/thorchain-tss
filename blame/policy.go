@@ -70,6 +70,8 @@ func (m *Manager) NodeSyncBlame(keys []string, onlinePeers []peer.ID) (Blame, er
 
 // this blame blames the node who cause the timeout in unicast message
 func (m *Manager) GetUnicastBlame(lastMsgType string) ([]Node, error) {
+	m.unicastPeerLocker.Lock()
+	defer m.unicastPeerLocker.Unlock()
 	if len(m.lastUnicastPeer) == 0 {
 		m.logger.Debug().Msg("we do not have any unicast message received yet")
 		return nil, nil
