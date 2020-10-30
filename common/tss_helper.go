@@ -147,19 +147,19 @@ func GetMsgRound(wireMsg *messages.WireMessage, partyID *btss.PartyID) (blame.Ro
 			RoundMsg: messages.KEYGEN3,
 		}, nil
 
-	case *eddsaKeyGen.EDDSAKGRound1Message:
+	case *eddsaKeyGen.KGRound1Message:
 		return blame.RoundInfo{
 			Index:    1,
 			RoundMsg: messages.EDDSAKEYGEN1,
 		}, nil
 
-	case *eddsaKeyGen.EDDSAKGRound2Message1:
+	case *eddsaKeyGen.KGRound2Message1:
 		return blame.RoundInfo{
 			Index:    2,
 			RoundMsg: messages.EDDSAKEYGEN2a,
 		}, nil
 
-	case *eddsaKeyGen.EDDSAKGRound2Message2:
+	case *eddsaKeyGen.KGRound2Message2:
 		return blame.RoundInfo{
 			Index:    3,
 			RoundMsg: messages.EDDSAKEYGEN2b,
@@ -223,19 +223,19 @@ func GetMsgRound(wireMsg *messages.WireMessage, partyID *btss.PartyID) (blame.Ro
 			RoundMsg: messages.KEYSIGN9,
 		}, nil
 
-	case *eddsaKeySign.EDDSASignRound1Message:
+	case *eddsaKeySign.SignRound1Message:
 		return blame.RoundInfo{
 			Index:    1,
 			RoundMsg: messages.EDDSAKEYSIGN1,
 		}, nil
 
-	case *eddsaKeySign.EDDSASignRound2Message:
+	case *eddsaKeySign.SignRound2Message:
 		return blame.RoundInfo{
 			Index:    2,
 			RoundMsg: messages.EDDSAKEYSIGN2,
 		}, nil
 
-	case *eddsaKeySign.EDDSASignRound3Message:
+	case *eddsaKeySign.SignRound3Message:
 		return blame.RoundInfo{
 			Index:    3,
 			RoundMsg: messages.EDDSAKEYSIGN3,

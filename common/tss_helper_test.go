@@ -111,12 +111,18 @@ func (t *tssHelpSuite) TestGetMsgRound(c *C) {
 	var sharesKeyGen []*messages.WireMessage
 	var sharesKeySign []*messages.WireMessage
 	for _, el := range sharesRawKeyGen {
+		if len(el) == 0 {
+			continue
+		}
 		var msg messages.WireMessage
-		json.Unmarshal(el, &msg)
+		err := json.Unmarshal(el, &msg)
+		c.Assert(err, IsNil)
 		sharesKeyGen = append(sharesKeyGen, &msg)
 	}
-
 	for _, el := range sharesRawKeySign {
+		if len(el) == 0 {
+			continue
+		}
 		var msg messages.WireMessage
 		json.Unmarshal(el, &msg)
 		sharesKeySign = append(sharesKeySign, &msg)
@@ -140,6 +146,7 @@ func (t *tssHelpSuite) TestGetMsgRound(c *C) {
 		messages.KEYSIGN8,
 		messages.KEYSIGN9,
 	}
+	_ = messagesKeysign
 	mockParty := btss.NewPartyID("12", "22", big.NewInt(2))
 	j := 0
 	for i := 0; i < len(messagesKeygen); i++ {
@@ -150,9 +157,9 @@ func (t *tssHelpSuite) TestGetMsgRound(c *C) {
 			RoundMsg: messagesKeygen[i],
 		}
 		c.Assert(ret, Equals, expectedRound)
-		// we skip the unicast
+		// we skip the reset of the unicast
 		if j == 1 {
-			j += 5
+			j += 3
 		} else {
 			j += 1
 		}
@@ -167,8 +174,8 @@ func (t *tssHelpSuite) TestGetMsgRound(c *C) {
 		}
 		c.Assert(ret, Equals, expectedRound)
 		// we skip the unicast
-		if j == 0 || j == 5 {
-			j += 5
+		if j == 0 || j == 3 {
+			j += 3
 		} else {
 			j += 1
 		}

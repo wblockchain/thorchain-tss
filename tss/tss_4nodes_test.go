@@ -60,7 +60,7 @@ type FourNodeEcdsaTestSuite struct {
 
 var _ = Suite(&FourNodeEcdsaTestSuite{})
 
-func createfolder(c *C, algo string) {
+func createFolder(c *C, algo string) {
 	folderPath1 := path.Join(os.TempDir(), algo)
 	if _, err := os.Stat(folderPath1); os.IsNotExist(err) {
 		err := os.Mkdir(folderPath1, os.ModePerm)
@@ -74,8 +74,9 @@ func createfolder(c *C, algo string) {
 }
 
 func (s *FourNodeEcdsaTestSuite) SetUpSuite(c *C) {
-	createfolder(c, "ecdsa")
-	createfolder(c, "eddsa")
+	createFolder(c, "ecdsa")
+	createFolder(c, "eddsa")
+	time.Sleep(3)
 }
 
 func (s *FourNodeEcdsaTestSuite) TearDownSuite(c *C) {
