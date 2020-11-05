@@ -11,6 +11,7 @@ import (
 	"gitlab.com/thorchain/tss/go-tss/conversion"
 	"gitlab.com/thorchain/tss/go-tss/keygen"
 	"gitlab.com/thorchain/tss/go-tss/keygen/ecdsa"
+	"gitlab.com/thorchain/tss/go-tss/keygen/ecgdsa"
 	"gitlab.com/thorchain/tss/go-tss/keygen/eddsa"
 	"gitlab.com/thorchain/tss/go-tss/messages"
 )
@@ -40,6 +41,17 @@ func (t *TssServer) Keygen(req keygen.Request) (keygen.Response, error) {
 			t.p2pCommunication)
 	case "eddsa":
 		keygenInstance = eddsa.NewTssKeyGen(
+			t.p2pCommunication.GetLocalPeerID(),
+			t.conf,
+			t.localNodePubKey,
+			t.p2pCommunication.BroadcastMsgChan,
+			t.stopChan,
+			msgID,
+			t.stateManager,
+			t.privateKey,
+			t.p2pCommunication)
+	case "ecgdsa":
+		keygenInstance = ecgdsa.NewTssKeyGen(
 			t.p2pCommunication.GetLocalPeerID(),
 			t.conf,
 			t.localNodePubKey,
@@ -150,6 +162,8 @@ func (t *TssServer) Keygen(req keygen.Request) (keygen.Response, error) {
 		newPubKey, addr, err = conversion.GetTssPubKeyECDSA(k)
 	case "eddsa":
 		newPubKey, addr, err = conversion.GetTssPubKeyEDDSA(k)
+	case "ecgdsa":
+		newPubKey, addr, err = conversion.GetTssPubKeyECGDSA(k)
 	default:
 		newPubKey, addr, err = conversion.GetTssPubKeyECDSA(k)
 	}

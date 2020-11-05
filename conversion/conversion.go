@@ -149,6 +149,23 @@ func isOnCurve(x, y *big.Int) bool {
 	return curve.IsOnCurve(x, y)
 }
 
+func GetTssPubKeyECGDSA(pubKeyPoint *crypto.ECPoint) (string, types.AccAddress, error) {
+	// we check whether the point is on curve according to Kudelski report
+	if pubKeyPoint == nil || !isOnCurve(pubKeyPoint.X(), pubKeyPoint.Y()) {
+		return "", types.AccAddress{}, errors.New("invalid points")
+	}
+	tssPubKey := btcec.PublicKey{
+		Curve: btss.EC(),
+		X:     pubKeyPoint.X(),
+		Y:     pubKeyPoint.Y(),
+	}
+	var pubKeyCompressed secp256k1.PubKeySecp256k1
+	copy(pubKeyCompressed[:], tssPubKey.SerializeCompressed())
+	pubKey, err := sdk.Bech32ifyPubKey(sdk.Bech32PubKeyTypeAccPub, pubKeyCompressed)
+	addr := types.AccAddress(pubKeyCompressed.Address().Bytes())
+	return pubKey, addr, err
+}
+
 func GetTssPubKeyEDDSA(pubKeyPoint *crypto.ECPoint) (string, types.AccAddress, error) {
 	// we check whether the point is on curve according to Kudelski report
 	if pubKeyPoint == nil || !isOnCurve(pubKeyPoint.X(), pubKeyPoint.Y()) {

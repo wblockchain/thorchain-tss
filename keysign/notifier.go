@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	bc "github.com/binance-chain/tss-lib/common"
+	"github.com/binance-chain/tss-lib/crypto/schnorr"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/decred/dcrd/dcrec/edwards/v2"
 	"github.com/tendermint/btcd/btcec"
@@ -16,6 +17,7 @@ import (
 
 // Notifier is design to receive keysign signature, success or failure
 type Notifier struct {
+	algo       string
 	MessageID  string
 	message    []byte // the message
 	poolPubKey string
@@ -23,7 +25,7 @@ type Notifier struct {
 }
 
 // NewNotifier create a new instance of Notifier
-func NewNotifier(messageID string, message []byte, poolPubKey string) (*Notifier, error) {
+func NewNotifier(messageID string, message []byte, poolPubKey, algo string) (*Notifier, error) {
 	if len(messageID) == 0 {
 		return nil, errors.New("messageID is empty")
 	}
@@ -34,6 +36,7 @@ func NewNotifier(messageID string, message []byte, poolPubKey string) (*Notifier
 		return nil, errors.New("pool pubkey is empty")
 	}
 	return &Notifier{
+		algo:       algo,
 		MessageID:  messageID,
 		message:    message,
 		poolPubKey: poolPubKey,
@@ -52,8 +55,8 @@ func (n *Notifier) verifySignature(data *bc.SignatureData) (bool, error) {
 		return false, fmt.Errorf("fail to get pubkey from bech32 pubkey string(%s):%w", n.poolPubKey, err)
 	}
 
-	switch pubKey.(type) {
-	case secp256k1.PubKeySecp256k1:
+	switch n.algo {
+	case "ecdsa":
 		pk := pubKey.(secp256k1.PubKeySecp256k1)
 		pub, err := btcec.ParsePubKey(pk[:], btcec.S256())
 		if err != nil {
@@ -61,7 +64,7 @@ func (n *Notifier) verifySignature(data *bc.SignatureData) (bool, error) {
 		}
 		return ecdsa.Verify(pub.ToECDSA(), n.message, new(big.Int).SetBytes(data.R), new(big.Int).SetBytes(data.S)), nil
 
-	case ed25519.PubKeyEd25519:
+	case "eddsa":
 		rawPk := pubKey.(ed25519.PubKeyEd25519)
 		bPk, err := edwards.ParsePubKey(rawPk[:])
 		if err != nil {
@@ -73,6 +76,20 @@ func (n *Notifier) verifySignature(data *bc.SignatureData) (bool, error) {
 			return false, err
 		}
 		return edwards.Verify(bPk, n.message, newSig.R, newSig.S), nil
+
+	case "ecgdsa":
+		pk := pubKey.(secp256k1.PubKeySecp256k1)
+		pub, err := btcec.ParsePubKey(pk[:], btcec.S256())
+		if err != nil {
+			return false, err
+		}
+		schnorrPubKey := schnorr.PublicKey{
+			X: pub.X,
+			Y: pub.Y,
+		}
+		return schnorrPubKey.Verify(n.message, new(big.Int).SetBytes(data.R), new(big.Int).SetBytes(data.S)), nil
+
+	// todo add the ecdsa one
 	default:
 		return false, errors.New("invalid pubkey type")
 	}

@@ -1,10 +1,9 @@
-package ecdsa
+package ecgdsa
 
 import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path"
 	"sort"
@@ -19,7 +18,6 @@ import (
 	tcrypto "github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/crypto/secp256k1"
 
-	ecdsakeygen "github.com/binance-chain/tss-lib/ecdsa/keygen"
 	btss "github.com/binance-chain/tss-lib/tss"
 	maddr "github.com/multiformats/go-multiaddr"
 	. "gopkg.in/check.v1"
@@ -61,18 +59,17 @@ var (
 
 func TestPackage(t *testing.T) { TestingT(t) }
 
-type EcdsaKeygenTestSuite struct {
+type EcgdsaKeygenTestSuite struct {
 	comms        []*p2p.Communication
-	preParams    []*ecdsakeygen.LocalPreParams
 	partyNum     int
 	stateMgrs    []storage.LocalStateManager
 	nodePrivKeys []tcrypto.PrivKey
 	targePeers   []peer.ID
 }
 
-var _ = Suite(&EcdsaKeygenTestSuite{})
+var _ = Suite(&EcgdsaKeygenTestSuite{})
 
-func (s *EcdsaKeygenTestSuite) SetUpSuite(c *C) {
+func (s *EcgdsaKeygenTestSuite) SetUpSuite(c *C) {
 	common.InitLog("info", true, "keygen_test")
 	conversion.SetupBech32Prefix()
 	for _, el := range testNodePrivkey {
@@ -94,17 +91,16 @@ func (s *EcdsaKeygenTestSuite) SetUpSuite(c *C) {
 }
 
 // SetUpTest set up environment for test key gen
-func (s *EcdsaKeygenTestSuite) SetUpTest(c *C) {
+func (s *EcgdsaKeygenTestSuite) SetUpTest(c *C) {
 	ports := []int{
-		18666, 18667, 18668, 18669,
+		12666, 12667, 12668, 12669,
 	}
 	s.partyNum = 4
 	s.comms = make([]*p2p.Communication, s.partyNum)
 	s.stateMgrs = make([]storage.LocalStateManager, s.partyNum)
-	bootstrapPeer := "/ip4/127.0.0.1/tcp/18666/p2p/16Uiu2HAm4TmEzUqy3q3Dv7HvdoSboHk5sFj2FH3npiN5vDbJC6gh"
+	bootstrapPeer := "/ip4/127.0.0.1/tcp/12666/p2p/16Uiu2HAm4TmEzUqy3q3Dv7HvdoSboHk5sFj2FH3npiN5vDbJC6gh"
 	multiAddr, err := maddr.NewMultiaddr(bootstrapPeer)
 	c.Assert(err, IsNil)
-	s.preParams = getPreparams(c)
 	for i := 0; i < s.partyNum; i++ {
 		buf, err := base64.StdEncoding.DecodeString(testPriKeyArr[i])
 		c.Assert(err, IsNil)
@@ -120,52 +116,32 @@ func (s *EcdsaKeygenTestSuite) SetUpTest(c *C) {
 		c.Assert(comm.Start(buf), IsNil)
 		s.comms[i] = comm
 	}
-
 	// give a little bit time to have the p2p ready(otherwise, it may have no address error)
 	time.Sleep(time.Second)
 	for i := 0; i < s.partyNum; i++ {
-		baseHome := path.Join(os.TempDir(), "keygen_ecdsa", strconv.Itoa(i))
+		baseHome := path.Join(os.TempDir(), "keygen_ecgdsa", strconv.Itoa(i))
 		fMgr, err := storage.NewFileStateMgr(baseHome)
 		c.Assert(err, IsNil)
 		s.stateMgrs[i] = fMgr
 	}
 }
 
-func (s *EcdsaKeygenTestSuite) TearDownSuite(c *C) {
-	tempFilePath := path.Join(os.TempDir(), "keygen_ecdsa")
+func (s *EcgdsaKeygenTestSuite) TearDownSuite(c *C) {
+	tempFilePath := path.Join(os.TempDir(), "keygen_ecgdsa")
 	err := os.RemoveAll(tempFilePath)
 	c.Assert(err, IsNil)
 }
 
-func (s *EcdsaKeygenTestSuite) TearDownTest(c *C) {
+func (s *EcgdsaKeygenTestSuite) TearDownTest(c *C) {
 	time.Sleep(time.Second)
 	for _, item := range s.comms {
 		c.Assert(item.Stop(), IsNil)
 	}
 }
 
-func getPreparams(c *C) []*ecdsakeygen.LocalPreParams {
-	const (
-		testFileLocation = "../../test_data"
-		preParamTestFile = "preParam_test.data"
-	)
-	var preParamArray []*ecdsakeygen.LocalPreParams
-	buf, err := ioutil.ReadFile(path.Join(testFileLocation, preParamTestFile))
-	c.Assert(err, IsNil)
-	preParamsStr := strings.Split(string(buf), "\n")
-	for _, item := range preParamsStr {
-		var preParam ecdsakeygen.LocalPreParams
-		val, err := hex.DecodeString(item)
-		c.Assert(err, IsNil)
-		c.Assert(json.Unmarshal(val, &preParam), IsNil)
-		preParamArray = append(preParamArray, &preParam)
-	}
-	return preParamArray
-}
-
-func (s *EcdsaKeygenTestSuite) TestGenerateNewKey(c *C) {
+func (s *EcgdsaKeygenTestSuite) TestGenerateNewKey(c *C) {
 	sort.Strings(testPubKeys)
-	req := keygen.NewRequest(testPubKeys, 10, "0.16.0", "ecdsa")
+	req := keygen.NewRequest(testPubKeys, 1, "0.15.0", "ecgdsa")
 	messageID, err := common.MsgToHashString([]byte(strings.Join(req.Keys, "")))
 	c.Assert(err, IsNil)
 	conf := common.TssConfig{
@@ -189,7 +165,6 @@ func (s *EcdsaKeygenTestSuite) TestGenerateNewKey(c *C) {
 				localPubKey,
 				comm.BroadcastMsgChan,
 				stopChan,
-				s.preParams[idx],
 				messageID,
 				s.stateMgrs[idx], s.nodePrivKeys[idx], s.comms[idx])
 			c.Assert(keygenInstance, NotNil)
@@ -216,80 +191,22 @@ func (s *EcdsaKeygenTestSuite) TestGenerateNewKey(c *C) {
 	}
 }
 
-func (s *EcdsaKeygenTestSuite) TestGenerateNewKeyWithStop(c *C) {
-	sort.Strings(testPubKeys)
-	req := keygen.NewRequest(testPubKeys, 10, "0.16.0", "ecdsa")
-	messageID, err := common.MsgToHashString([]byte(strings.Join(req.Keys, "")))
-	c.Assert(err, IsNil)
-	conf := common.TssConfig{
-		KeyGenTimeout:   10 * time.Second,
-		KeySignTimeout:  10 * time.Second,
-		PreParamTimeout: 5 * time.Second,
-	}
-	wg := sync.WaitGroup{}
-
-	for i := 0; i < s.partyNum; i++ {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
-			comm := s.comms[idx]
-			stopChan := make(chan struct{})
-			localPubKey := testPubKeys[idx]
-			keygenInstance := NewTssKeyGen(
-				comm.GetLocalPeerID(),
-				conf,
-				localPubKey,
-				comm.BroadcastMsgChan,
-				stopChan,
-				s.preParams[idx],
-				messageID,
-				s.stateMgrs[idx],
-				s.nodePrivKeys[idx], s.comms[idx])
-			c.Assert(keygenInstance, NotNil)
-			keygenMsgChannel := keygenInstance.GetTssKeyGenChannels()
-			comm.SetSubscribe(messages.TSSKeyGenMsg, messageID, keygenMsgChannel)
-			comm.SetSubscribe(messages.TSSKeyGenVerMsg, messageID, keygenMsgChannel)
-			comm.SetSubscribe(messages.TSSControlMsg, messageID, keygenMsgChannel)
-			comm.SetSubscribe(messages.TSSTaskDone, messageID, keygenMsgChannel)
-			defer comm.CancelSubscribe(messages.TSSKeyGenMsg, messageID)
-			defer comm.CancelSubscribe(messages.TSSKeyGenVerMsg, messageID)
-			defer comm.CancelSubscribe(messages.TSSControlMsg, messageID)
-			defer comm.CancelSubscribe(messages.TSSTaskDone, messageID)
-			if idx == 1 {
-				go func() {
-					time.Sleep(time.Millisecond * 200)
-					close(keygenInstance.stopChan)
-				}()
-			}
-			_, err := keygenInstance.GenerateNewKey(req)
-			c.Assert(err, NotNil)
-			// we skip the node 1 as we force it to stop
-			if idx != 1 {
-				blames := keygenInstance.GetTssCommonStruct().GetBlameMgr().GetBlame().BlameNodes
-				c.Assert(blames, HasLen, 1)
-				c.Assert(blames[0].Pubkey, Equals, testPubKeys[1])
-			}
-		}(i)
-	}
-	wg.Wait()
-}
-
-func (s *EcdsaKeygenTestSuite) TestKeyGenWithError(c *C) {
+func (s *EcgdsaKeygenTestSuite) TestKeyGenWithError(c *C) {
 	req := keygen.Request{
 		Keys: testPubKeys[:],
 	}
 	conf := common.TssConfig{}
 	stateManager := &storage.MockLocalStateManager{}
-	keyGenInstance := NewTssKeyGen("", conf, "", nil, nil, nil, "test", stateManager, s.nodePrivKeys[0], nil)
+	keyGenInstance := NewTssKeyGen("", conf, "", nil, nil, "test", stateManager, s.nodePrivKeys[0], nil)
 	generatedKey, err := keyGenInstance.GenerateNewKey(req)
 	c.Assert(err, NotNil)
 	c.Assert(generatedKey, IsNil)
 }
 
-func (s *EcdsaKeygenTestSuite) TestCloseKeyGennotifyChannel(c *C) {
+func (s *EcgdsaKeygenTestSuite) TestCloseKeyGennotifyChannel(c *C) {
 	conf := common.TssConfig{}
 	stateManager := &storage.MockLocalStateManager{}
-	keyGenInstance := NewTssKeyGen("", conf, "", nil, nil, nil, "test", stateManager, s.nodePrivKeys[0], s.comms[0])
+	keyGenInstance := NewTssKeyGen("", conf, "", nil, nil, "test", stateManager, s.nodePrivKeys[0], s.comms[0])
 
 	taskDone := messages.TssTaskNotifier{TaskDone: true}
 	taskDoneBytes, err := json.Marshal(taskDone)

@@ -16,7 +16,9 @@ import (
 
 	btsskeygen "github.com/binance-chain/tss-lib/ecdsa/keygen"
 	maddr "github.com/multiformats/go-multiaddr"
-	"github.com/rs/zerolog/log"
+
+	log2 "github.com/ipfs/go-log"
+	log "github.com/rs/zerolog/log"
 	. "gopkg.in/check.v1"
 
 	"gitlab.com/thorchain/tss/go-tss/common"
@@ -50,7 +52,7 @@ func TestPackage(t *testing.T) {
 	TestingT(t)
 }
 
-type FourNodeEcdsaTestSuite struct {
+type FourNodeTestSuite struct {
 	servers       []*TssServer
 	ports         []int
 	preParams     []*btsskeygen.LocalPreParams
@@ -58,41 +60,32 @@ type FourNodeEcdsaTestSuite struct {
 	algo          string
 }
 
-var _ = Suite(&FourNodeEcdsaTestSuite{})
+var _ = Suite(&FourNodeTestSuite{})
 
-func createFolder(c *C, algo string) {
-	folderPath1 := path.Join(os.TempDir(), algo)
+func (s *FourNodeTestSuite) SetUpSuite(c *C) {
+	log2.SetLogLevel("tss-lib", "info")
+
+	folderPath1 := path.Join(os.TempDir(), "tss_4nodes_test")
 	if _, err := os.Stat(folderPath1); os.IsNotExist(err) {
 		err := os.Mkdir(folderPath1, os.ModePerm)
 		c.Assert(err, IsNil)
 	}
-	folderPath := path.Join(os.TempDir(), algo, "tss_4nodes_test")
-	if _, err := os.Stat(folderPath); os.IsNotExist(err) {
-		err := os.Mkdir(folderPath, os.ModePerm)
-		c.Assert(err, IsNil)
-	}
-}
-
-func (s *FourNodeEcdsaTestSuite) SetUpSuite(c *C) {
-	createFolder(c, "ecdsa")
-	createFolder(c, "eddsa")
 	time.Sleep(3)
 }
 
-func (s *FourNodeEcdsaTestSuite) TearDownSuite(c *C) {
-	err := os.RemoveAll(path.Join(os.TempDir(), s.algo))
+func (s *FourNodeTestSuite) TearDownSuite(c *C) {
+	err := os.RemoveAll(path.Join(os.TempDir(), "tss_4nodes_test"))
 	c.Assert(err, IsNil)
 }
 
 // setup four nodes for test
-func (s *FourNodeEcdsaTestSuite) SetUpTest(c *C) {
+func (s *FourNodeTestSuite) setUpTest(c *C) {
 	common.InitLog("info", true, "four_nodes_test")
 	conversion.SetupBech32Prefix()
 	s.ports = []int{
-		16666, 16667, 16668, 16669,
+		10666, 10667, 10668, 10669,
 	}
-	s.bootstrapPeer = "/ip4/127.0.0.1/tcp/16666/p2p/16Uiu2HAmACG5DtqmQsHtXg4G2sLS65ttv84e7MrL4kapkjfmhxAp"
-	s.algo = "eddsa"
+	s.bootstrapPeer = "/ip4/127.0.0.1/tcp/10666/p2p/16Uiu2HAmACG5DtqmQsHtXg4G2sLS65ttv84e7MrL4kapkjfmhxAp"
 	s.preParams = getPreparams(c)
 	s.servers = make([]*TssServer, partyNum)
 
@@ -102,7 +95,6 @@ func (s *FourNodeEcdsaTestSuite) SetUpTest(c *C) {
 		PreParamTimeout: 5 * time.Second,
 		EnableMonitor:   false,
 	}
-
 	var wg sync.WaitGroup
 	for i := 0; i < partyNum; i++ {
 		wg.Add(1)
@@ -129,39 +121,69 @@ func hash(payload []byte) []byte {
 	return h.Sum(nil)
 }
 
-// we do for both join party schemes
-func (s *FourNodeEcdsaTestSuite) Test4NodesEcdsaTss(c *C) {
-	s.algo = "ecdsa"
-	s.doTestKeygenAndKeySign(c, false)
-	time.Sleep(time.Second * 2)
-	s.doTestKeygenAndKeySign(c, true)
-	//
-	time.Sleep(time.Second * 2)
-	s.doTestFailJoinParty(c, false)
-	time.Sleep(time.Second * 2)
-	s.doTestFailJoinParty(c, true)
-	//
-	time.Sleep(time.Second * 2)
-	s.doTestBlame(c, false)
+func (s *FourNodeTestSuite) TestKeygenAndKeysign(c *C) {
+	algos := []string{"ecdsa", "eddsa", "ecgdsa"}
+	s.setUpTest(c)
+	for _, el := range algos {
+		s.algo = el
+		s.doTestKeygenAndKeySign(c, false)
+		// time.Sleep(time.Second * 2)
+		s.doTestKeygenAndKeySign(c, true)
+	}
 }
 
-func (s *FourNodeEcdsaTestSuite) Test4NodesEddsaTss(c *C) {
-	s.algo = "eddsa"
-	s.doTestKeygenAndKeySign(c, false)
-	time.Sleep(time.Second * 2)
-	s.doTestKeygenAndKeySign(c, true)
-	//
-	time.Sleep(time.Second * 2)
-	s.doTestFailJoinParty(c, false)
-	time.Sleep(time.Second * 2)
-	s.doTestFailJoinParty(c, true)
-	//
-	time.Sleep(time.Second * 2)
-	s.doTestBlame(c, false)
+func (s *FourNodeTestSuite) TestFailJoinParty(c *C) {
+	algos := []string{"ecdsa", "eddsa", "ecgdsa"}
+	s.setUpTest(c)
+	for _, el := range algos {
+		s.algo = el
+		s.doTestFailJoinParty(c, false)
+		// time.Sleep(time.Second * 2)
+		s.doTestFailJoinParty(c, true)
+	}
+}
+
+func (s *FourNodeTestSuite) TestBlame(c *C) {
+	algos := []string{"ecdsa"}
+	for _, el := range algos {
+		s.algo = el
+		s.setUpTest(c)
+		s.servers[0].conf.KeyGenTimeout = time.Second * 20
+		s.servers[1].conf.KeyGenTimeout = time.Second * 20
+		s.servers[2].conf.KeyGenTimeout = time.Second * 20
+		time.Sleep(time.Second * 2)
+		s.doTestBlame(c, false)
+	}
+}
+
+func (s *FourNodeTestSuite) TestBlame2(c *C) {
+	algos := []string{"eddsa"}
+	for _, el := range algos {
+		s.algo = el
+		s.setUpTest(c)
+		s.servers[0].conf.KeyGenTimeout = time.Second * 20
+		s.servers[1].conf.KeyGenTimeout = time.Second * 20
+		s.servers[2].conf.KeyGenTimeout = time.Second * 20
+		time.Sleep(time.Second * 2)
+		s.doTestBlame(c, false)
+	}
+}
+
+func (s *FourNodeTestSuite) TestBlame3(c *C) {
+	algos := []string{"ecgdsa"}
+	for _, el := range algos {
+		s.algo = el
+		s.setUpTest(c)
+		s.servers[0].conf.KeyGenTimeout = time.Second * 20
+		s.servers[1].conf.KeyGenTimeout = time.Second * 20
+		s.servers[2].conf.KeyGenTimeout = time.Second * 20
+		time.Sleep(time.Second * 2)
+		s.doTestBlame(c, false)
+	}
 }
 
 // generate a new key
-func (s *FourNodeEcdsaTestSuite) doTestKeygenAndKeySign(c *C, newJoinParty bool) {
+func (s *FourNodeTestSuite) doTestKeygenAndKeySign(c *C, newJoinParty bool) {
 	var req keygen.Request
 	if newJoinParty {
 		req = keygen.NewRequest(testPubKeys, 10, "0.14.0", s.algo)
@@ -267,7 +289,7 @@ func (s *FourNodeEcdsaTestSuite) doTestKeygenAndKeySign(c *C, newJoinParty bool)
 	}
 }
 
-func (s *FourNodeEcdsaTestSuite) doTestFailJoinParty(c *C, newJoinParty bool) {
+func (s *FourNodeTestSuite) doTestFailJoinParty(c *C, newJoinParty bool) {
 	// JoinParty should fail if there is a node that suppose to be in the keygen , but we didn't send request in
 	var req keygen.Request
 	if newJoinParty {
@@ -309,7 +331,7 @@ func (s *FourNodeEcdsaTestSuite) doTestFailJoinParty(c *C, newJoinParty bool) {
 	}
 }
 
-func (s *FourNodeEcdsaTestSuite) doTestBlame(c *C, newJoinParty bool) {
+func (s *FourNodeTestSuite) doTestBlame(c *C, newJoinParty bool) {
 	expectedFailNode := "thorpub1addwnpepqtdklw8tf3anjz7nn5fly3uvq2e67w2apn560s4smmrt9e3x52nt2svmmu3"
 	var req keygen.Request
 	if newJoinParty {
@@ -348,7 +370,7 @@ func (s *FourNodeEcdsaTestSuite) doTestBlame(c *C, newJoinParty bool) {
 	}
 }
 
-func (s *FourNodeEcdsaTestSuite) TearDownTest(c *C) {
+func (s *FourNodeTestSuite) TearDownTest(c *C) {
 	// give a second before we shutdown the network
 	defer func() {
 		if err := recover(); err != nil {
@@ -361,10 +383,10 @@ func (s *FourNodeEcdsaTestSuite) TearDownTest(c *C) {
 	}
 }
 
-func (s *FourNodeEcdsaTestSuite) getTssServer(c *C, index int, conf common.TssConfig, bootstrap string) *TssServer {
+func (s *FourNodeTestSuite) getTssServer(c *C, index int, conf common.TssConfig, bootstrap string) *TssServer {
 	priKey, err := conversion.GetPriKey(testPriKeyArr[index])
 	c.Assert(err, IsNil)
-	baseHome := path.Join(os.TempDir(), s.algo, "tss_4nodes_test", strconv.Itoa(index))
+	baseHome := path.Join(os.TempDir(), "tss_4nodes_test", strconv.Itoa(index))
 	if _, err := os.Stat(baseHome); os.IsNotExist(err) {
 		err := os.Mkdir(baseHome, os.ModePerm)
 		c.Assert(err, IsNil)

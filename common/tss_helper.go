@@ -15,6 +15,8 @@ import (
 
 	ecdsaKeyGen "github.com/binance-chain/tss-lib/ecdsa/keygen"
 	ecdsaKeySign "github.com/binance-chain/tss-lib/ecdsa/signing"
+	ecgdsaKeyGen "github.com/binance-chain/tss-lib/ecgdsa/keygen"
+	ecgdsaKeySign "github.com/binance-chain/tss-lib/ecgdsa/signing"
 	eddsaKeyGen "github.com/binance-chain/tss-lib/eddsa/keygen"
 	eddsaKeySign "github.com/binance-chain/tss-lib/eddsa/signing"
 	btss "github.com/binance-chain/tss-lib/tss"
@@ -128,41 +130,50 @@ func GetMsgRound(wireMsg *messages.WireMessage, partyID *btss.PartyID) (blame.Ro
 			Index:    0,
 			RoundMsg: messages.KEYGEN1,
 		}, nil
-
 	case *ecdsaKeyGen.KGRound2Message1:
 		return blame.RoundInfo{
 			Index:    1,
 			RoundMsg: messages.KEYGEN2aUnicast,
 		}, nil
-
 	case *ecdsaKeyGen.KGRound2Message2:
 		return blame.RoundInfo{
 			Index:    2,
 			RoundMsg: messages.KEYGEN2b,
 		}, nil
-
 	case *ecdsaKeyGen.KGRound3Message:
 		return blame.RoundInfo{
 			Index:    3,
 			RoundMsg: messages.KEYGEN3,
 		}, nil
-
 	case *eddsaKeyGen.KGRound1Message:
 		return blame.RoundInfo{
 			Index:    1,
 			RoundMsg: messages.EDDSAKEYGEN1,
 		}, nil
-
 	case *eddsaKeyGen.KGRound2Message1:
 		return blame.RoundInfo{
 			Index:    2,
 			RoundMsg: messages.EDDSAKEYGEN2a,
 		}, nil
-
 	case *eddsaKeyGen.KGRound2Message2:
 		return blame.RoundInfo{
 			Index:    3,
 			RoundMsg: messages.EDDSAKEYGEN2b,
+		}, nil
+	case *ecgdsaKeyGen.KGRound1Message:
+		return blame.RoundInfo{
+			Index:    1,
+			RoundMsg: messages.ECGDSAKEYGEN1,
+		}, nil
+	case *ecgdsaKeyGen.KGRound2Message1:
+		return blame.RoundInfo{
+			Index:    2,
+			RoundMsg: messages.ECGDSAKEYGEN2a,
+		}, nil
+	case *ecgdsaKeyGen.KGRound2Message2:
+		return blame.RoundInfo{
+			Index:    3,
+			RoundMsg: messages.ECGDSAKEYGEN2b,
 		}, nil
 
 	case *ecdsaKeySign.SignRound1Message1:
@@ -240,7 +251,70 @@ func GetMsgRound(wireMsg *messages.WireMessage, partyID *btss.PartyID) (blame.Ro
 			Index:    3,
 			RoundMsg: messages.EDDSAKEYSIGN3,
 		}, nil
+	case *eddsaKeySign.SignRound4Message:
+		return blame.RoundInfo{
+			Index:    4,
+			RoundMsg: messages.EDDSAKEYSIGN4,
+		}, nil
+	case *eddsaKeySign.SignRound5Message:
+		return blame.RoundInfo{
+			Index:    5,
+			RoundMsg: messages.EDDSAKEYSIGN5,
+		}, nil
 
+	case *eddsaKeySign.SignRound6Message:
+		return blame.RoundInfo{
+			Index:    6,
+			RoundMsg: messages.EDDSAKEYSIGN6,
+		}, nil
+
+	case *eddsaKeySign.SignRound7Message:
+		return blame.RoundInfo{
+			Index:    7,
+			RoundMsg: messages.EDDSAKEYSIGN7,
+		}, nil
+
+	case *ecgdsaKeySign.SignRound1Message:
+		return blame.RoundInfo{
+			Index:    1,
+			RoundMsg: messages.ECGDSAKEYSIGN1,
+		}, nil
+
+	case *ecgdsaKeySign.SignRound2Message:
+		return blame.RoundInfo{
+			Index:    2,
+			RoundMsg: messages.ECGDSAKEYSIGN2,
+		}, nil
+
+	case *ecgdsaKeySign.SignRound3Message:
+		return blame.RoundInfo{
+			Index:    3,
+			RoundMsg: messages.ECGDSAKEYSIGN3,
+		}, nil
+
+	case *ecgdsaKeySign.SignRound4Message:
+		return blame.RoundInfo{
+			Index:    4,
+			RoundMsg: messages.ECGDSAKEYSIGN3,
+		}, nil
+
+	case *ecgdsaKeySign.SignRound5Message:
+		return blame.RoundInfo{
+			Index:    5,
+			RoundMsg: messages.ECGDSAKEYSIGN5,
+		}, nil
+
+	case *ecgdsaKeySign.SignRound6Message:
+		return blame.RoundInfo{
+			Index:    6,
+			RoundMsg: messages.ECGDSAKEYSIGN6,
+		}, nil
+
+	case *ecgdsaKeySign.SignRound7Message:
+		return blame.RoundInfo{
+			Index:    7,
+			RoundMsg: messages.ECGDSAKEYSIGN7,
+		}, nil
 	default:
 		return blame.RoundInfo{}, errors.New("unknown round")
 	}

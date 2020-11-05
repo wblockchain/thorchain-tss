@@ -1,4 +1,4 @@
-package ecdsa
+package ecgdsa
 
 import (
 	"encoding/base64"
@@ -8,16 +8,12 @@ import (
 	"io/ioutil"
 	"os"
 	"sort"
-	"strconv"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	btss "github.com/binance-chain/tss-lib/tss"
 	"github.com/libp2p/go-libp2p-peerstore/addr"
-
-	"github.com/rs/zerolog/log"
 
 	"gitlab.com/thorchain/tss/go-tss/conversion"
 	"gitlab.com/thorchain/tss/go-tss/keysign"
@@ -93,7 +89,7 @@ func (s *MockLocalStateManager) RetrieveP2PAddresses() (addr.AddrList, error) {
 	return nil, os.ErrNotExist
 }
 
-type EcdsaKeysignTestSuite struct {
+type EcgdsaKeysignTestSuite struct {
 	comms        []*p2p.Communication
 	partyNum     int
 	stateMgrs    []storage.LocalStateManager
@@ -101,12 +97,11 @@ type EcdsaKeysignTestSuite struct {
 	targetPeers  []peer.ID
 }
 
-var _ = Suite(&EcdsaKeysignTestSuite{})
+var _ = Suite(&EcgdsaKeysignTestSuite{})
 
-func (s *EcdsaKeysignTestSuite) SetUpSuite(c *C) {
+func (s *EcgdsaKeysignTestSuite) SetUpSuite(c *C) {
 	conversion.SetupBech32Prefix()
 	common.InitLog("info", true, "keysign_test")
-
 	for _, el := range testNodePrivkey {
 		priHexBytes, err := base64.StdEncoding.DecodeString(el)
 		c.Assert(err, IsNil)
@@ -125,18 +120,18 @@ func (s *EcdsaKeysignTestSuite) SetUpSuite(c *C) {
 	}
 }
 
-func (s *EcdsaKeysignTestSuite) SetUpTest(c *C) {
+func (s *EcgdsaKeysignTestSuite) SetUpTest(c *C) {
 	if testing.Short() {
 		c.Skip("skip the test")
 		return
 	}
 	ports := []int{
-		17666, 17667, 17668, 17669,
+		13666, 13667, 13668, 13669,
 	}
 	s.partyNum = 4
 	s.comms = make([]*p2p.Communication, s.partyNum)
 	s.stateMgrs = make([]storage.LocalStateManager, s.partyNum)
-	bootstrapPeer := "/ip4/127.0.0.1/tcp/17666/p2p/16Uiu2HAm4TmEzUqy3q3Dv7HvdoSboHk5sFj2FH3npiN5vDbJC6gh"
+	bootstrapPeer := "/ip4/127.0.0.1/tcp/13666/p2p/16Uiu2HAm4TmEzUqy3q3Dv7HvdoSboHk5sFj2FH3npiN5vDbJC6gh"
 	multiAddr, err := maddr.NewMultiaddr(bootstrapPeer)
 	c.Assert(err, IsNil)
 	for i := 0; i < s.partyNum; i++ {
@@ -159,19 +154,19 @@ func (s *EcdsaKeysignTestSuite) SetUpTest(c *C) {
 	time.Sleep(time.Second)
 	for i := 0; i < s.partyNum; i++ {
 		f := &MockLocalStateManager{
-			file: fmt.Sprintf("../../test_data/keysign_data/ecdsa/%d.json", i),
+			file: fmt.Sprintf("../../test_data/keysign_data/ecgdsa/%d.json", i),
 		}
 		s.stateMgrs[i] = f
 	}
 }
 
-func (s *EcdsaKeysignTestSuite) TestSignMessage(c *C) {
+func (s *EcgdsaKeysignTestSuite) TestSignMessage(c *C) {
 	if testing.Short() {
 		c.Skip("skip the test")
 		return
 	}
 	sort.Strings(testPubKeys)
-	req := keysign.NewRequest("thorpub1addwnpepqv6xp3fmm47dfuzglywqvpv8fdjv55zxte4a26tslcezns5czv586u2fw33", "helloworld-test111", 10, testPubKeys, "0.16.0", "ecdsa")
+	req := keysign.NewRequest("thorpub1addwnpepq0shpn7n4hpn0xrqkaeg3upjnulxupkxzqk7x8udkp8heyu7mtymsa0lyz9", "helloworld-test111", 10, testPubKeys, "0.16.0", "ecgdsa")
 	messageID, err := common.MsgToHashString([]byte(req.Message))
 	c.Assert(err, IsNil)
 	wg := sync.WaitGroup{}
@@ -225,164 +220,7 @@ func (s *EcdsaKeysignTestSuite) TestSignMessage(c *C) {
 	}
 }
 
-func observeAndStop(c *C, tssKeySign *ECDSAKeySign, stopChan chan struct{}) {
-	for {
-		select {
-		case <-stopChan:
-			return
-		case <-time.After(time.Millisecond):
-			blameMgr := tssKeySign.tssCommonStruct.GetBlameMgr()
-			lastMsg := blameMgr.GetLastMsg()
-			if lastMsg != nil && len(lastMsg.Type()) > 4 {
-				a := lastMsg.Type()
-				idx := strings.Index(a, "Round")
-				start := idx + len("Round")
-				round := a[start : start+1]
-				roundD, err := strconv.Atoi(round)
-				c.Assert(err, IsNil)
-				if roundD > 4 {
-					close(tssKeySign.stopChan)
-				}
-
-			}
-		}
-	}
-}
-
-func (s *EcdsaKeysignTestSuite) TestSignMessageWithStop(c *C) {
-	if testing.Short() {
-		c.Skip("skip the test")
-		return
-	}
-	sort.Strings(testPubKeys)
-	req := keysign.NewRequest("thorpub1addwnpepqv6xp3fmm47dfuzglywqvpv8fdjv55zxte4a26tslcezns5czv586u2fw33", "helloworld-test111", 10, testPubKeys, "0.16.0", "ecdsa")
-	messageID, err := common.MsgToHashString([]byte(req.Message))
-	c.Assert(err, IsNil)
-	wg := sync.WaitGroup{}
-	conf := common.TssConfig{
-		KeyGenTimeout:   10 * time.Second,
-		KeySignTimeout:  10 * time.Second,
-		PreParamTimeout: 5 * time.Second,
-	}
-
-	for i := 0; i < s.partyNum; i++ {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
-			comm := s.comms[idx]
-			stopChan := make(chan struct{})
-			keysignIns := NewTssKeySign(comm.GetLocalPeerID(),
-				conf,
-				comm.BroadcastMsgChan,
-				stopChan, messageID,
-				s.nodePrivKeys[idx], s.comms[idx], s.stateMgrs[idx])
-			keysignMsgChannel := keysignIns.GetTssKeySignChannels()
-
-			comm.SetSubscribe(messages.TSSKeySignMsg, messageID, keysignMsgChannel)
-			comm.SetSubscribe(messages.TSSKeySignVerMsg, messageID, keysignMsgChannel)
-			comm.SetSubscribe(messages.TSSControlMsg, messageID, keysignMsgChannel)
-			comm.SetSubscribe(messages.TSSTaskDone, messageID, keysignMsgChannel)
-			defer comm.CancelSubscribe(messages.TSSKeySignMsg, messageID)
-			defer comm.CancelSubscribe(messages.TSSKeySignVerMsg, messageID)
-			defer comm.CancelSubscribe(messages.TSSControlMsg, messageID)
-			defer comm.CancelSubscribe(messages.TSSTaskDone, messageID)
-
-			localState, err := s.stateMgrs[idx].GetLocalState(req.PoolPubKey)
-			c.Assert(err, IsNil)
-			if idx == 1 {
-				go observeAndStop(c, keysignIns, stopChan)
-			}
-			_, err = keysignIns.SignMessage([]byte(req.Message), localState, req.SignerPubKeys)
-			c.Assert(err, NotNil)
-			// we skip the node 1 as we force it to stop
-			if idx != 1 {
-				blames := keysignIns.GetTssCommonStruct().GetBlameMgr().GetBlame().BlameNodes
-				c.Assert(blames, HasLen, 1)
-				c.Assert(blames[0].Pubkey, Equals, testPubKeys[1])
-			}
-		}(i)
-	}
-	wg.Wait()
-}
-
-func rejectSendToOnePeer(c *C, tssKeySign *ECDSAKeySign, stopChan chan struct{}, targetPeers []peer.ID) {
-	for {
-		select {
-		case <-stopChan:
-			return
-		case <-time.After(time.Millisecond):
-			lastMsg := tssKeySign.tssCommonStruct.GetBlameMgr().GetLastMsg()
-			if lastMsg != nil && len(lastMsg.Type()) > 6 {
-				a := lastMsg.Type()
-				idx := strings.Index(a, "Round")
-				start := idx + len("Round")
-				round := a[start : start+1]
-				roundD, err := strconv.Atoi(round)
-				c.Assert(err, IsNil)
-				if roundD > 6 {
-					peersID := tssKeySign.tssCommonStruct.P2PPeers
-					sort.Slice(peersID, func(i, j int) bool {
-						return peersID[i].String() > peersID[j].String()
-					})
-					tssKeySign.tssCommonStruct.P2PPeers = targetPeers
-					return
-				}
-			}
-		}
-	}
-}
-
-func (s *EcdsaKeysignTestSuite) TestSignMessageRejectOnePeer(c *C) {
-	if testing.Short() {
-		c.Skip("skip the test")
-		return
-	}
-	sort.Strings(testPubKeys)
-	req := keysign.NewRequest("thorpub1addwnpepqv6xp3fmm47dfuzglywqvpv8fdjv55zxte4a26tslcezns5czv586u2fw33", "helloworld-test111", 10, testPubKeys, "0.16.0", "ecdsa")
-	messageID, err := common.MsgToHashString([]byte(req.Message))
-	c.Assert(err, IsNil)
-	wg := sync.WaitGroup{}
-	conf := common.TssConfig{
-		KeyGenTimeout:   20 * time.Second,
-		KeySignTimeout:  20 * time.Second,
-		PreParamTimeout: 5 * time.Second,
-	}
-	for i := 0; i < s.partyNum; i++ {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
-			comm := s.comms[idx]
-			stopChan := make(chan struct{})
-			keysignIns := NewTssKeySign(comm.GetLocalPeerID(),
-				conf,
-				comm.BroadcastMsgChan,
-				stopChan, messageID, s.nodePrivKeys[idx], s.comms[idx], s.stateMgrs[idx])
-			keysignMsgChannel := keysignIns.GetTssKeySignChannels()
-
-			comm.SetSubscribe(messages.TSSKeySignMsg, messageID, keysignMsgChannel)
-			comm.SetSubscribe(messages.TSSKeySignVerMsg, messageID, keysignMsgChannel)
-			comm.SetSubscribe(messages.TSSControlMsg, messageID, keysignMsgChannel)
-			comm.SetSubscribe(messages.TSSTaskDone, messageID, keysignMsgChannel)
-			defer comm.CancelSubscribe(messages.TSSKeySignMsg, messageID)
-			defer comm.CancelSubscribe(messages.TSSKeySignVerMsg, messageID)
-			defer comm.CancelSubscribe(messages.TSSControlMsg, messageID)
-			defer comm.CancelSubscribe(messages.TSSTaskDone, messageID)
-
-			localState, err := s.stateMgrs[idx].GetLocalState(req.PoolPubKey)
-			c.Assert(err, IsNil)
-			if idx == 1 {
-				go rejectSendToOnePeer(c, keysignIns, stopChan, s.targetPeers)
-			}
-			_, err = keysignIns.SignMessage([]byte(req.Message), localState, req.SignerPubKeys)
-			lastMsg := keysignIns.tssCommonStruct.GetBlameMgr().GetLastMsg()
-			log.Info().Msgf("%s------->last message %v, broadcast? %v", keysignIns.tssCommonStruct.GetLocalPeerID(), lastMsg.Type(), lastMsg.IsBroadcast())
-			c.Assert(err, IsNil)
-		}(i)
-	}
-	wg.Wait()
-}
-
-func (s *EcdsaKeysignTestSuite) TearDownTest(c *C) {
+func (s *EcgdsaKeysignTestSuite) TearDownTest(c *C) {
 	if testing.Short() {
 		c.Skip("skip the test")
 		return
@@ -393,7 +231,7 @@ func (s *EcdsaKeysignTestSuite) TearDownTest(c *C) {
 	}
 }
 
-func (s *EcdsaKeysignTestSuite) TestCloseKeySignnotifyChannel(c *C) {
+func (s *EcgdsaKeysignTestSuite) TestCloseKeySignnotifyChannel(c *C) {
 	conf := common.TssConfig{}
 	keySignInstance := NewTssKeySign("", conf, nil, nil, "test", s.nodePrivKeys[0], s.comms[0], s.stateMgrs[0])
 

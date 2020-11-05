@@ -15,6 +15,7 @@ import (
 	"gitlab.com/thorchain/tss/go-tss/conversion"
 	"gitlab.com/thorchain/tss/go-tss/keysign"
 	"gitlab.com/thorchain/tss/go-tss/keysign/ecdsa"
+	"gitlab.com/thorchain/tss/go-tss/keysign/ecgdsa"
 	"gitlab.com/thorchain/tss/go-tss/keysign/eddsa"
 
 	"gitlab.com/thorchain/tss/go-tss/messages"
@@ -22,9 +23,9 @@ import (
 	"gitlab.com/thorchain/tss/go-tss/storage"
 )
 
-func (t *TssServer) waitForSignatures(msgID, poolPubKey string, msgToSign []byte, sigChan chan string) (keysign.Response, error) {
+func (t *TssServer) waitForSignatures(msgID, poolPubKey string, msgToSign []byte, sigChan chan string, algo string) (keysign.Response, error) {
 	// TSS keysign include both form party and keysign itself, thus we wait twice of the timeout
-	data, err := t.signatureNotifier.WaitForSignature(msgID, msgToSign, poolPubKey, t.conf.KeySignTimeout, sigChan)
+	data, err := t.signatureNotifier.WaitForSignature(msgID, msgToSign, poolPubKey, t.conf.KeySignTimeout, sigChan, algo)
 	if err != nil {
 		return keysign.Response{}, err
 	}
@@ -208,6 +209,17 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 			t.p2pCommunication,
 			t.stateManager,
 		)
+	case "ecgdsa":
+		keysignInstance = ecgdsa.NewTssKeySign(
+			t.p2pCommunication.GetLocalPeerID(),
+			t.conf,
+			t.p2pCommunication.BroadcastMsgChan,
+			t.stopChan,
+			msgID,
+			t.privateKey,
+			t.p2pCommunication,
+			t.stateManager,
+		)
 	default:
 		return keysign.Response{}, errors.New("invalid keysign algo")
 	}
@@ -271,7 +283,7 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 	// we wait for signatures
 	go func() {
 		defer wg.Done()
-		receivedSig, errWait = t.waitForSignatures(msgID, req.PoolPubKey, msgToSign, sigChan)
+		receivedSig, errWait = t.waitForSignatures(msgID, req.PoolPubKey, msgToSign, sigChan, req.Algo)
 		// we received an valid signature indeed
 		if errWait == nil {
 			sigChan <- "signature received"

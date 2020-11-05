@@ -13,6 +13,7 @@ import (
 	"time"
 
 	btss "github.com/binance-chain/tss-lib/tss"
+	"github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p-peerstore/addr"
 
 	"gitlab.com/thorchain/tss/go-tss/conversion"
@@ -102,7 +103,7 @@ var _ = Suite(&EddsaKeysignTestSuite{})
 func (s *EddsaKeysignTestSuite) SetUpSuite(c *C) {
 	conversion.SetupBech32Prefix()
 	common.InitLog("info", true, "keysign_test")
-
+	log.SetLogLevel("tss-lib", "info")
 	for _, el := range testNodePrivkey {
 		priHexBytes, err := base64.StdEncoding.DecodeString(el)
 		c.Assert(err, IsNil)
@@ -151,6 +152,8 @@ func (s *EddsaKeysignTestSuite) SetUpTest(c *C) {
 		s.comms[i] = comm
 	}
 
+	// give a little bit time to have the p2p ready(otherwise, it may have no address error)
+	time.Sleep(time.Second)
 	for i := 0; i < s.partyNum; i++ {
 		f := &MockLocalStateManager{
 			file: fmt.Sprintf("../../test_data/keysign_data/eddsa/%d.json", i),

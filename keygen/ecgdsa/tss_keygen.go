@@ -1,4 +1,4 @@
-package eddsa
+package ecgdsa
 
 import (
 	"encoding/json"
@@ -8,9 +8,9 @@ import (
 	"time"
 
 	bcrypto "github.com/binance-chain/tss-lib/crypto"
-	eddsakg "github.com/binance-chain/tss-lib/eddsa/keygen"
+	eddsakg "github.com/binance-chain/tss-lib/ecgdsa/keygen"
 	btss "github.com/binance-chain/tss-lib/tss"
-	"github.com/decred/dcrd/dcrec/edwards/v2"
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	tcrypto "github.com/tendermint/tendermint/crypto"
@@ -24,7 +24,7 @@ import (
 	"gitlab.com/thorchain/tss/go-tss/storage"
 )
 
-type EDDSAKeyGen struct {
+type ECGDSAKeyGen struct {
 	logger          zerolog.Logger
 	localNodePubKey string
 	tssCommonStruct *common.TssCommon
@@ -43,8 +43,8 @@ func NewTssKeyGen(localP2PID string,
 	msgID string,
 	stateManager storage.LocalStateManager,
 	privateKey tcrypto.PrivKey,
-	p2pComm *p2p.Communication) *EDDSAKeyGen {
-	return &EDDSAKeyGen{
+	p2pComm *p2p.Communication) *ECGDSAKeyGen {
+	return &ECGDSAKeyGen{
 		logger: log.With().
 			Str("module", "keygen").
 			Str("msgID", msgID).Logger(),
@@ -58,16 +58,17 @@ func NewTssKeyGen(localP2PID string,
 	}
 }
 
-func (tKeyGen *EDDSAKeyGen) GetTssKeyGenChannels() chan *p2p.Message {
+func (tKeyGen *ECGDSAKeyGen) GetTssKeyGenChannels() chan *p2p.Message {
 	return tKeyGen.tssCommonStruct.TssMsg
 }
 
-func (tKeyGen *EDDSAKeyGen) GetTssCommonStruct() *common.TssCommon {
+func (tKeyGen *ECGDSAKeyGen) GetTssCommonStruct() *common.TssCommon {
 	return tKeyGen.tssCommonStruct
 }
 
-func (tKeyGen *EDDSAKeyGen) GenerateNewKey(keygenReq keygen.Request) (*bcrypto.ECPoint, error) {
-	btss.SetCurve(edwards.Edwards())
+func (tKeyGen *ECGDSAKeyGen) GenerateNewKey(keygenReq keygen.Request) (*bcrypto.ECPoint, error) {
+	// schnorr is based on secp256k1 curve
+	btss.SetCurve(btcec.S256())
 	partiesID, localPartyID, err := conversion.GetParties(keygenReq.Keys, tKeyGen.localNodePubKey)
 	if err != nil {
 		return nil, fmt.Errorf("fail to get keygen parties: %w", err)
@@ -136,7 +137,7 @@ func (tKeyGen *EDDSAKeyGen) GenerateNewKey(keygenReq keygen.Request) (*bcrypto.E
 	return r, err
 }
 
-func (tKeyGen *EDDSAKeyGen) processKeyGen(errChan chan struct{},
+func (tKeyGen *ECGDSAKeyGen) processKeyGen(errChan chan struct{},
 	outCh <-chan btss.Message,
 	endCh <-chan eddsakg.LocalPartySaveData,
 	keyGenLocalStateItem storage.KeygenLocalState) (*bcrypto.ECPoint, error) {
@@ -185,7 +186,7 @@ func (tKeyGen *EDDSAKeyGen) processKeyGen(errChan chan struct{},
 
 			// if we cannot find the blame node, we check whether everyone send me the share
 			if len(blameMgr.GetBlame().BlameNodes) == 0 {
-				blameNodesMisingShare, isUnicast, err := blameMgr.TssMissingShareBlame(messages.EDDSATSSKEYGENROUNDS, messages.EDDSAKEYGEN)
+				blameNodesMisingShare, isUnicast, err := blameMgr.TssMissingShareBlame(messages.ECGDSATSSKEYGENROUNDS, messages.ECGDSAKEYGEN)
 				if err != nil {
 					tKeyGen.logger.Error().Err(err).Msg("fail to get the node of missing share ")
 				}
@@ -206,12 +207,16 @@ func (tKeyGen *EDDSAKeyGen) processKeyGen(errChan chan struct{},
 			}
 
 		case msg := <-endCh:
-			tKeyGen.logger.Debug().Msgf("keygen finished successfully: %s", msg.EDDSAPub.Y().String())
+			tKeyGen.logger.Debug().Msgf("keygen finished successfully: %s", msg.ECGDSAPub.Y.String())
 			err := tKeyGen.tssCommonStruct.NotifyTaskDone()
 			if err != nil {
 				tKeyGen.logger.Error().Err(err).Msg("fail to broadcast the keysign done")
 			}
-			pubKey, _, err := conversion.GetTssPubKeyEDDSA(msg.EDDSAPub)
+			pub, err := bcrypto.NewECPoint(btss.EC(), msg.ECGDSAPub.X, msg.ECGDSAPub.Y)
+			if err != nil {
+				tKeyGen.logger.Error().Err(err).Msg("fail to create the public key")
+			}
+			pubKey, _, err := conversion.GetTssPubKeyECGDSA(pub)
 			if err != nil {
 				return nil, fmt.Errorf("fail to get thorchain pubkey: %w", err)
 			}
@@ -229,7 +234,7 @@ func (tKeyGen *EDDSAKeyGen) processKeyGen(errChan chan struct{},
 			if err := tKeyGen.stateManager.SaveAddressBook(address); err != nil {
 				tKeyGen.logger.Error().Err(err).Msg("fail to save the peer addresses")
 			}
-			return msg.EDDSAPub, nil
+			return bcrypto.NewECPoint(btss.EC(), msg.ECGDSAPub.X, msg.ECGDSAPub.Y)
 		}
 	}
 }

@@ -22,18 +22,18 @@ func (*NotifierTestSuite) SetUpSuite(c *C) {
 
 func (NotifierTestSuite) TestNewNotifier(c *C) {
 	poolPubKey := conversion.GetRandomPubKey()
-	n, err := NewNotifier("", []byte("hello"), poolPubKey)
+	n, err := NewNotifier("", []byte("hello"), poolPubKey, "ecdsa")
 	c.Assert(err, NotNil)
 	c.Assert(n, IsNil)
-	n, err = NewNotifier("aasfdasdf", nil, poolPubKey)
-	c.Assert(err, NotNil)
-	c.Assert(n, IsNil)
-
-	n, err = NewNotifier("hello", []byte("hello"), "")
+	n, err = NewNotifier("aasfdasdf", nil, poolPubKey, "ecdsa")
 	c.Assert(err, NotNil)
 	c.Assert(n, IsNil)
 
-	n, err = NewNotifier("hello", []byte("hello"), poolPubKey)
+	n, err = NewNotifier("hello", []byte("hello"), "", "ecdsa")
+	c.Assert(err, NotNil)
+	c.Assert(n, IsNil)
+
+	n, err = NewNotifier("hello", []byte("hello"), poolPubKey, "ecdsa")
 	c.Assert(err, IsNil)
 	c.Assert(n, NotNil)
 	ch := n.GetResponseChannel()
@@ -47,7 +47,7 @@ func (NotifierTestSuite) TestNotifierHappyPath(c *C) {
 	messageID, err := common.MsgToHashString(buf)
 	c.Assert(err, IsNil)
 	poolPubKey := `thorpub1addwnpepq0ul3xt882a6nm6m7uhxj4tk2n82zyu647dyevcs5yumuadn4uamqx7neak`
-	n, err := NewNotifier(messageID, buf, poolPubKey)
+	n, err := NewNotifier(messageID, buf, poolPubKey, "ecdsa")
 	c.Assert(err, IsNil)
 	c.Assert(n, NotNil)
 	sigFile := "../test_data/signature_notify/sig1.json"

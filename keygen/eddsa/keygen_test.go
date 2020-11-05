@@ -117,8 +117,10 @@ func (s *EddsaKeygenTestSuite) SetUpTest(c *C) {
 		s.comms[i] = comm
 	}
 
+	// give a little bit time to have the p2p ready(otherwise, it may have no address error)
+	time.Sleep(time.Second)
 	for i := 0; i < s.partyNum; i++ {
-		baseHome := path.Join(os.TempDir(), "eddsa", strconv.Itoa(i))
+		baseHome := path.Join(os.TempDir(), "keygen_eddsa", strconv.Itoa(i))
 		fMgr, err := storage.NewFileStateMgr(baseHome)
 		c.Assert(err, IsNil)
 		s.stateMgrs[i] = fMgr
@@ -126,7 +128,7 @@ func (s *EddsaKeygenTestSuite) SetUpTest(c *C) {
 }
 
 func (s *EddsaKeygenTestSuite) TearDownSuite(c *C) {
-	tempFilePath := path.Join(os.TempDir(), "eddsa")
+	tempFilePath := path.Join(os.TempDir(), "keygen_eddsa")
 	err := os.RemoveAll(tempFilePath)
 	c.Assert(err, IsNil)
 }

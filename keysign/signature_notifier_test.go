@@ -78,7 +78,7 @@ func TestSignatureNotifierHappyPath(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		sig, err := n1.WaitForSignature(messageID, buf, poolPubKey, time.Second*30, sigChan)
+		sig, err := n1.WaitForSignature(messageID, buf, poolPubKey, time.Second*30, sigChan, "ecdsa")
 		assert.Nil(t, err)
 		assert.NotNil(t, sig)
 	}()
