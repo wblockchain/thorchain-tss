@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/binance-chain/tss-lib/crypto"
+	"github.com/decred/dcrd/dcrec/edwards/v2"
 	"github.com/libp2p/go-libp2p-core/peer"
 	tcrypto "github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/crypto/secp256k1"
@@ -70,6 +71,7 @@ type EddsaKeygenTestSuite struct {
 var _ = Suite(&EddsaKeygenTestSuite{})
 
 func (s *EddsaKeygenTestSuite) SetUpSuite(c *C) {
+	btss.SetCurve(edwards.Edwards())
 	common.InitLog("info", true, "keygen_test")
 	conversion.SetupBech32Prefix()
 	for _, el := range testNodePrivkey {

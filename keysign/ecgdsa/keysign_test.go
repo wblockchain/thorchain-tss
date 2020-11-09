@@ -13,6 +13,7 @@ import (
 	"time"
 
 	btss "github.com/binance-chain/tss-lib/tss"
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/libp2p/go-libp2p-peerstore/addr"
 
 	"gitlab.com/thorchain/tss/go-tss/conversion"
@@ -121,6 +122,7 @@ func (s *EcgdsaKeysignTestSuite) SetUpSuite(c *C) {
 }
 
 func (s *EcgdsaKeysignTestSuite) SetUpTest(c *C) {
+	btss.SetCurve(btcec.S256())
 	if testing.Short() {
 		c.Skip("skip the test")
 		return

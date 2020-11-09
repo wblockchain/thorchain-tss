@@ -10,7 +10,6 @@ import (
 	bcrypto "github.com/binance-chain/tss-lib/crypto"
 	eddsakg "github.com/binance-chain/tss-lib/ecgdsa/keygen"
 	btss "github.com/binance-chain/tss-lib/tss"
-	"github.com/btcsuite/btcd/btcec"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	tcrypto "github.com/tendermint/tendermint/crypto"
@@ -68,7 +67,6 @@ func (tKeyGen *ECGDSAKeyGen) GetTssCommonStruct() *common.TssCommon {
 
 func (tKeyGen *ECGDSAKeyGen) GenerateNewKey(keygenReq keygen.Request) (*bcrypto.ECPoint, error) {
 	// schnorr is based on secp256k1 curve
-	btss.SetCurve(btcec.S256())
 	partiesID, localPartyID, err := conversion.GetParties(keygenReq.Keys, tKeyGen.localNodePubKey)
 	if err != nil {
 		return nil, fmt.Errorf("fail to get keygen parties: %w", err)

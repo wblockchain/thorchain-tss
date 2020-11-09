@@ -8,6 +8,9 @@ import (
 	"sync"
 	"time"
 
+	btss "github.com/binance-chain/tss-lib/tss"
+	"github.com/btcsuite/btcd/btcec"
+	"github.com/decred/dcrd/dcrec/edwards/v2"
 	"github.com/libp2p/go-libp2p-core/peer"
 
 	"gitlab.com/thorchain/tss/go-tss/blame"
@@ -188,6 +191,7 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 
 	switch req.Algo {
 	case "ecdsa":
+		btss.SetCurve(btcec.S256())
 		keysignInstance = ecdsa.NewTssKeySign(
 			t.p2pCommunication.GetLocalPeerID(),
 			t.conf,
@@ -199,6 +203,7 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 			t.stateManager,
 		)
 	case "eddsa":
+		btss.SetCurve(edwards.Edwards())
 		keysignInstance = eddsa.NewTssKeySign(
 			t.p2pCommunication.GetLocalPeerID(),
 			t.conf,
@@ -210,6 +215,7 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 			t.stateManager,
 		)
 	case "ecgdsa":
+		btss.SetCurve(btcec.S256())
 		keysignInstance = ecgdsa.NewTssKeySign(
 			t.p2pCommunication.GetLocalPeerID(),
 			t.conf,

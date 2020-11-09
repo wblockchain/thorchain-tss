@@ -57,7 +57,10 @@ func (n *Notifier) verifySignature(data *bc.SignatureData) (bool, error) {
 
 	switch n.algo {
 	case "ecdsa":
-		pk := pubKey.(secp256k1.PubKeySecp256k1)
+		pk, ok := pubKey.(secp256k1.PubKeySecp256k1)
+		if !ok {
+			return false, fmt.Errorf("invalid public key for signature verification")
+		}
 		pub, err := btcec.ParsePubKey(pk[:], btcec.S256())
 		if err != nil {
 			return false, err
@@ -65,7 +68,10 @@ func (n *Notifier) verifySignature(data *bc.SignatureData) (bool, error) {
 		return ecdsa.Verify(pub.ToECDSA(), n.message, new(big.Int).SetBytes(data.R), new(big.Int).SetBytes(data.S)), nil
 
 	case "eddsa":
-		rawPk := pubKey.(ed25519.PubKeyEd25519)
+		rawPk, ok := pubKey.(ed25519.PubKeyEd25519)
+		if !ok {
+			return false, fmt.Errorf("invalid public key for signature verification")
+		}
 		bPk, err := edwards.ParsePubKey(rawPk[:])
 		if err != nil {
 			return false, fmt.Errorf("inval ed25519 key with error %w", err)
@@ -78,7 +84,10 @@ func (n *Notifier) verifySignature(data *bc.SignatureData) (bool, error) {
 		return edwards.Verify(bPk, n.message, newSig.R, newSig.S), nil
 
 	case "ecgdsa":
-		pk := pubKey.(secp256k1.PubKeySecp256k1)
+		pk, ok := pubKey.(secp256k1.PubKeySecp256k1)
+		if !ok {
+			return false, fmt.Errorf("invalid public key for signature verification")
+		}
 		pub, err := btcec.ParsePubKey(pk[:], btcec.S256())
 		if err != nil {
 			return false, err

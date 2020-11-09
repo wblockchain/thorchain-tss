@@ -5,6 +5,9 @@ import (
 	"time"
 
 	"github.com/binance-chain/go-sdk/common/types"
+	btss "github.com/binance-chain/tss-lib/tss"
+	"github.com/btcsuite/btcd/btcec"
+	"github.com/decred/dcrd/dcrec/edwards/v2"
 
 	"gitlab.com/thorchain/tss/go-tss/blame"
 	"gitlab.com/thorchain/tss/go-tss/common"
@@ -28,6 +31,7 @@ func (t *TssServer) Keygen(req keygen.Request) (keygen.Response, error) {
 	var keygenInstance keygen.TssKeyGen
 	switch req.Algo {
 	case "ecdsa":
+		btss.SetCurve(btcec.S256())
 		keygenInstance = ecdsa.NewTssKeyGen(
 			t.p2pCommunication.GetLocalPeerID(),
 			t.conf,
@@ -40,6 +44,7 @@ func (t *TssServer) Keygen(req keygen.Request) (keygen.Response, error) {
 			t.privateKey,
 			t.p2pCommunication)
 	case "eddsa":
+		btss.SetCurve(edwards.Edwards())
 		keygenInstance = eddsa.NewTssKeyGen(
 			t.p2pCommunication.GetLocalPeerID(),
 			t.conf,
@@ -51,6 +56,7 @@ func (t *TssServer) Keygen(req keygen.Request) (keygen.Response, error) {
 			t.privateKey,
 			t.p2pCommunication)
 	case "ecgdsa":
+		btss.SetCurve(btcec.S256())
 		keygenInstance = ecgdsa.NewTssKeyGen(
 			t.p2pCommunication.GetLocalPeerID(),
 			t.conf,

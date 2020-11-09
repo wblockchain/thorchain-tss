@@ -12,7 +12,6 @@ import (
 	ecgdsakeygen "github.com/binance-chain/tss-lib/ecgdsa/keygen"
 	"github.com/binance-chain/tss-lib/ecgdsa/signing"
 	btss "github.com/binance-chain/tss-lib/tss"
-	"github.com/btcsuite/btcd/btcec"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	tcrypto "github.com/tendermint/tendermint/crypto"
@@ -62,7 +61,6 @@ func (tKeySign *ECGDSAKeySign) GetTssCommonStruct() *common.TssCommon {
 
 // signMessage
 func (tKeySign *ECGDSAKeySign) SignMessage(msgToSign []byte, localStateItem storage.KeygenLocalState, parties []string) (*bc.SignatureData, error) {
-	btss.SetCurve(btcec.S256())
 	partiesID, localPartyID, err := conversion.GetParties(parties, localStateItem.LocalPartyKey)
 	tKeySign.localParty = localPartyID
 	if err != nil {
@@ -93,6 +91,10 @@ func (tKeySign *ECGDSAKeySign) SignMessage(msgToSign []byte, localStateItem stor
 	err = json.Unmarshal(localStateItem.LocalData, &localData)
 	if err != nil {
 		return nil, errors.New("fail to load the saved keygen data")
+	}
+
+	if localData.ECGDSAPub == nil {
+		return nil, errors.New("incorrect format of the ecdsa saved data")
 	}
 	keySignParty := signing.NewLocalParty(m, params, localData, outCh, endCh)
 	partyIDMap := conversion.SetupPartyIDMap(partiesID)

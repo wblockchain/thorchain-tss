@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/binance-chain/tss-lib/crypto"
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/libp2p/go-libp2p-core/peer"
 	tcrypto "github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/crypto/secp256k1"
@@ -73,6 +74,7 @@ type EcdsaKeygenTestSuite struct {
 var _ = Suite(&EcdsaKeygenTestSuite{})
 
 func (s *EcdsaKeygenTestSuite) SetUpSuite(c *C) {
+	btss.SetCurve(btcec.S256())
 	common.InitLog("info", true, "keygen_test")
 	conversion.SetupBech32Prefix()
 	for _, el := range testNodePrivkey {

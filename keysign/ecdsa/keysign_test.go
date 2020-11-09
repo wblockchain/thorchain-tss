@@ -15,6 +15,7 @@ import (
 	"time"
 
 	btss "github.com/binance-chain/tss-lib/tss"
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/libp2p/go-libp2p-peerstore/addr"
 
 	"github.com/rs/zerolog/log"
@@ -104,6 +105,7 @@ type EcdsaKeysignTestSuite struct {
 var _ = Suite(&EcdsaKeysignTestSuite{})
 
 func (s *EcdsaKeysignTestSuite) SetUpSuite(c *C) {
+	btss.SetCurve(btcec.S256())
 	conversion.SetupBech32Prefix()
 	common.InitLog("info", true, "keysign_test")
 

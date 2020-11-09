@@ -13,6 +13,7 @@ import (
 	"time"
 
 	btss "github.com/binance-chain/tss-lib/tss"
+	"github.com/decred/dcrd/dcrec/edwards/v2"
 	"github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p-peerstore/addr"
 
@@ -102,6 +103,7 @@ var _ = Suite(&EddsaKeysignTestSuite{})
 
 func (s *EddsaKeysignTestSuite) SetUpSuite(c *C) {
 	conversion.SetupBech32Prefix()
+	btss.SetCurve(edwards.Edwards())
 	common.InitLog("info", true, "keysign_test")
 	log.SetLogLevel("tss-lib", "info")
 	for _, el := range testNodePrivkey {

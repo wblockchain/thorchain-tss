@@ -63,7 +63,7 @@ func (fsm *FileStateMgr) getFilePathName(pubKey string) (string, error) {
 		return "", err
 	}
 	if !ret {
-		return "", errors.New("invalid pubkey for file name")
+		return "", errors.New("invalid pubkey for the file name")
 	}
 
 	localFileName := fmt.Sprintf("localstate-%s.json", pubKey)

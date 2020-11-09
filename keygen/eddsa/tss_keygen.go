@@ -10,7 +10,6 @@ import (
 	bcrypto "github.com/binance-chain/tss-lib/crypto"
 	eddsakg "github.com/binance-chain/tss-lib/eddsa/keygen"
 	btss "github.com/binance-chain/tss-lib/tss"
-	"github.com/decred/dcrd/dcrec/edwards/v2"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	tcrypto "github.com/tendermint/tendermint/crypto"
@@ -67,7 +66,6 @@ func (tKeyGen *EDDSAKeyGen) GetTssCommonStruct() *common.TssCommon {
 }
 
 func (tKeyGen *EDDSAKeyGen) GenerateNewKey(keygenReq keygen.Request) (*bcrypto.ECPoint, error) {
-	btss.SetCurve(edwards.Edwards())
 	partiesID, localPartyID, err := conversion.GetParties(keygenReq.Keys, tKeyGen.localNodePubKey)
 	if err != nil {
 		return nil, fmt.Errorf("fail to get keygen parties: %w", err)
