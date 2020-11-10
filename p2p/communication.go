@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/libp2p/go-libp2p"
@@ -199,38 +198,19 @@ func (c *Communication) bootStrapConnectivityCheck() error {
 		return nil
 	}
 
-	var onlineNodes uint32
-	var wg sync.WaitGroup
+	var checkPeers []peer.ID
 	for _, el := range c.bootstrapPeers {
 		peerNode, err := peer.AddrInfoFromP2pAddr(el)
 		if err != nil {
 			c.logger.Error().Err(err).Msg("error in decode the bootstrap node, skip it")
 			continue
 		}
-		wg.Add(1)
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
-			defer cancel()
-			defer wg.Done()
-			outChan := ping.Ping(ctx, c.host, peer.ID)
-			select {
-			case ret, ok := <-outChan:
-				if !ok {
-					return
-				}
-				if ret.Error == nil {
-					c.logger.Debug().Msgf("connect to peer %v with RTT %v\n", peer.ID, ret.RTT)
-					atomic.AddUint32(&onlineNodes, 1)
-				}
-			case <-ctx.Done():
-				c.logger.Error().Msgf("fail to ping the node %s within 2 seconds", peer.ID)
-			}
-		}()
+		checkPeers = append(checkPeers, peerNode.ID)
 	}
-	wg.Wait()
+	onlineNodes := c.CheckPeerConnectivity(checkPeers)
 
-	if onlineNodes > 0 {
-		c.logger.Info().Msgf("we have successfully ping pong %d nodes", onlineNodes)
+	if len(onlineNodes) > 0 {
+		c.logger.Info().Msgf("we have successfully ping pong %d nodes", len(onlineNodes))
 		return nil
 	}
 	c.logger.Error().Msg("fail to ping any bootstrap node")
@@ -441,4 +421,35 @@ func (c *Communication) ProcessBroadcast() {
 
 func (c *Communication) ReleaseStream(msgID string) {
 	c.streamMgr.ReleaseStream(msgID)
+}
+
+func (c *Communication) CheckPeerConnectivity(peerNodes []peer.ID) []peer.ID {
+	var lock sync.Mutex
+	var onlineNodes []peer.ID
+	var wg sync.WaitGroup
+	for _, el := range peerNodes {
+		wg.Add(1)
+		go func(node peer.ID) {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
+			defer cancel()
+			defer wg.Done()
+			outChan := ping.Ping(ctx, c.host, node)
+			select {
+			case ret, ok := <-outChan:
+				if !ok {
+					return
+				}
+				if ret.Error == nil {
+					c.logger.Debug().Msgf("connect to peer %v with RTT %v\n", node, ret.RTT)
+					lock.Lock()
+					onlineNodes = append(onlineNodes, node)
+					lock.Unlock()
+				}
+			case <-ctx.Done():
+				c.logger.Error().Msgf("fail to ping the node %s within 2 seconds", node)
+			}
+		}(el)
+	}
+	wg.Wait()
+	return onlineNodes
 }

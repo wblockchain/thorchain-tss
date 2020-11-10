@@ -80,39 +80,6 @@ func InitLog(level string, pretty bool, serviceValue string) {
 	log.Logger = log.Output(out).With().Str("service", serviceValue).Logger()
 }
 
-func generateSignature(msg []byte, msgID string, privKey tcrypto.PrivKey) ([]byte, error) {
-	var dataForSigning bytes.Buffer
-	dataForSigning.Write(msg)
-	dataForSigning.WriteString(msgID)
-	return privKey.Sign(dataForSigning.Bytes())
-}
-
-func verifySignature(pubKey tcrypto.PubKey, message, sig []byte, msgID string) bool {
-	var dataForSign bytes.Buffer
-	dataForSign.Write(message)
-	dataForSign.WriteString(msgID)
-	return pubKey.VerifyBytes(dataForSign.Bytes(), sig)
-}
-
-func getHighestFreq(confirmedList map[string]string) (string, int, error) {
-	if len(confirmedList) == 0 {
-		return "", 0, errors.New("empty input")
-	}
-	freq := make(map[string]int, len(confirmedList))
-	for _, n := range confirmedList {
-		freq[n]++
-	}
-	maxFreq := -1
-	var data string
-	for key, counter := range freq {
-		if counter > maxFreq {
-			maxFreq = counter
-			data = key
-		}
-	}
-	return data, maxFreq, nil
-}
-
 func GetMsgRound(wireMsg *messages.WireMessage, partyID *btss.PartyID) (blame.RoundInfo, error) {
 	parsedMsg, err := btss.ParseWireMessage(wireMsg.Message, partyID, wireMsg.Routing.IsBroadcast)
 	if err != nil {

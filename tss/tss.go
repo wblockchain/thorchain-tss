@@ -183,7 +183,6 @@ func (t *TssServer) joinParty(msgID, version string, sig []byte, blockHeight int
 		onlines, err := t.partyCoordinator.JoinPartyWithRetry(msgID, peersIDStr)
 		return onlines, "NONE", err
 	} else {
-
 		isBroadcast, err := conversion.VersionGECheck(version, messages.NEWJOINPARTYVERSIONBroadcast)
 		if err != nil {
 			return nil, "", fmt.Errorf("fail to parse the version with error:%w", err)

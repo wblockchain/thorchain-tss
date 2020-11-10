@@ -20,6 +20,7 @@ import (
 
 func setupHosts(t *testing.T, n int) ([]host.Host, map[peer.ID]tnet.Identity, mocknet.Mocknet) {
 	mn := mocknet.New(context.Background())
+	MockNet = true
 	var hosts []host.Host
 	ids := make(map[peer.ID]tnet.Identity)
 	for i := 0; i < n; i++ {

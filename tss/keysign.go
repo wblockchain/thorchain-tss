@@ -46,6 +46,7 @@ func (t *TssServer) generateSignature(msgID string, msgToSign []byte, req keysig
 			Blame:  blame.NewBlame(blame.InternalError, []blame.Node{}),
 		}, nil
 	}
+	activePeersID := t.p2pCommunication.CheckPeerConnectivity(allPeersID)
 
 	oldJoinParty, err := conversion.VersionLTCheck(req.Version, messages.NEWJOINPARTYVERSION)
 	if err != nil {
@@ -68,7 +69,7 @@ func (t *TssServer) generateSignature(msgID string, msgToSign []byte, req keysig
 	}
 
 	joinPartyStartTime := time.Now()
-	onlinePeers, leader, errJoinParty := t.joinParty(msgID, req.Version, sig, req.BlockHeight, allParticipants, threshold, sigChan)
+	keysignPeers, leader, errJoinParty := t.joinParty(msgID, req.Version, sig, req.BlockHeight, allParticipants, threshold, sigChan)
 	joinPartyTime := time.Since(joinPartyStartTime)
 	if errJoinParty != nil {
 		// we received the signature from waiting for signature
@@ -78,22 +79,22 @@ func (t *TssServer) generateSignature(msgID string, msgToSign []byte, req keysig
 		t.tssMetrics.KeysignJoinParty(joinPartyTime, false)
 		// this indicate we are processing the leaderness join party
 		if leader == "NONE" {
-			if onlinePeers == nil {
+			if keysignPeers == nil {
 				t.logger.Error().Err(errJoinParty).Msg("error before we start join party")
-				t.broadcastKeysignFailure(msgID, allPeersID)
+				t.broadcastKeysignFailure(msgID, activePeersID)
 				return keysign.Response{
 					Status: common.Fail,
 					Blame:  blame.NewBlame(blame.InternalError, []blame.Node{}),
 				}, nil
 			}
 
-			blameNodes, err := blameMgr.NodeSyncBlame(req.SignerPubKeys, onlinePeers)
+			blameNodes, err := blameMgr.NodeSyncBlame(req.SignerPubKeys, keysignPeers)
 			if err != nil {
 				t.logger.Err(err).Msg("fail to get peers to blame")
 			}
-			t.broadcastKeysignFailure(msgID, allPeersID)
+			t.broadcastKeysignFailure(msgID, activePeersID)
 			// make sure we blame the leader as well
-			t.logger.Error().Err(err).Msgf("fail to form keysign party with online:%v", onlinePeers)
+			t.logger.Error().Err(err).Msgf("fail to form keysign party with online:%v", keysignPeers)
 			return keysign.Response{
 				Status: common.Fail,
 				Blame:  blameNodes,
@@ -109,9 +110,9 @@ func (t *TssServer) generateSignature(msgID string, msgToSign []byte, req keysig
 			blameLeader = blame.NewBlame(blame.TssSyncFail, []blame.Node{{leaderPubKey, nil, nil}})
 		}
 
-		t.broadcastKeysignFailure(msgID, allPeersID)
+		t.broadcastKeysignFailure(msgID, activePeersID)
 		// make sure we blame the leader as well
-		t.logger.Error().Err(errJoinParty).Msgf("messagesID(%s)fail to form keysign party with online:%v", msgID, onlinePeers)
+		t.logger.Error().Err(errJoinParty).Msgf("messagesID(%s)fail to form keysign party with online:%v", msgID, keysignPeers)
 		return keysign.Response{
 			Status: common.Fail,
 			Blame:  blameLeader,
@@ -120,7 +121,7 @@ func (t *TssServer) generateSignature(msgID string, msgToSign []byte, req keysig
 	}
 	t.tssMetrics.KeysignJoinParty(joinPartyTime, true)
 	isKeySignMember := false
-	for _, el := range onlinePeers {
+	for _, el := range keysignPeers {
 		if el == t.p2pCommunication.GetHost().ID() {
 			isKeySignMember = true
 		}
@@ -130,8 +131,8 @@ func (t *TssServer) generateSignature(msgID string, msgToSign []byte, req keysig
 		return keysign.Response{}, p2p.ErrSignReceived
 	}
 
-	parsedPeers := make([]string, len(onlinePeers))
-	for i, el := range onlinePeers {
+	parsedPeers := make([]string, len(keysignPeers))
+	for i, el := range keysignPeers {
 		parsedPeers[i] = el.String()
 	}
 

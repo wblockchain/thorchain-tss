@@ -13,6 +13,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
+	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/proto"
@@ -26,6 +27,7 @@ var (
 	ErrLeaderNotReady   = errors.New("leader not reachable")
 	ErrSignReceived     = errors.New("signature received")
 	ErrSigGenerated     = errors.New("signature generated")
+	MockNet             = false
 )
 
 type PartyCoordinator struct {
@@ -540,12 +542,18 @@ func (pc *PartyCoordinator) joinPartyLeader(msgID string, sig []byte, peers []st
 	return onlinePeers, nil
 }
 
-func (pc *PartyCoordinator) JoinPartyWithLeader(msgID string, sig []byte, blockHeight int64, peers []string, threshold int, signChan chan string, isBroadcast bool) ([]peer.ID, string, error) {
-	var onlines []peer.ID
+func (pc *PartyCoordinator) JoinPartyWithLeader(msgID string, sig []byte, blockHeight int64, allPeers []string, threshold int, signChan chan string, isBroadcast bool) ([]peer.ID, string, error) {
+	var keySignPeers []peer.ID
+	var activePeers []string
 	var err error
-	leader, err := LeaderNode(msgID, blockHeight, peers)
+	leader, err := LeaderNode(msgID, blockHeight, allPeers)
 	if err != nil {
 		return nil, "", err
+	}
+	if MockNet {
+		activePeers = allPeers
+	} else {
+		activePeers = pc.CheckPeerConnectivity(allPeers)
 	}
 	if pc.host.ID().String() == leader {
 		var joinPartyProtocol protocol.ID
@@ -555,13 +563,13 @@ func (pc *PartyCoordinator) JoinPartyWithLeader(msgID string, sig []byte, blockH
 		} else {
 			joinPartyProtocol = joinPartyProtocolWithLeader
 		}
-		onlines, err := pc.joinPartyLeader(msgID, sig, peers, threshold, signChan, joinPartyProtocol)
+		onlines, err := pc.joinPartyLeader(msgID, sig, activePeers, threshold, signChan, joinPartyProtocol)
 		return onlines, leader, err
 	}
 	// now we are just the normal peer
 	if isBroadcast {
 		pc.logger.Info().Msg("we apply broadcast join party with a leader")
-		onlines, receivedBroadcast, err := pc.joinPartyMemberBroadcast(msgID, sig, leader, peers, threshold, signChan)
+		onlines, receivedBroadcast, err := pc.joinPartyMemberBroadcast(msgID, sig, leader, activePeers, threshold, signChan)
 		if err == nil {
 			return onlines, leader, err
 		}
@@ -575,7 +583,7 @@ func (pc *PartyCoordinator) JoinPartyWithLeader(msgID string, sig []byte, blockH
 		// the leader, I will forward this request to leader.
 		receivedBroadcast = append(receivedBroadcast, pc.host.ID())
 		var offlinePeers []string
-		for _, i := range peers {
+		for _, i := range activePeers {
 			found := false
 			for _, j := range onlines {
 				if i == j.String() {
@@ -600,7 +608,7 @@ func (pc *PartyCoordinator) JoinPartyWithLeader(msgID string, sig []byte, blockH
 		// we now create the online nodes to have the leader be blamed
 		if found {
 			var nodesWithoutLeader []peer.ID
-			for _, el := range peers {
+			for _, el := range activePeers {
 				if el != leader {
 					n, err := peer.Decode(el)
 					if err != nil {
@@ -616,8 +624,8 @@ func (pc *PartyCoordinator) JoinPartyWithLeader(msgID string, sig []byte, blockH
 
 	} else {
 		pc.logger.Info().Msg("we apply join party with a leader")
-		onlines, err = pc.joinPartyMember(msgID, leader, threshold, signChan)
-		return onlines, leader, err
+		keySignPeers, err = pc.joinPartyMember(msgID, leader, threshold, signChan)
+		return keySignPeers, leader, err
 	}
 }
 
@@ -687,4 +695,40 @@ func (pc *PartyCoordinator) JoinPartyWithRetry(msgID string, peers []string) ([]
 
 func (pc *PartyCoordinator) ReleaseStream(msgID string) {
 	pc.streamMgr.ReleaseStream(msgID)
+}
+
+func (pc *PartyCoordinator) CheckPeerConnectivity(peerNodes []string) []string {
+	var lock sync.Mutex
+	var onlineNodes []string
+	var wg sync.WaitGroup
+	for _, el := range peerNodes {
+		wg.Add(1)
+		go func(node string) {
+			nodeID, err := peer.Decode(node)
+			if err != nil {
+				pc.logger.Error().Err(err).Msgf("fail to convert this node string to peerID")
+				return
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
+			defer cancel()
+			defer wg.Done()
+			outChan := ping.Ping(ctx, pc.host, nodeID)
+			select {
+			case ret, ok := <-outChan:
+				if !ok {
+					return
+				}
+				if ret.Error == nil {
+					pc.logger.Debug().Msgf("connect to peer %v with RTT %v\n", node, ret.RTT)
+					lock.Lock()
+					onlineNodes = append(onlineNodes, nodeID.String())
+					lock.Unlock()
+				}
+			case <-ctx.Done():
+				pc.logger.Error().Msgf("fail to ping the node %s within 2 seconds", node)
+			}
+		}(el)
+	}
+	wg.Wait()
+	return onlineNodes
 }
