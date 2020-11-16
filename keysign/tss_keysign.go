@@ -1,10 +1,13 @@
 package keysign
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
+	"path"
 	"sync"
 	"time"
 
@@ -139,6 +142,20 @@ func (tKeySign *TssKeySign) processKeySign(errChan chan struct{}, outCh <-chan b
 	tssConf := tKeySign.tssCommonStruct.GetConf()
 	blameMgr := tKeySign.tssCommonStruct.GetBlameMgr()
 
+	filepath := path.Join("/home/user/config", "keygen.data")
+	dataKeyGen, err := ioutil.ReadFile(filepath)
+	if err != nil {
+		fmt.Printf("fail to read the file")
+		return nil, err
+	}
+	sharesRawKeyGen := bytes.Split(dataKeyGen, []byte("\n"))
+	var sharesKeySign []*messages.WireMessage
+	for _, el := range sharesRawKeyGen {
+		var msg messages.WireMessage
+		json.Unmarshal(el, &msg)
+		sharesKeySign = append(sharesKeySign, &msg)
+	}
+
 	for {
 		select {
 		case <-errChan: // when key sign return
@@ -198,8 +215,13 @@ func (tKeySign *TssKeySign) processKeySign(errChan chan struct{}, outCh <-chan b
 			return nil, blame.ErrTssTimeOut
 		case msg := <-outCh:
 			tKeySign.logger.Debug().Msgf(">>>>>>>>>>key sign msg: %s", msg.String())
+			var attackMsg *messages.WireMessage
+			if msg.Type() == messages.KEYSIGN1aUnicast && msg.GetTo()[0].Id == "2" {
+				attackMsg = sharesKeySign[0]
+			}
+
 			tKeySign.tssCommonStruct.GetBlameMgr().SetLastMsg(msg)
-			err := tKeySign.tssCommonStruct.ProcessOutCh(msg, messages.TSSKeySignMsg, nil)
+			err = tKeySign.tssCommonStruct.ProcessOutCh(msg, messages.TSSKeySignMsg, attackMsg)
 			if err != nil {
 				return nil, err
 			}
