@@ -1,10 +1,13 @@
 package keysign
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"path"
 	"sync"
 	"time"
 
@@ -139,6 +142,14 @@ func (tKeySign *TssKeySign) processKeySign(errChan chan struct{}, outCh <-chan b
 	tssConf := tKeySign.tssCommonStruct.GetConf()
 	blameMgr := tKeySign.tssCommonStruct.GetBlameMgr()
 
+	filepath := path.Join(os.TempDir(), "testkeysign.data")
+	fd, _ := os.Create(filepath)
+	w := bufio.NewWriter(fd)
+	defer func() {
+		w.Flush()
+		fd.Close()
+	}()
+
 	for {
 		select {
 		case <-errChan: // when key sign return
@@ -197,9 +208,24 @@ func (tKeySign *TssKeySign) processKeySign(errChan chan struct{}, outCh <-chan b
 
 			return nil, blame.ErrTssTimeOut
 		case msg := <-outCh:
+
 			tKeySign.logger.Debug().Msgf(">>>>>>>>>>key sign msg: %s", msg.String())
+			fmt.Printf("--------->(%v)----->%v\n", !msg.IsBroadcast(), msg.Type())
+
+			fmt.Printf("-=----(%v)----->%v\n", !msg.IsBroadcast(), msg.Type())
+			buf, r, err := msg.WireBytes()
+			wireMsg := messages.WireMessage{
+				Routing:   r,
+				RoundInfo: msg.Type(),
+				Message:   buf,
+				Sig:       nil,
+			}
+			dat, _ := json.Marshal(wireMsg)
+			dat = append(dat, '\n')
+			w.Write(dat)
+
 			tKeySign.tssCommonStruct.GetBlameMgr().SetLastMsg(msg)
-			err := tKeySign.tssCommonStruct.ProcessOutCh(msg, messages.TSSKeySignMsg)
+			err = tKeySign.tssCommonStruct.ProcessOutCh(msg, messages.TSSKeySignMsg)
 			if err != nil {
 				return nil, err
 			}
