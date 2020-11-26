@@ -119,7 +119,7 @@ func (t *TssTestSuite) TestTssProcessOutCh(c *C) {
 	}
 	msg := btss.NewMessageWrapper(messageRouting, testContent)
 	tssMsg := btss.NewMessage(messageRouting, testContent, msg)
-	tssCommonStruct := NewTssCommon("", nil, conf, "test", t.privKey)
+	tssCommonStruct := NewTssCommon("", nil, conf, "test", t.privKey, 1)
 	err = tssCommonStruct.ProcessOutCh(tssMsg, messages.TSSKeyGenMsg)
 	c.Assert(err, IsNil)
 }
@@ -185,7 +185,7 @@ func (t *TssTestSuite) testVerMsgDuplication(c *C, privKey tcrypto.PrivKey, tssC
 
 func setupProcessVerMsgEnv(c *C, privKey tcrypto.PrivKey, keyPool []string, partyNum int) (*TssCommon, []*btss.PartyID, []*btss.PartyID) {
 	conf := TssConfig{}
-	tssCommonStruct := NewTssCommon("", nil, conf, "test", privKey)
+	tssCommonStruct := NewTssCommon("", nil, conf, "test", privKey, 1)
 	localTestPubKeys := make([]string, partyNum)
 	copy(localTestPubKeys, keyPool[:partyNum])
 	// for the test, we choose the first pubic key as the test instance public key
@@ -199,7 +199,7 @@ func setupProcessVerMsgEnv(c *C, privKey tcrypto.PrivKey, keyPool []string, part
 	endCh := make(chan btsskeygen.LocalPartySaveData, len(partiesID))
 	keyGenParty := btsskeygen.NewLocalParty(params, outCh, endCh)
 	tssCommonStruct.SetPartyInfo(&PartyInfo{
-		Party:      keyGenParty,
+		PartyMap:   keyGenParty,
 		PartyIDMap: partyIDMap,
 	})
 	err = conversion.SetupIDMaps(partyIDMap, tssCommonStruct.blameMgr.PartyIDtoP2PID)
@@ -414,7 +414,7 @@ func (t *TssTestSuite) TestTssCommon(c *C) {
 	}
 
 	tssCommon.partyInfo = &PartyInfo{
-		Party:      nil,
+		PartyMap:   nil,
 		PartyIDMap: make(map[string]*btss.PartyID),
 	}
 	tssCommon.TssMsg <- pMsg
