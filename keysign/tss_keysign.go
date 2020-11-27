@@ -96,12 +96,11 @@ func (tKeySign *TssKeySign) SignMessage(msgsToSign [][]byte, localStateItem stor
 		return nil, errors.New("fail to get threshold")
 	}
 
-	tKeySign.logger.Debug().Msgf("local party: %+v", localPartyID)
-	outCh := make(chan btss.Message, len(partiesID)*len(msgsToSign))
+	// tKeySign.logger.Debug().Msgf("local party: %+v", localPartyID)
+	outCh := make(chan btss.Message, 2*len(partiesID)*len(msgsToSign))
 	endCh := make(chan *signing.SignatureData, len(partiesID)*len(msgsToSign))
 	errCh := make(chan struct{})
 
-	// keySignPartyMap := make(map[string]btss.Party)
 	keySignPartyMap := &sync.Map{}
 	for i, val := range msgsToSign {
 		m, err := common.MsgToHashInt(val)
@@ -110,13 +109,13 @@ func (tKeySign *TssKeySign) SignMessage(msgsToSign [][]byte, localStateItem stor
 		}
 		tKeySign.sigMsgMap[hex.EncodeToString(m.Bytes())] = val
 		moniker := m.String() + ":" + strconv.Itoa(i)
+		partiesID, eachLocalPartyID, err := conversion.GetParties(parties, localStateItem.LocalPartyKey)
 		ctx := btss.NewPeerContext(partiesID)
-		_, eachLocalPartyID, err := conversion.GetParties(parties, localStateItem.LocalPartyKey)
 		if err != nil {
 			return nil, fmt.Errorf("error to create parties in batch signging %w\n", err)
 		}
 		eachLocalPartyID.Moniker = moniker
-		tKeySign.localParties = append(tKeySign.localParties, eachLocalPartyID)
+		tKeySign.localParties = nil
 		params := btss.NewParameters(ctx, eachLocalPartyID, len(partiesID), threshold)
 		keySignParty := signing.NewLocalParty(m, params, localStateItem.LocalData, outCh, endCh)
 		keySignPartyMap.Store(moniker, keySignParty)

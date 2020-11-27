@@ -207,9 +207,6 @@ func (t *TssCommon) updateLocal(wireMsg *messages.WireMessage) error {
 		return err
 	}
 
-	//if wireMsg.RoundInfo == "SignRound1Message2" {
-	//	fmt.Printf("========>(from:%v,to:%v)----%v\n", wireMsg.Routing.From.Id, wireMsg.Routing.To, len(BulkMsg))
-	//}
 	for _, eachWiredMsg := range BulkMsg {
 
 		// localMsgParty, ok := partyInfo.PartyMap[eachWiredMsg.MsgIdentifier]
@@ -240,8 +237,8 @@ func (t *TssCommon) updateLocal(wireMsg *messages.WireMessage) error {
 			partyList := dat.([]string)
 			for _, el := range partyList {
 				if el == partyID.Id {
-					t.logger.Warn().Msgf("we received the duplicated message from party %s with key %s", partyID.Id, shareKey)
-					return nil
+					t.logger.Debug().Msgf("we received the duplicated message from party %s with key %s", partyID.Id, shareKey)
+					continue
 				}
 			}
 		}
@@ -252,16 +249,10 @@ func (t *TssCommon) updateLocal(wireMsg *messages.WireMessage) error {
 
 		}
 
-		if wireMsg.RoundInfo == "SignRound1Message2" {
-			// fmt.Printf("####>>>>>>type(%s)-------num:%d\n", wireMsg.RoundInfo, len(BulkMsg))
-			fmt.Printf("(%v--from%v)update...........%v:%v\n", localMsgParty.PartyID().Id, wireMsg.Routing.From.Id, eachWiredMsg.Routing.To, eachWiredMsg.MsgIdentifier)
-		}
-
 		_, errUp := localMsgParty.UpdateFromBytes(eachWiredMsg.WiredBulkMsgs, partyID, eachWiredMsg.Routing.IsBroadcast)
 		if errUp != nil {
 			return t.processInvalidMsgBlame(wireMsg, round, errUp)
 		}
-
 		if !ok {
 			partyList := []string{partyID.Id}
 			acceptedShares.Store(shareKey, partyList)
@@ -271,7 +262,6 @@ func (t *TssCommon) updateLocal(wireMsg *messages.WireMessage) error {
 		partyList = append(partyList, partyID.Id)
 		acceptedShares.Store(shareKey, partyList)
 	}
-	// fmt.Printf("444444------------>%v--%v--%v\n", wireMsg.RoundInfo, len(BulkMsg), wireMsg.Routing.IsBroadcast)
 	return nil
 }
 
@@ -481,43 +471,32 @@ func (t *TssCommon) ProcessOutCh(msg btss.Message, msgType messages.THORChainTSS
 		}
 	} else {
 		cachedWiredMsg := NewBulkWireMsg(msgData, msg.GetFrom().Moniker, r)
-		dat, ok := t.cachedWireUnicastMsgLists.Load(r.To[0].String())
+		dat, ok := t.cachedWireUnicastMsgLists.Load(msg.Type() + r.To[0].String())
 		if !ok {
 			l := []BulkWireMsg{cachedWiredMsg}
-			t.cachedWireUnicastMsgLists.Store(r.To[0].String(), l)
+			t.cachedWireUnicastMsgLists.Store(msg.Type()+r.To[0].String(), l)
 		} else {
 			cachedList := dat.([]BulkWireMsg)
 			cachedList = append(cachedList, cachedWiredMsg)
-			t.cachedWireUnicastMsgLists.Store(r.To[0].String(), cachedList)
+			t.cachedWireUnicastMsgLists.Store(msg.Type()+r.To[0].String(), cachedList)
 		}
 	}
-	// if len(t.cachedWireUnicastMsgLists) != 0 {
 	// now we send the messages that have all the signers ready
-	var cleanupMsg []string
 	processdata := func(key, value interface{}) bool {
 		wiredMsgList := value.([]BulkWireMsg)
 		wiredMsgType := key.(string)
-		fmt.Printf("lllllll----->%v\n", t.msgNum)
 		if len(wiredMsgList) == t.msgNum {
 			err := t.sendBulkMsg(wiredMsgType, msgType, wiredMsgList)
 			if err != nil {
 				t.logger.Error().Err(err).Msg("error in send bulk message")
 				return true
 			}
-			// we do need to delete this message
-			cleanupMsg = append(cleanupMsg, wiredMsgType)
 		}
 		return true
 	}
+
 	t.cachedWireUnicastMsgLists.Range(processdata)
-	for _, el := range cleanupMsg {
-		t.cachedWireUnicastMsgLists.Delete(el)
-	}
-	cleanupMsg = nil
 	t.cachedWireBroadcastMsgLists.Range(processdata)
-	for _, el := range cleanupMsg {
-		t.cachedWireBroadcastMsgLists.Delete(el)
-	}
 
 	return nil
 }

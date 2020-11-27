@@ -166,10 +166,9 @@ func (s *TssKeysignTestSuite) TestSignMessage(c *C) {
 		c.Skip("skip the test")
 		return
 	}
-
 	log.SetLogLevel("tss-lib", "info")
 	sort.Strings(testPubKeys)
-	req := NewRequest("thorpub1addwnpepqv6xp3fmm47dfuzglywqvpv8fdjv55zxte4a26tslcezns5czv586u2fw33", []string{"helloworld-test"}, 10, testPubKeys, "")
+	req := NewRequest("thorpub1addwnpepqv6xp3fmm47dfuzglywqvpv8fdjv55zxte4a26tslcezns5czv586u2fw33", []string{"helloworld-test", "t"}, 10, testPubKeys, "")
 	sort.Strings(req.Messages)
 	dat := []byte(strings.Join(req.Messages, ","))
 	messageID, err := common.MsgToHashString(dat)
@@ -184,7 +183,7 @@ func (s *TssKeysignTestSuite) TestSignMessage(c *C) {
 	}
 	var msgForSign [][]byte
 	msgForSign = append(msgForSign, []byte(req.Messages[0]))
-	// msgForSign = append(msgForSign, []byte(req.Messages[1]))
+	msgForSign = append(msgForSign, []byte(req.Messages[1]))
 	for i := 0; i < s.partyNum; i++ {
 		wg.Add(1)
 		go func(idx int) {
