@@ -198,8 +198,10 @@ func setupProcessVerMsgEnv(c *C, privKey tcrypto.PrivKey, keyPool []string, part
 	outCh := make(chan btss.Message, len(partiesID))
 	endCh := make(chan btsskeygen.LocalPartySaveData, len(partiesID))
 	keyGenParty := btsskeygen.NewLocalParty(params, outCh, endCh)
+	partyMap := new(sync.Map)
+	partyMap.Store("", keyGenParty)
 	tssCommonStruct.SetPartyInfo(&PartyInfo{
-		PartyMap:   keyGenParty,
+		PartyMap:   partyMap,
 		PartyIDMap: partyIDMap,
 	})
 	err = conversion.SetupIDMaps(partyIDMap, tssCommonStruct.blameMgr.PartyIDtoP2PID)
@@ -207,7 +209,7 @@ func setupProcessVerMsgEnv(c *C, privKey tcrypto.PrivKey, keyPool []string, part
 	tssCommonStruct.SetLocalPeerID("fakeID")
 	err = conversion.SetupIDMaps(partyIDMap, tssCommonStruct.PartyIDtoP2PID)
 	c.Assert(err, IsNil)
-	tssCommonStruct.blameMgr.SetPartyInfo(keyGenParty, partyIDMap)
+	tssCommonStruct.blameMgr.SetPartyInfo(partyMap, partyIDMap)
 	peerPartiesID := append(partiesID[:localPartyID.Index], partiesID[localPartyID.Index+1:]...)
 	tssCommonStruct.P2PPeers = conversion.GetPeersID(tssCommonStruct.PartyIDtoP2PID, tssCommonStruct.GetLocalPeerID())
 	return tssCommonStruct, peerPartiesID, partiesID
@@ -395,7 +397,7 @@ func (t *TssTestSuite) TestTssCommon(c *C) {
 	c.Assert(err, IsNil)
 	broadcastChannel := make(chan *messages.BroadcastMsgChan)
 	sk := secp256k1.GenPrivKey()
-	tssCommon := NewTssCommon(peerID.String(), broadcastChannel, TssConfig{}, "message-id", sk)
+	tssCommon := NewTssCommon(peerID.String(), broadcastChannel, TssConfig{}, "message-id", sk, 1)
 	c.Assert(tssCommon, NotNil)
 	stopchan := make(chan struct{})
 	wg := sync.WaitGroup{}

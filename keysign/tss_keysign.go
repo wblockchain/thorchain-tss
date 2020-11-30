@@ -101,7 +101,7 @@ func (tKeySign *TssKeySign) SignMessage(msgsToSign [][]byte, localStateItem stor
 	endCh := make(chan *signing.SignatureData, len(partiesID)*len(msgsToSign))
 	errCh := make(chan struct{})
 
-	keySignPartyMap := &sync.Map{}
+	keySignPartyMap := new(sync.Map)
 	for i, val := range msgsToSign {
 		m, err := common.MsgToHashInt(val)
 		if err != nil {

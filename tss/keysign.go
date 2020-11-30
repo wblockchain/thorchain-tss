@@ -20,9 +20,9 @@ import (
 	"gitlab.com/thorchain/tss/go-tss/storage"
 )
 
-func (t *TssServer) waitForSignatures(msgID, poolPubKey string, msgToSign []byte, sigChan chan string) (keysign.Response, error) {
+func (t *TssServer) waitForSignatures(msgID, poolPubKey string, msgsToSign [][]byte, sigChan chan string) (keysign.Response, error) {
 	// TSS keysign include both form party and keysign itself, thus we wait twice of the timeout
-	data, err := t.signatureNotifier.WaitForSignature(msgID, msgToSign, poolPubKey, t.conf.KeySignTimeout, sigChan)
+	data, err := t.signatureNotifier.WaitForSignature(msgID, msgsToSign, poolPubKey, t.conf.KeySignTimeout, sigChan)
 	if err != nil {
 		return keysign.Response{}, err
 	}
