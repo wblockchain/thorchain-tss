@@ -1,9 +1,9 @@
 package keysign
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/big"
 	"sort"
 	"strconv"
 	"sync"
@@ -32,7 +32,6 @@ type TssKeySign struct {
 	commStopChan    chan struct{}
 	p2pComm         *p2p.Communication
 	stateManager    storage.LocalStateManager
-	sigMsgMap       map[string][]byte
 }
 
 func NewTssKeySign(localP2PID string,
@@ -47,7 +46,6 @@ func NewTssKeySign(localP2PID string,
 		localParties:    make([]*btss.PartyID, 0),
 		commStopChan:    make(chan struct{}),
 		p2pComm:         p2pComm,
-		sigMsgMap:       make(map[string][]byte),
 		stateManager:    stateManager,
 	}
 }
@@ -107,7 +105,6 @@ func (tKeySign *TssKeySign) SignMessage(msgsToSign [][]byte, localStateItem stor
 		if err != nil {
 			return nil, fmt.Errorf("fail to convert msg to hash int: %w", err)
 		}
-		tKeySign.sigMsgMap[hex.EncodeToString(m.Bytes())] = val
 		moniker := m.String() + ":" + strconv.Itoa(i)
 		partiesID, eachLocalPartyID, err := conversion.GetParties(parties, localStateItem.LocalPartyKey)
 		ctx := btss.NewPeerContext(partiesID)
@@ -165,9 +162,13 @@ func (tKeySign *TssKeySign) SignMessage(msgsToSign [][]byte, localStateItem stor
 
 	tKeySign.logger.Info().Msgf("%s successfully sign the message", tKeySign.p2pComm.GetHost().ID().String())
 	sort.SliceStable(results, func(i, j int) bool {
-		a := hex.EncodeToString(results[i].GetSignature().Signature)
-		b := hex.EncodeToString(results[j].GetSignature().Signature)
-		return a < b
+		a := new(big.Int).SetBytes(results[i].GetSignature().M)
+		b := new(big.Int).SetBytes(results[j].GetSignature().M)
+
+		if a.Cmp(b) == -1 {
+			return false
+		}
+		return true
 	})
 
 	return results, nil
@@ -253,23 +254,16 @@ func (tKeySign *TssKeySign) processKeySign(reqNum int, errChan chan struct{}, ou
 				tKeySign.logger.Error().Err(err).Msg("fail to broadcast the keysign done")
 			}
 
-			orgSignMsg, ok := tKeySign.sigMsgMap[hex.EncodeToString(msg.GetSignature().M)]
-			if !ok {
-				tKeySign.logger.Error().Msg("error in find the original msg")
-				orgSignMsg = []byte("unknown Msg")
-			}
-			msg.GetSignature().M = orgSignMsg
 			signatures = append(signatures, msg)
 			if len(signatures) == reqNum {
-				tKeySign.logger.Debug().Msg("we have done the key sign")
+				tKeySign.logger.Info().Msg("we have done the key sign")
+				//export the address book
+				address := tKeySign.p2pComm.ExportPeerAddress()
+				if err := tKeySign.stateManager.SaveAddressBook(address); err != nil {
+					tKeySign.logger.Error().Err(err).Msg("fail to save the peer addresses")
+				}
 				return signatures, nil
 			}
-
-			address := tKeySign.p2pComm.ExportPeerAddress()
-			if err := tKeySign.stateManager.SaveAddressBook(address); err != nil {
-				tKeySign.logger.Error().Err(err).Msg("fail to save the peer addresses")
-			}
-			return signatures, nil
 		}
 	}
 }

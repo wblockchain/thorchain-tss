@@ -4,6 +4,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"math/big"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -27,18 +29,38 @@ func (t *TssServer) waitForSignatures(msgID, poolPubKey string, msgsToSign [][]b
 		return keysign.Response{}, err
 	}
 	// for gg20, it wrap the signature R,S into ECSignature structure
-	if data.GetSignature() == nil || (len(data.GetSignature().S) == 0 && len(data.GetSignature().R) == 0) {
+	if len(data) == 0 {
 		return keysign.Response{}, errors.New("keysign failed")
 	}
-	return keysign.NewResponse(
-		base64.StdEncoding.EncodeToString(data.GetSignature().R),
-		base64.StdEncoding.EncodeToString(data.GetSignature().S),
-		common.Success,
-		blame.Blame{},
-	), nil
+
+	sort.SliceStable(msgsToSign, func(i, j int) bool {
+		ma, err := common.MsgToHashInt(msgsToSign[i])
+		if err != nil {
+			t.logger.Error().Err(err).Msgf("fail to convert the hash value")
+		}
+		mb, err := common.MsgToHashInt(msgsToSign[j])
+		if err != nil {
+			t.logger.Error().Err(err).Msgf("fail to convert the hash value")
+		}
+		if ma.Cmp(mb) == -1 {
+			return false
+		}
+		return true
+	})
+	for i, _ := range msgsToSign {
+		ma, err := common.MsgToHashInt(msgsToSign[i])
+		if err != nil {
+			t.logger.Error().Err(err).Msgf("fail to convert the hash value")
+		}
+		if new(big.Int).SetBytes(data[i].Signature.GetM()).Cmp(ma) != 0 {
+			return keysign.Response{}, errors.New("the message we signed is not in consistency")
+		}
+	}
+
+	return t.batchSignatures(data), nil
 }
 
-func (t *TssServer) generateSignature(msgID string, msgToSign []byte, req keysign.Request, threshold int, allParticipants []string, localStateItem storage.KeygenLocalState, blameMgr *blame.Manager, keysignInstance *keysign.TssKeySign, sigChan chan string) (keysign.Response, error) {
+func (t *TssServer) generateSignature(msgID string, msgsToSign [][]byte, req keysign.Request, threshold int, allParticipants []string, localStateItem storage.KeygenLocalState, blameMgr *blame.Manager, keysignInstance *keysign.TssKeySign, sigChan chan string) (keysign.Response, error) {
 	allPeersID, err := conversion.GetPeerIDsFromPubKeys(allParticipants)
 	if err != nil {
 		t.logger.Error().Msg("invalid block height or public key")
@@ -153,7 +175,7 @@ func (t *TssServer) generateSignature(msgID string, msgToSign []byte, req keysig
 			Blame:  blame.Blame{},
 		}, nil
 	}
-	signatureData, err := keysignInstance.SignMessage(msgToSign, localStateItem, signers)
+	signatureData, err := keysignInstance.SignMessage(msgsToSign, localStateItem, signers)
 	// the statistic of keygen only care about Tss it self, even if the following http response aborts,
 	// it still counted as a successful keygen as the Tss model runs successfully.
 	if err != nil {
@@ -172,12 +194,8 @@ func (t *TssServer) generateSignature(msgID string, msgToSign []byte, req keysig
 	if err := t.signatureNotifier.BroadcastSignature(msgID, signatureData, allPeersID); err != nil {
 		return keysign.Response{}, fmt.Errorf("fail to broadcast signature:%w", err)
 	}
-	return keysign.NewResponse(
-		base64.StdEncoding.EncodeToString(signatureData.GetSignature().R),
-		base64.StdEncoding.EncodeToString(signatureData.GetSignature().S),
-		common.Success,
-		blame.Blame{},
-	), nil
+
+	return t.batchSignatures(signatureData), nil
 }
 
 func (t *TssServer) updateKeySignResult(result keysign.Response, timeSpent time.Duration) {
@@ -209,7 +227,7 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 		t.privateKey,
 		t.p2pCommunication,
 		t.stateManager,
-		uint32(len(req.Messages)),
+		len(req.Messages),
 	)
 
 	keySignChannels := keysignInstance.GetTssKeySignChannels()
