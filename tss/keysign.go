@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"math/big"
 	"sort"
 	"strings"
 	"sync"
@@ -23,16 +22,6 @@ import (
 )
 
 func (t *TssServer) waitForSignatures(msgID, poolPubKey string, msgsToSign [][]byte, sigChan chan string) (keysign.Response, error) {
-	// TSS keysign include both form party and keysign itself, thus we wait twice of the timeout
-	data, err := t.signatureNotifier.WaitForSignature(msgID, msgsToSign, poolPubKey, t.conf.KeySignTimeout, sigChan)
-	if err != nil {
-		return keysign.Response{}, err
-	}
-	// for gg20, it wrap the signature R,S into ECSignature structure
-	if len(data) == 0 {
-		return keysign.Response{}, errors.New("keysign failed")
-	}
-
 	sort.SliceStable(msgsToSign, func(i, j int) bool {
 		ma, err := common.MsgToHashInt(msgsToSign[i])
 		if err != nil {
@@ -47,14 +36,15 @@ func (t *TssServer) waitForSignatures(msgID, poolPubKey string, msgsToSign [][]b
 		}
 		return true
 	})
-	for i, _ := range msgsToSign {
-		ma, err := common.MsgToHashInt(msgsToSign[i])
-		if err != nil {
-			t.logger.Error().Err(err).Msgf("fail to convert the hash value")
-		}
-		if new(big.Int).SetBytes(data[i].Signature.GetM()).Cmp(ma) != 0 {
-			return keysign.Response{}, errors.New("the message we signed is not in consistency")
-		}
+
+	// TSS keysign include both form party and keysign itself, thus we wait twice of the timeout
+	data, err := t.signatureNotifier.WaitForSignature(msgID, msgsToSign, poolPubKey, t.conf.KeySignTimeout, sigChan)
+	if err != nil {
+		return keysign.Response{}, err
+	}
+	// for gg20, it wrap the signature R,S into ECSignature structure
+	if len(data) == 0 {
+		return keysign.Response{}, errors.New("keysign failed")
 	}
 
 	return t.batchSignatures(data), nil

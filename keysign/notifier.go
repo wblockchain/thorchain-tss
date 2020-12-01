@@ -78,6 +78,7 @@ func (n *Notifier) ProcessSignature(data []*signing.SignatureData) (bool, error)
 			}
 		}
 	}
+
 	// it is ok to push nil to the resp channel , the receiver will check it
 	n.resp <- data
 	return true, nil
