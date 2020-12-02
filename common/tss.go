@@ -231,13 +231,13 @@ func (t *TssCommon) updateLocal(wireMsg *messages.WireMessage) error {
 		acceptedShares := t.blameMgr.GetAcceptShares()
 		// we only allow a message be updated only once.
 		// here we use round + msgIdentifier as the key for the acceptedShares
-		shareKey := round.RoundMsg + eachWiredMsg.MsgIdentifier
-		dat, ok := acceptedShares.Load(shareKey)
+		round.MsgIdentifier = eachWiredMsg.MsgIdentifier
+		dat, ok := acceptedShares.Load(round)
 		if ok {
 			partyList := dat.([]string)
 			for _, el := range partyList {
 				if el == partyID.Id {
-					t.logger.Debug().Msgf("we received the duplicated message from party %s with key %s", partyID.Id, shareKey)
+					t.logger.Debug().Msgf("we received the duplicated message from party %s", partyID.Id)
 					continue
 				}
 			}
@@ -255,12 +255,12 @@ func (t *TssCommon) updateLocal(wireMsg *messages.WireMessage) error {
 		}
 		if !ok {
 			partyList := []string{partyID.Id}
-			acceptedShares.Store(shareKey, partyList)
+			acceptedShares.Store(round, partyList)
 			return nil
 		}
 		partyList := dat.([]string)
 		partyList = append(partyList, partyID.Id)
-		acceptedShares.Store(shareKey, partyList)
+		acceptedShares.Store(round, partyList)
 	}
 	return nil
 }

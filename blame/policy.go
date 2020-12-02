@@ -134,8 +134,7 @@ func (m *Manager) TssMissingShareBlame(rounds int) ([]Node, bool, error) {
 	m.acceptedShares.Range(func(key, value interface{}) bool {
 		data := value.([]string)
 		roundInfo := key.(RoundInfo)
-		index := roundInfo.Index
-		cachedShares[index] = data
+		cachedShares[roundInfo.Index] = data
 		return true
 	})
 	var peers []string

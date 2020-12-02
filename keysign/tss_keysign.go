@@ -248,15 +248,13 @@ func (tKeySign *TssKeySign) processKeySign(reqNum int, errChan chan struct{}, ou
 			}
 
 		case msg := <-endCh:
-			tKeySign.logger.Debug().Msg("we have done the key sign")
-			err := tKeySign.tssCommonStruct.NotifyTaskDone()
-			if err != nil {
-				tKeySign.logger.Error().Err(err).Msg("fail to broadcast the keysign done")
-			}
-
 			signatures = append(signatures, msg)
 			if len(signatures) == reqNum {
-				tKeySign.logger.Info().Msg("we have done the key sign")
+				tKeySign.logger.Debug().Msg("we have done the key sign")
+				err := tKeySign.tssCommonStruct.NotifyTaskDone()
+				if err != nil {
+					tKeySign.logger.Error().Err(err).Msg("fail to broadcast the keysign done")
+				}
 				//export the address book
 				address := tKeySign.p2pComm.ExportPeerAddress()
 				if err := tKeySign.stateManager.SaveAddressBook(address); err != nil {
