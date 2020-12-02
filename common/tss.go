@@ -249,6 +249,7 @@ func (t *TssCommon) updateLocal(wireMsg *messages.WireMessage) error {
 
 		}
 
+		fmt.Printf("---->%v with round %v", eachWiredMsg.MsgIdentifier, round.RoundMsg)
 		_, errUp := localMsgParty.UpdateFromBytes(eachWiredMsg.WiredBulkMsgs, partyID, eachWiredMsg.Routing.IsBroadcast)
 		if errUp != nil {
 			return t.processInvalidMsgBlame(wireMsg, round, errUp)
@@ -481,8 +482,8 @@ func (t *TssCommon) ProcessOutCh(msg btss.Message, msgType messages.THORChainTSS
 			t.cachedWireUnicastMsgLists.Store(msg.Type()+r.To[0].String(), cachedList)
 		}
 	}
-	// now we send the messages that have all the signers ready
-	processdata := func(key, value interface{}) bool {
+
+	t.cachedWireUnicastMsgLists.Range(func(key, value interface{}) bool {
 		wiredMsgList := value.([]BulkWireMsg)
 		wiredMsgType := key.(string)
 		if len(wiredMsgList) == t.msgNum {
@@ -491,12 +492,24 @@ func (t *TssCommon) ProcessOutCh(msg btss.Message, msgType messages.THORChainTSS
 				t.logger.Error().Err(err).Msg("error in send bulk message")
 				return true
 			}
+			t.cachedWireUnicastMsgLists.Delete(key)
 		}
 		return true
-	}
+	})
 
-	t.cachedWireUnicastMsgLists.Range(processdata)
-	t.cachedWireBroadcastMsgLists.Range(processdata)
+	t.cachedWireBroadcastMsgLists.Range(func(key, value interface{}) bool {
+		wiredMsgList := value.([]BulkWireMsg)
+		wiredMsgType := key.(string)
+		if len(wiredMsgList) == t.msgNum {
+			err := t.sendBulkMsg(wiredMsgType, msgType, wiredMsgList)
+			if err != nil {
+				t.logger.Error().Err(err).Msg("error in send bulk message")
+				return true
+			}
+			t.cachedWireBroadcastMsgLists.Delete(key)
+		}
+		return true
+	})
 
 	return nil
 }

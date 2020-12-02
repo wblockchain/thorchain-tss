@@ -64,7 +64,9 @@ func (n *Notifier) ProcessSignature(data []*signing.SignatureData) (bool, error)
 	// only need to verify the signature when data is not nil
 	// when data is nil , which means keysign  failed, there is no signature to be verified in that case
 	// for gg20, it wrap the signature R,S into ECSignature structure
-	fmt.Println("aaaaaaaaaaaaaaaaaaa>>>>>")
+	if len(data) == 0 {
+		return false, nil
+	}
 	for i := 0; i < len(data); i++ {
 		sig := data[i]
 		msg := n.messages[i]
@@ -80,6 +82,7 @@ func (n *Notifier) ProcessSignature(data []*signing.SignatureData) (bool, error)
 			}
 		}
 	}
+	fmt.Println("aaaaaaaaaaaaaaaaaaa>>>>>")
 
 	// it is ok to push nil to the resp channel , the receiver will check it
 	n.resp <- data
