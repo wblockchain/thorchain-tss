@@ -94,6 +94,7 @@ func (tKeySign *TssKeySign) SignMessage(msgsToSign [][]byte, localStateItem stor
 		return nil, errors.New("fail to get threshold")
 	}
 
+	threshold = len(localStateItem.ParticipantKeys) - 1
 	// tKeySign.logger.Debug().Msgf("local party: %+v", localPartyID)
 	outCh := make(chan btss.Message, 2*len(partiesID)*len(msgsToSign))
 	endCh := make(chan *signing.SignatureData, len(partiesID)*len(msgsToSign))

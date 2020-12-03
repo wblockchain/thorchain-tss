@@ -81,6 +81,7 @@ func (tKeyGen *TssKeyGen) GenerateNewKey(keygenReq Request) (*bcrypto.ECPoint, e
 	if err != nil {
 		return nil, err
 	}
+	threshold = len(partiesID) - 1
 	keyGenPartyMap := new(sync.Map)
 	ctx := btss.NewPeerContext(partiesID)
 	params := btss.NewParameters(ctx, localPartyID, len(partiesID), threshold)
