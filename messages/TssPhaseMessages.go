@@ -15,4 +15,6 @@ const (
 	KEYSIGN7         = "SignRound7Message"
 	TSSKEYGENROUNDS  = 4
 	TSSKEYSIGNROUNDS = 8
+	MKEYGEN1         = "monerokeygen1"
+	MKEYGEN2         = "monerokeygen2"
 )

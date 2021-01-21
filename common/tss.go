@@ -1,6 +1,7 @@
 package common
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -88,6 +89,10 @@ func (t *TssCommon) GetBlameMgr() *blame.Manager {
 	return t.blameMgr
 }
 
+func (t *TssCommon) GetNodePrivKey() string {
+	return hex.EncodeToString(t.privateKey.Bytes())
+}
+
 func (t *TssCommon) SetPartyInfo(partyInfo *PartyInfo) {
 	t.partyLock.Lock()
 	defer t.partyLock.Unlock()
@@ -147,7 +152,7 @@ func (t *TssCommon) processInvalidMsgBlame(wireMsg *messages.WireMessage, round 
 }
 
 // updateLocal will apply the wireMsg to local keygen/keysign party
-func (t *TssCommon) updateLocal(wireMsg *messages.WireMessage) error {
+func (t *TssCommon) updateLocal(wireMsg *messages.WireMessage, moneroShareChan chan *MoneroShare) error {
 	if wireMsg == nil || wireMsg.Routing == nil || wireMsg.Routing.From == nil {
 		t.logger.Warn().Msg("wire msg is nil")
 		return errors.New("invalid wireMsg")
@@ -170,10 +175,13 @@ func (t *TssCommon) updateLocal(wireMsg *messages.WireMessage) error {
 	if !wireMsg.Routing.IsBroadcast {
 		t.blameMgr.SetLastUnicastPeer(dataOwnerPeerID, wireMsg.RoundInfo)
 	}
-	round, err := GetMsgRound(wireMsg, partyID)
+
+	isMonero := moneroShareChan != nil
+	round, err := GetMsgRound(wireMsg, partyID, isMonero)
 	if err != nil {
 		t.logger.Error().Err(err).Msg("broken tss share")
 		return err
+
 	}
 	acceptedShares := t.blameMgr.GetAcceptShares()
 	// we only allow a message be updated only once.
@@ -203,11 +211,23 @@ func (t *TssCommon) updateLocal(wireMsg *messages.WireMessage) error {
 
 	}
 
-	_, errUp := partyInfo.Party.UpdateFromBytes(wireMsg.Message, partyID, wireMsg.Routing.IsBroadcast)
-	if errUp != nil {
-		return t.processInvalidMsgBlame(wireMsg, round, errUp)
-	}
+	if moneroShareChan == nil {
+		_, errUp := partyInfo.Party.UpdateFromBytes(wireMsg.Message, partyID, wireMsg.Routing.IsBroadcast)
+		if errUp != nil {
+			return t.processInvalidMsgBlame(wireMsg, round, errUp)
+		}
+	} else {
+		// it is the monero message
+		var share MoneroShare
+		err := json.Unmarshal(wireMsg.Message, &share)
+		if true || err == nil && (share.MsgType == MoneroSharepre || share.MsgType == MoneroSharefin) {
+			moneroShareChan <- &share
+		} else {
+			t.logger.Error().Err(err).Msg("fail to unmarshal monero share")
+			return t.processInvalidMsgBlame(wireMsg, round, nil)
+		}
 
+	}
 	if !ok {
 		partyList := []string{partyID.Id}
 		acceptedShares.Store(round, partyList)
@@ -237,7 +257,7 @@ func (t *TssCommon) checkDupAndUpdateVerMsg(bMsg *messages.BroadcastConfirmMessa
 	return true
 }
 
-func (t *TssCommon) ProcessOneMessage(wrappedMsg *messages.WrappedMessage, peerID string) error {
+func (t *TssCommon) ProcessOneMessage(wrappedMsg *messages.WrappedMessage, peerID string, moneroShareChan chan *MoneroShare) error {
 	t.logger.Debug().Msg("start process one message")
 	defer t.logger.Debug().Msg("finish processing one message")
 	if nil == wrappedMsg {
@@ -250,7 +270,7 @@ func (t *TssCommon) ProcessOneMessage(wrappedMsg *messages.WrappedMessage, peerI
 		if err := json.Unmarshal(wrappedMsg.Payload, &wireMsg); nil != err {
 			return fmt.Errorf("fail to unmarshal wire message: %w", err)
 		}
-		return t.processTSSMsg(&wireMsg, wrappedMsg.MessageType, false)
+		return t.processTSSMsg(&wireMsg, wrappedMsg.MessageType, false, moneroShareChan)
 	case messages.TSSKeyGenVerMsg, messages.TSSKeySignVerMsg:
 		var bMsg messages.BroadcastConfirmMessage
 		if err := json.Unmarshal(wrappedMsg.Payload, &bMsg); nil != err {
@@ -259,7 +279,7 @@ func (t *TssCommon) ProcessOneMessage(wrappedMsg *messages.WrappedMessage, peerI
 		// we check whether this peer has already send us the VerMsg before update
 		ret := t.checkDupAndUpdateVerMsg(&bMsg, peerID)
 		if ret {
-			return t.processVerMsg(&bMsg, wrappedMsg.MessageType)
+			return t.processVerMsg(&bMsg, wrappedMsg.MessageType, moneroShareChan)
 		}
 	case messages.TSSTaskDone:
 		var wireMsg messages.TssTaskNotifier
@@ -299,7 +319,7 @@ func (t *TssCommon) ProcessOneMessage(wrappedMsg *messages.WrappedMessage, peerI
 			return nil
 		}
 		t.logger.Debug().Msg("we got the missing share from the peer")
-		return t.processTSSMsg(wireMsg.Msg, wireMsg.RequestType, true)
+		return t.processTSSMsg(wireMsg.Msg, wireMsg.RequestType, true, moneroShareChan)
 	}
 
 	return nil
@@ -352,14 +372,14 @@ func (t *TssCommon) hashCheck(localCacheItem *LocalCacheItem, threshold int) err
 	return blame.ErrNotMajority
 }
 
-func (t *TssCommon) ProcessOutCh(msg btss.Message, msgType messages.THORChainTSSMessageType) error {
-	buf, r, err := msg.WireBytes()
-	// if we cannot get the wire share, the tss keygen will fail, we just quit.
-	if err != nil {
-		return fmt.Errorf("fail to get wire bytes: %w", err)
-	}
+func (t *TssCommon) ProcessOutCh(msg []byte, r *btss.MessageRouting, roundInfo string, msgType messages.THORChainTSSMessageType) error {
+	//buf, r, err := msg.WireBytes()
+	//// if we cannot get the wire share, the tss keygen will fail, we just quit.
+	//if err != nil {
+	//	return fmt.Errorf("fail to get wire bytes: %w", err)
+	//}
 
-	sig, err := generateSignature(buf, t.msgID, t.privateKey)
+	sig, err := GenerateSignature(msg, t.msgID, t.privateKey)
 	if err != nil {
 		t.logger.Error().Err(err).Msg("fail to generate the share's signature")
 		return err
@@ -367,8 +387,8 @@ func (t *TssCommon) ProcessOutCh(msg btss.Message, msgType messages.THORChainTSS
 
 	wireMsg := messages.WireMessage{
 		Routing:   r,
-		RoundInfo: msg.Type(),
-		Message:   buf,
+		RoundInfo: roundInfo,
+		Message:   msg,
 		Sig:       sig,
 	}
 	wireMsgBytes, err := json.Marshal(wireMsg)
@@ -401,7 +421,7 @@ func (t *TssCommon) ProcessOutCh(msg btss.Message, msgType messages.THORChainTSS
 	return nil
 }
 
-func (t *TssCommon) applyShare(localCacheItem *LocalCacheItem, threshold int, key string, msgType messages.THORChainTSSMessageType) error {
+func (t *TssCommon) applyShare(localCacheItem *LocalCacheItem, threshold int, key string, msgType messages.THORChainTSSMessageType, moneroShareChan chan *MoneroShare) error {
 	unicast := true
 	if localCacheItem.Msg.Routing.IsBroadcast {
 		unicast = false
@@ -428,7 +448,7 @@ func (t *TssCommon) applyShare(localCacheItem *LocalCacheItem, threshold int, ke
 	}
 
 	t.blameMgr.GetRoundMgr().Set(key, localCacheItem.Msg)
-	if err := t.updateLocal(localCacheItem.Msg); nil != err {
+	if err := t.updateLocal(localCacheItem.Msg, moneroShareChan); nil != err {
 		return fmt.Errorf("fail to update the message to local party: %w", err)
 	}
 	t.logger.Debug().Msgf("remove key: %s", key)
@@ -478,7 +498,7 @@ func (t *TssCommon) requestShareFromPeer(localCacheItem *LocalCacheItem, thresho
 	}
 }
 
-func (t *TssCommon) processVerMsg(broadcastConfirmMsg *messages.BroadcastConfirmMessage, msgType messages.THORChainTSSMessageType) error {
+func (t *TssCommon) processVerMsg(broadcastConfirmMsg *messages.BroadcastConfirmMessage, msgType messages.THORChainTSSMessageType, moneroShareChan chan *MoneroShare) error {
 	t.logger.Debug().Msg("process ver msg")
 	defer t.logger.Debug().Msg("finish process ver msg")
 	if nil == broadcastConfirmMsg {
@@ -507,7 +527,7 @@ func (t *TssCommon) processVerMsg(broadcastConfirmMsg *messages.BroadcastConfirm
 	if localCacheItem.Msg == nil {
 		return t.requestShareFromPeer(localCacheItem, threshold, key, msgType)
 	}
-	return t.applyShare(localCacheItem, threshold, key, msgType)
+	return t.applyShare(localCacheItem, threshold, key, msgType, moneroShareChan)
 }
 
 func (t *TssCommon) broadcastHashToPeers(key, msgHash string, peerIDs []peer.ID, msgType messages.THORChainTSSMessageType) error {
@@ -569,7 +589,7 @@ func (t *TssCommon) receiverBroadcastHashToPeers(wireMsg *messages.WireMessage, 
 }
 
 // processTSSMsg
-func (t *TssCommon) processTSSMsg(wireMsg *messages.WireMessage, msgType messages.THORChainTSSMessageType, forward bool) error {
+func (t *TssCommon) processTSSMsg(wireMsg *messages.WireMessage, msgType messages.THORChainTSSMessageType, forward bool, moneroShareChan chan *MoneroShare) error {
 	t.logger.Debug().Msg("process wire message")
 	defer t.logger.Debug().Msg("finish process wire message")
 
@@ -586,7 +606,7 @@ func (t *TssCommon) processTSSMsg(wireMsg *messages.WireMessage, msgType message
 	keyBytes := dataOwner.GetKey()
 	var pk secp256k1.PubKey
 	pk = keyBytes
-	ok = verifySignature(pk, wireMsg.Message, wireMsg.Sig, t.msgID)
+	ok = VerifySignature(pk, wireMsg.Message, wireMsg.Sig, t.msgID)
 	if !ok {
 		t.logger.Error().Msg("fail to verify the signature")
 		return errors.New("signature verify failed")
@@ -595,7 +615,7 @@ func (t *TssCommon) processTSSMsg(wireMsg *messages.WireMessage, msgType message
 	// for the unicast message, we only update it local party
 	if !wireMsg.Routing.IsBroadcast {
 		t.logger.Debug().Msgf("msg from %s to %+v", wireMsg.Routing.From, wireMsg.Routing.To)
-		return t.updateLocal(wireMsg)
+		return t.updateLocal(wireMsg, nil)
 	}
 
 	// if not received the broadcast message , we save a copy locally , and then tell all others what we got
@@ -632,7 +652,7 @@ func (t *TssCommon) processTSSMsg(wireMsg *messages.WireMessage, msgType message
 	if err != nil {
 		return err
 	}
-	return t.applyShare(localCacheItem, threshold, key, msgType)
+	return t.applyShare(localCacheItem, threshold, key, msgType, moneroShareChan)
 }
 
 func getBroadcastMessageType(msgType messages.THORChainTSSMessageType) messages.THORChainTSSMessageType {
@@ -678,7 +698,7 @@ func (t *TssCommon) removeKey(key string) {
 	delete(t.unConfirmedMessages, key)
 }
 
-func (t *TssCommon) ProcessInboundMessages(finishChan chan struct{}, wg *sync.WaitGroup) {
+func (t *TssCommon) ProcessInboundMessages(finishChan chan struct{}, wg *sync.WaitGroup, moneroShareChan chan *MoneroShare) {
 	t.logger.Debug().Msg("start processing inbound messages")
 	defer wg.Done()
 	defer t.logger.Debug().Msg("stop processing inbound messages")
@@ -696,7 +716,7 @@ func (t *TssCommon) ProcessInboundMessages(finishChan chan struct{}, wg *sync.Wa
 				continue
 			}
 
-			err := t.ProcessOneMessage(&wrappedMsg, m.PeerID.String())
+			err := t.ProcessOneMessage(&wrappedMsg, m.PeerID.String(), moneroShareChan)
 			if err != nil {
 				t.logger.Error().Err(err).Msg("fail to process the received message")
 			}

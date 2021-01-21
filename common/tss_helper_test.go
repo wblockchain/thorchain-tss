@@ -46,9 +46,9 @@ func (t *tssHelpSuite) TestMsgSignAndVerification(c *C) {
 	msg := []byte("hello")
 	msgID := "123"
 	sk := secp256k1.GenPrivKey()
-	sig, err := generateSignature(msg, msgID, sk)
+	sig, err := GenerateSignature(msg, msgID, sk)
 	c.Assert(err, IsNil)
-	ret := verifySignature(sk.PubKey(), msg, sig, msgID)
+	ret := VerifySignature(sk.PubKey(), msg, sig, msgID)
 	c.Assert(ret, Equals, true)
 }
 

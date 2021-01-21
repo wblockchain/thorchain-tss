@@ -16,3 +16,15 @@ type TssConfig struct {
 	// enable the tss monitor
 	EnableMonitor bool
 }
+
+const (
+	MoneroSharepre  = "moneroMsgMakeSig"
+	MoneroSharepre2 = "moneroMsgMakeSig2"
+	MoneroSharepre3 = "moneroMsgMakeSig3"
+	MoneroSharefin  = "moneroMsgSigFinal"
+)
+
+type MoneroShare struct {
+	MultisigInfo string `json:"multisig_info"`
+	MsgType      string
+}

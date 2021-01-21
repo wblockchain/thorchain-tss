@@ -82,14 +82,14 @@ func InitLog(level string, pretty bool, serviceValue string) {
 	log.Logger = log.Output(out).With().Str("service", serviceValue).Logger()
 }
 
-func generateSignature(msg []byte, msgID string, privKey tcrypto.PrivKey) ([]byte, error) {
+func GenerateSignature(msg []byte, msgID string, privKey tcrypto.PrivKey) ([]byte, error) {
 	var dataForSigning bytes.Buffer
 	dataForSigning.Write(msg)
 	dataForSigning.WriteString(msgID)
 	return privKey.Sign(dataForSigning.Bytes())
 }
 
-func verifySignature(pubKey tcrypto.PubKey, message, sig []byte, msgID string) bool {
+func VerifySignature(pubKey tcrypto.PubKey, message, sig []byte, msgID string) bool {
 	var dataForSign bytes.Buffer
 	dataForSign.Write(message)
 	dataForSign.WriteString(msgID)
@@ -135,7 +135,36 @@ func checkUnicast(round blame.RoundInfo) bool {
 	return false
 }
 
-func GetMsgRound(wireMsg *messages.WireMessage, partyID *btss.PartyID) (blame.RoundInfo, error) {
+func GetMsgRound(wireMsg *messages.WireMessage, partyID *btss.PartyID, isMonero bool) (blame.RoundInfo, error) {
+	//
+	if isMonero {
+		var moneroShare MoneroShare
+		err := json.Unmarshal(wireMsg.Message, &moneroShare)
+		if err != nil {
+			return blame.RoundInfo{}, err
+		}
+
+		switch moneroShare.MsgType {
+		case MoneroSharepre:
+			return blame.RoundInfo{
+				Index:    0,
+				RoundMsg: MoneroSharepre,
+			}, nil
+		case MoneroSharepre2:
+			return blame.RoundInfo{
+				Index:    1,
+				RoundMsg: MoneroSharefin,
+			}, nil
+
+		case MoneroSharepre3:
+			return blame.RoundInfo{
+				Index:    2,
+				RoundMsg: MoneroSharefin,
+			}, nil
+
+		}
+	}
+
 	parsedMsg, err := btss.ParseWireMessage(wireMsg.Message, partyID, wireMsg.Routing.IsBroadcast)
 	if err != nil {
 		return blame.RoundInfo{}, err

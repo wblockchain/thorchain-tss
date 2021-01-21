@@ -10,7 +10,6 @@ require (
 	github.com/davidlazar/go-crypto v0.0.0-20200604182044-b73af7476f6c // indirect
 	github.com/deckarep/golang-set v1.7.1
 	github.com/decred/dcrd/dcrec/secp256k1 v1.0.3
-	github.com/gogo/protobuf v1.3.1
 	github.com/golang/protobuf v1.4.3
 	github.com/gorilla/mux v1.8.0
 	github.com/ipfs/go-log v1.0.4
@@ -24,13 +23,14 @@ require (
 	github.com/libp2p/go-sockaddr v0.1.0 // indirect
 	github.com/libp2p/go-yamux v1.3.8 // indirect
 	github.com/magiconair/properties v1.8.4
+	github.com/monero-ecosystem/go-monero-rpc-client v0.0.0-20201125143746-e676e3fa8725
 	github.com/multiformats/go-multiaddr v0.3.1
 	github.com/olekukonko/tablewriter v0.0.0-20170122224234-a0225b3f23b5
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.8.0
 	github.com/prometheus/client_model v0.2.0
 	github.com/rs/zerolog v1.20.0
-	github.com/stretchr/testify v1.6.1
+	github.com/stretchr/testify v1.7.0
 	github.com/tendermint/btcd v0.1.1
 	github.com/tendermint/tendermint v0.34.0
 	gitlab.com/thorchain/binance-sdk v1.2.3-0.20210102180356-7b2f8924ed23
@@ -43,4 +43,5 @@ require (
 replace (
 	github.com/binance-chain/tss-lib => gitlab.com/thorchain/tss/tss-lib v0.0.0-20201118045712-70b2cb4bf916
 	github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.2-alpha.regen.4
+	github.com/monero-ecosystem/go-monero-rpc-client => /Users/yb/go/src/github.com/monero-rpc-client
 )

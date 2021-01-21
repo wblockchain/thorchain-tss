@@ -199,7 +199,12 @@ func (tKeySign *TssKeySign) processKeySign(errChan chan struct{}, outCh <-chan b
 		case msg := <-outCh:
 			tKeySign.logger.Debug().Msgf(">>>>>>>>>>key sign msg: %s", msg.String())
 			tKeySign.tssCommonStruct.GetBlameMgr().SetLastMsg(msg)
-			err := tKeySign.tssCommonStruct.ProcessOutCh(msg, messages.TSSKeySignMsg)
+			buf, r, err := msg.WireBytes()
+			// if we cannot get the wire share, the tss keygen will fail, we just quit.
+			if err != nil {
+				return nil, errors.New("invalid tss message")
+			}
+			err = tKeySign.tssCommonStruct.ProcessOutCh(buf, r, msg.Type(), messages.TSSKeySignMsg)
 			if err != nil {
 				return nil, err
 			}
