@@ -143,26 +143,11 @@ func GetMsgRound(wireMsg *messages.WireMessage, partyID *btss.PartyID, isMonero 
 		if err != nil {
 			return blame.RoundInfo{}, err
 		}
+		return blame.RoundInfo{
+			Index:    moneroShare.ExchangeRound,
+			RoundMsg: MoneroSharepre,
+		}, nil
 
-		switch moneroShare.MsgType {
-		case MoneroSharepre:
-			return blame.RoundInfo{
-				Index:    0,
-				RoundMsg: MoneroSharepre,
-			}, nil
-		case MoneroSharepre2:
-			return blame.RoundInfo{
-				Index:    1,
-				RoundMsg: MoneroSharefin,
-			}, nil
-
-		case MoneroSharepre3:
-			return blame.RoundInfo{
-				Index:    2,
-				RoundMsg: MoneroSharefin,
-			}, nil
-
-		}
 	}
 
 	parsedMsg, err := btss.ParseWireMessage(wireMsg.Message, partyID, wireMsg.Routing.IsBroadcast)

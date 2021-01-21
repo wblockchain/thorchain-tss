@@ -81,6 +81,10 @@ func (t *TssCommon) GetConf() TssConfig {
 	return t.conf
 }
 
+func (t *TssCommon) GetMsgID() string {
+	return t.msgID
+}
+
 func (t *TssCommon) GetTaskDone() chan struct{} {
 	return t.taskDone
 }
@@ -220,7 +224,7 @@ func (t *TssCommon) updateLocal(wireMsg *messages.WireMessage, moneroShareChan c
 		// it is the monero message
 		var share MoneroShare
 		err := json.Unmarshal(wireMsg.Message, &share)
-		if true || err == nil && (share.MsgType == MoneroSharepre || share.MsgType == MoneroSharefin) {
+		if err == nil && (share.MsgType == MoneroSharepre || share.MsgType == MoneroKeyGenShareExchange) {
 			moneroShareChan <- &share
 		} else {
 			t.logger.Error().Err(err).Msg("fail to unmarshal monero share")

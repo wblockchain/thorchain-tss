@@ -15,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/binance-chain/tss-lib/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	tcrypto "github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/crypto/secp256k1"
@@ -182,7 +181,7 @@ func (s *TssKeygenTestSuite) TestGenerateNewKey(c *C) {
 	}
 	wg := sync.WaitGroup{}
 	lock := &sync.Mutex{}
-	keygenResult := make(map[int]*crypto.ECPoint)
+	keygenResult := make(map[int]string)
 	for i := 0; i < s.partyNum; i++ {
 		wg.Add(1)
 		go func(idx int) {
@@ -219,7 +218,7 @@ func (s *TssKeygenTestSuite) TestGenerateNewKey(c *C) {
 	wg.Wait()
 	ans := keygenResult[0]
 	for _, el := range keygenResult {
-		c.Assert(el.Equals(ans), Equals, true)
+		c.Assert(ans, Equals, el)
 	}
 }
 

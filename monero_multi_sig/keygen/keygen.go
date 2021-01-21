@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	bcrypto "github.com/binance-chain/tss-lib/crypto"
 	bkg "github.com/binance-chain/tss-lib/ecdsa/keygen"
 	btss "github.com/binance-chain/tss-lib/tss"
 	"github.com/rs/zerolog"
@@ -32,6 +32,35 @@ type MoneroKeyGen struct {
 	stateManager       storage.LocalStateManager
 	commStopChan       chan struct{}
 	p2pComm            *p2p.Communication
+}
+
+type MoneroSharesStore struct {
+	shares map[int][]string
+	locker sync.Mutex
+}
+
+func GenMoneroShareStore() *MoneroSharesStore {
+	shares := make(map[int][]string)
+	return &MoneroSharesStore{
+		shares,
+		sync.Mutex{},
+	}
+}
+
+func (ms *MoneroSharesStore) storeAndCheck(round int, share string, checkLength int) ([]string, bool) {
+	ms.locker.Lock()
+	defer ms.locker.Unlock()
+	shares, ok := ms.shares[round]
+	if ok {
+		shares = append(shares, share)
+		ms.shares[round] = shares
+		if len(shares) == checkLength {
+			return shares, true
+		}
+		return shares, false
+	}
+	ms.shares[round] = []string{share}
+	return ms.shares[round], false
 }
 
 func NewMoneroKeyGen(localP2PID string,
@@ -63,14 +92,15 @@ func (tKeyGen *MoneroKeyGen) GetTssKeyGenChannels() chan *p2p.Message {
 	return tKeyGen.moneroCommonStruct.TssMsg
 }
 
-func (tKeyGen *MoneroKeyGen) GetMoneroCommonStruct() *common.TssCommon {
+func (tKeyGen *MoneroKeyGen) GetTssCommonStruct() *common.TssCommon {
 	return tKeyGen.moneroCommonStruct
 }
 
-func (tKeyGen *MoneroKeyGen) packAndSend(info string, localPartyID *btss.PartyID, msgType string) error {
+func (tKeyGen *MoneroKeyGen) packAndSend(info string, exchangeRound int, localPartyID *btss.PartyID, msgType string) error {
 	sendShare := common.MoneroShare{
-		MultisigInfo: info,
-		MsgType:      msgType,
+		MultisigInfo:  info,
+		MsgType:       msgType,
+		ExchangeRound: exchangeRound,
 	}
 	msg, err := json.Marshal(sendShare)
 	if err != nil {
@@ -85,25 +115,24 @@ func (tKeyGen *MoneroKeyGen) packAndSend(info string, localPartyID *btss.PartyID
 	return tKeyGen.moneroCommonStruct.ProcessOutCh(msg, &r, "moneroMsg", messages.TSSKeyGenMsg)
 }
 
-func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (*bcrypto.ECPoint, error) {
+func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, error) {
 	partiesID, localPartyID, err := conversion.GetParties(keygenReq.Keys, tKeyGen.localNodePubKey)
 	if err != nil {
-		return nil, fmt.Errorf("fail to get keygen parties: %w", err)
+		return "", fmt.Errorf("fail to get keygen parties: %w", err)
 	}
 
 	threshold, err := conversion.GetThreshold(len(partiesID))
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	// now we try to connect to the monero wallet rpc client
-
 	client := moneroWallet.New(moneroWallet.Config{
 		Address: keygenReq.rpcAddress,
 	})
 
-	walletName := tKeyGen.localNodePubKey + ".mo"
-	passcode := tKeyGen.GetMoneroCommonStruct().GetNodePrivKey()
+	walletName := tKeyGen.localNodePubKey + tKeyGen.GetTssCommonStruct().GetMsgID() + ".mo"
+	passcode := tKeyGen.GetTssCommonStruct().GetNodePrivKey()
 	walletDat := moneroWallet.RequestCreateWallet{
 		Filename: walletName,
 		Password: passcode,
@@ -111,17 +140,10 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (*bcrypto.ECPoint
 	}
 	err = client.CreateWallet(&walletDat)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	var keyGenWg sync.WaitGroup
-
-	//ctx := btss.NewPeerContext(partiesID)
-	//params := btss.NewParameters(ctx, localPartyID, len(partiesID), threshold)
-	//if tKeyGen.preParams == nil {
-	//	tKeyGen.logger.Error().Err(err).Msg("error, empty pre-parameters")
-	//	return nil, errors.New("error, empty pre-parameters")
-	//}
 
 	blameMgr := tKeyGen.moneroCommonStruct.GetBlameMgr()
 
@@ -136,7 +158,7 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (*bcrypto.ECPoint
 	err2 := conversion.SetupIDMaps(partyIDMap, blameMgr.PartyIDtoP2PID)
 	if err1 != nil || err2 != nil {
 		tKeyGen.logger.Error().Msgf("error in creating mapping between partyID and P2P ID")
-		return nil, err
+		return "", err
 	}
 
 	partyInfo := &common.PartyInfo{
@@ -152,22 +174,28 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (*bcrypto.ECPoint
 	defer tKeyGen.logger.Debug().Msg("generate monero share")
 
 	moneroShareChan := make(chan *common.MoneroShare, len(partiesID))
-	var sharespre, sharespre2, sharesfin []string
+
 	var address string
 	go func() {
-		defer keyGenWg.Done()
 		tKeyGen.moneroCommonStruct.ProcessInboundMessages(tKeyGen.commStopChan, &keyGenWg, moneroShareChan)
 	}()
 
 	share, err := client.PrepareMultisig()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	err = tKeyGen.packAndSend(share.MultisigInfo, localPartyID, common.MoneroSharepre)
+
+	var exchangeRound int32
+	exchangeRound = 0
+	err = tKeyGen.packAndSend(share.MultisigInfo, int(exchangeRound), localPartyID, common.MoneroSharepre)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
+	exchangeRound += 1
+
 	var globalErr error
+	peerNum := len(partiesID) - 1
+	shareStore := GenMoneroShareStore()
 	keyGenWg.Add(1)
 	go func() {
 		defer keyGenWg.Done()
@@ -179,12 +207,12 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (*bcrypto.ECPoint
 			case share := <-moneroShareChan:
 				switch share.MsgType {
 				case common.MoneroSharepre:
-					sharespre = append(sharespre, share.MultisigInfo)
-					if len(sharespre) < len(partiesID)-1 {
+					shares, ready := shareStore.storeAndCheck(int(exchangeRound)-1, share.MultisigInfo, peerNum)
+					if !ready {
 						continue
 					}
 					request := moneroWallet.RequestMakeMultisig{
-						MultisigInfo: sharespre,
+						MultisigInfo: shares,
 						Threshold:    uint64(threshold),
 						Password:     passcode,
 					}
@@ -194,20 +222,22 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (*bcrypto.ECPoint
 						return
 					}
 
-					err = tKeyGen.packAndSend(resp.MultisigInfo, localPartyID, common.MoneroSharepre2)
+					currentRound := atomic.LoadInt32(&exchangeRound)
+					err = tKeyGen.packAndSend(resp.MultisigInfo, int(currentRound), localPartyID, common.MoneroKeyGenShareExchange)
 					if err != nil {
 						globalErr = err
 						return
 					}
+					atomic.AddInt32(&exchangeRound, 1)
 
-				case common.MoneroSharepre2:
-					sharespre2 = append(sharespre2, share.MultisigInfo)
-					if len(sharespre2) < len(partiesID)-1 {
+				case common.MoneroKeyGenShareExchange:
+					shares, ready := shareStore.storeAndCheck(int(exchangeRound)-1, share.MultisigInfo, peerNum)
+					if !ready {
 						continue
 					}
-					fmt.Printf("we do exchange222222222>>>>>>>\n")
+
 					finRequest := moneroWallet.RequestExchangeMultisigKeys{
-						MultisigInfo: sharespre2,
+						MultisigInfo: shares,
 						Password:     passcode,
 					}
 					resp, err := client.ExchangeMultiSigKeys(&finRequest)
@@ -215,47 +245,35 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (*bcrypto.ECPoint
 						globalErr = err
 						return
 					}
-					fmt.Printf("-2222#########-->%v@@@@@@@@@@@%v\n", resp.MultisigInfo, resp.Address)
-					address = resp.Address
-					err = tKeyGen.packAndSend(resp.MultisigInfo, localPartyID, common.MoneroSharepre3)
-					if err != nil {
-						globalErr = err
+					// this indicate the wallet address is generated
+					if len(resp.Address) != 0 {
+						address = resp.Address
+						err = tKeyGen.moneroCommonStruct.NotifyTaskDone()
+						if err != nil {
+							tKeyGen.logger.Error().Err(err).Msg("fail to broadcast the keysign done")
+						}
+						close(tKeyGen.commStopChan)
 						return
 					}
 
-				case common.MoneroSharepre3:
-					sharesfin = append(sharesfin, share.MultisigInfo)
-					if len(sharesfin) < len(partiesID)-1 {
-						continue
-					}
-					fmt.Printf("we do exchange333333>>>>>>>\n")
-					finRequest := moneroWallet.RequestExchangeMultisigKeys{
-						MultisigInfo: sharesfin,
-						Password:     passcode,
-					}
-					resp, err := client.ExchangeMultiSigKeys(&finRequest)
+					currentRound := atomic.LoadInt32(&exchangeRound)
+					err = tKeyGen.packAndSend(resp.MultisigInfo, int(currentRound), localPartyID, common.MoneroKeyGenShareExchange)
 					if err != nil {
 						globalErr = err
 						return
 					}
-					fmt.Printf("-33333#########-->%v@@@@@@@@@@@%v\n", resp.MultisigInfo, resp.Address)
-					address = resp.Address
-					err = tKeyGen.moneroCommonStruct.NotifyTaskDone()
-					if err != nil {
-						tKeyGen.logger.Error().Err(err).Msg("fail to broadcast the keysign done")
-					}
-					return
+					atomic.AddInt32(&exchangeRound, 1)
 				}
 			case <-tKeyGen.moneroCommonStruct.GetTaskDone():
 				close(tKeyGen.commStopChan)
 			}
 		}
 	}()
+
+	keyGenWg.Wait()
 	if globalErr != nil {
 		tKeyGen.logger.Error().Err(err).Msg("fail to create the monero multisig wallet")
 	}
-
-	keyGenWg.Wait()
 	tKeyGen.logger.Info().Msgf("wallet address is  %v\n", address)
-	return nil, err
+	return address, err
 }

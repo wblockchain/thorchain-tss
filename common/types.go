@@ -18,13 +18,12 @@ type TssConfig struct {
 }
 
 const (
-	MoneroSharepre  = "moneroMsgMakeSig"
-	MoneroSharepre2 = "moneroMsgMakeSig2"
-	MoneroSharepre3 = "moneroMsgMakeSig3"
-	MoneroSharefin  = "moneroMsgSigFinal"
+	MoneroSharepre            = "moneroMsgMakeSig"
+	MoneroKeyGenShareExchange = "moneroKeyGenShareExchange"
 )
 
 type MoneroShare struct {
-	MultisigInfo string `json:"multisig_info"`
-	MsgType      string
+	MultisigInfo  string `json:"multisig_info"`
+	MsgType       string `json:"message_type"`
+	ExchangeRound int    `json:"exchangeRound"`
 }
