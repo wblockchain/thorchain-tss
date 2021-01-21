@@ -10,17 +10,16 @@ import (
 	"math/big"
 	"net/http"
 	"sort"
-	"strconv"
 	"sync"
 	"time"
 
 	"github.com/binance-chain/tss-lib/ecdsa/keygen"
 	"github.com/binance-chain/tss-lib/ecdsa/signing"
 	btss "github.com/binance-chain/tss-lib/tss"
-	moneroWallet "github.com/monero-ecosystem/go-monero-rpc-client/wallet"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	tcrypto "github.com/tendermint/tendermint/crypto"
+	moneroWallet "gitlab.com/thorchain/tss/monero-wallet-rpc/wallet"
 
 	"gitlab.com/thorchain/tss/go-tss/blame"
 	"gitlab.com/thorchain/tss/go-tss/common"
