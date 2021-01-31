@@ -66,7 +66,7 @@ func TestSignatureNotifierHappyPath(t *testing.T) {
 	assert.NotNil(t, n1)
 	assert.NotNil(t, n2)
 	assert.NotNil(t, n3)
-	sigFile := "../test_data/signature_notify/sig1.json"
+	sigFile := "../../test_data/signature_notify/sig1.json"
 	content, err := ioutil.ReadFile(sigFile)
 	assert.Nil(t, err)
 	assert.NotNil(t, content)
