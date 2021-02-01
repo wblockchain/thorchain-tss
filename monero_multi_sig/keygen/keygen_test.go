@@ -32,20 +32,26 @@ import (
 
 var (
 	testPubKeys = []string{
+		"thorpub1addwnpepq2m5ng0e6vm66feecrwxp37cdvmezsysghskz3t5w2du4c48qwupxn96nrr",
 		"thorpub1addwnpepq2ryyje5zr09lq7gqptjwnxqsy2vcdngvwd6z7yt5yjcnyj8c8cn559xe69",
+		"thorpub1addwnpepqfey5l8v7azq0r4jlkd9hqqu8md0ff3vmtw2s6453zuzy8uf29fz54r7sr0",
 		"thorpub1addwnpepqfjcw5l4ay5t00c32mmlky7qrppepxzdlkcwfs2fd5u73qrwna0vzag3y4j",
 		"thorpub1addwnpepqtdklw8tf3anjz7nn5fly3uvq2e67w2apn560s4smmrt9e3x52nt2svmmu3",
 		"thorpub1addwnpepqtspqyy6gk22u37ztra4hq3hdakc0w0k60sfy849mlml2vrpfr0wvm6uz09",
 	}
 	testPriKeyArr = []string{
+		"91S1wLkg9ew+Nksb8wlH3YqE7Mxc8UvQem/SJ9DTbyU=",
 		"6LABmWB4iXqkqOJ9H0YFEA2CSSx6bA7XAKGyI/TDtas=",
+		"wm1XwwLAJNzMykWE98go8YOL4rBPBXz+JLBFDPSq5Ok=",
 		"528pkgjuCWfHx1JihEjiIXS7jfTS/viEdAbjqVvSifQ=",
 		"JFB2LIJZtK+KasK00NcNil4PRJS4c4liOnK0nDalhqc=",
 		"vLMGhVXMOXQVnAE3BUU8fwNj/q0ZbndKkwmxfS5EN9Y=",
 	}
 
 	testNodePrivkey = []string{
+		"Zjc1NGI1YzBiOTIwZjVlYzNlMzY0YjFiZjMwOTQ3ZGQ4YTg0ZWNjYzVjZjE0YmQwN2E2ZmQyMjdkMGQzNmYyNQ==",
 		"ZThiMDAxOTk2MDc4ODk3YWE0YThlMjdkMWY0NjA1MTAwZDgyNDkyYzdhNmMwZWQ3MDBhMWIyMjNmNGMzYjVhYg==",
+		"YzI2ZDU3YzMwMmMwMjRkY2NjY2E0NTg0ZjdjODI4ZjE4MzhiZTJiMDRmMDU3Y2ZlMjRiMDQ1MGNmNGFhZTRlOQ==",
 		"ZTc2ZjI5OTIwOGVlMDk2N2M3Yzc1MjYyODQ0OGUyMjE3NGJiOGRmNGQyZmVmODg0NzQwNmUzYTk1YmQyODlmNA==",
 		"MjQ1MDc2MmM4MjU5YjRhZjhhNmFjMmI0ZDBkNzBkOGE1ZTBmNDQ5NGI4NzM4OTYyM2E3MmI0OWMzNmE1ODZhNw==",
 		"YmNiMzA2ODU1NWNjMzk3NDE1OWMwMTM3MDU0NTNjN2YwMzYzZmVhZDE5NmU3NzRhOTMwOWIxN2QyZTQ0MzdkNg==",
@@ -101,12 +107,12 @@ func (s *TssKeygenTestSuite) TearDownSuite(c *C) {
 // SetUpTest set up environment for test key gen
 func (s *TssKeygenTestSuite) SetUpTest(c *C) {
 	ports := []int{
-		18666, 18667, 18668, 18669,
+		18666, 18667, 18668, 18669, 18670, 18671,
 	}
-	s.partyNum = 4
+	s.partyNum = 6
 	s.comms = make([]*p2p.Communication, s.partyNum)
 	s.stateMgrs = make([]storage.LocalStateManager, s.partyNum)
-	bootstrapPeer := "/ip4/127.0.0.1/tcp/18666/p2p/16Uiu2HAm4TmEzUqy3q3Dv7HvdoSboHk5sFj2FH3npiN5vDbJC6gh"
+	bootstrapPeer := "/ip4/127.0.0.1/tcp/18666/p2p/16Uiu2HAm7m9i8A7cPENuL97sa5b6Xq7TSDNF6gGrSBhN41jWCmop"
 	multiAddr, err := maddr.NewMultiaddr(bootstrapPeer)
 	c.Assert(err, IsNil)
 	s.preParams = getPreparams(c)
@@ -164,10 +170,10 @@ func (s *TssKeygenTestSuite) TestGenerateNewKey(c *C) {
 	sort.Strings(testPubKeys)
 	var reqs []Request
 
-	for i := 0; i < 4; i++ {
-		port := 18083 + i
+	remoteAddress := []string{"188.166.183.111", "178.128.155.101", "188.166.158.53", "104.236.7.106", "104.248.200.163", "139.59.237.127"}
+	for i := 0; i < s.partyNum; i++ {
 		var rpcaddress string
-		rpcaddress = fmt.Sprintf("http://127.0.0.1:%d/json_rpc", port)
+		rpcaddress = fmt.Sprintf("http://%s:18083/json_rpc", remoteAddress[i])
 		req := NewRequest(testPubKeys, 10, "", rpcaddress)
 		reqs = append(reqs, req)
 	}
@@ -195,7 +201,6 @@ func (s *TssKeygenTestSuite) TestGenerateNewKey(c *C) {
 				localPubKey,
 				comm.BroadcastMsgChan,
 				stopChan,
-				s.preParams[idx],
 				messageID,
 				s.stateMgrs[idx], s.nodePrivKeys[idx], s.comms[idx])
 			c.Assert(keygenInstance, NotNil)

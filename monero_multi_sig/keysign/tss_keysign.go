@@ -7,13 +7,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/big"
-	"net/http"
 	"sort"
 	"sync"
 	"time"
 
-	"github.com/binance-chain/tss-lib/ecdsa/keygen"
 	"github.com/binance-chain/tss-lib/ecdsa/signing"
 	btss "github.com/binance-chain/tss-lib/tss"
 	"github.com/rs/zerolog"
@@ -21,10 +18,10 @@ import (
 	tcrypto "github.com/tendermint/tendermint/crypto"
 	moneroWallet "gitlab.com/thorchain/tss/monero-wallet-rpc/wallet"
 
-	"gitlab.com/thorchain/tss/go-tss/blame"
 	"gitlab.com/thorchain/tss/go-tss/common"
 	"gitlab.com/thorchain/tss/go-tss/conversion"
 	"gitlab.com/thorchain/tss/go-tss/messages"
+	"gitlab.com/thorchain/tss/go-tss/monero_multi_sig"
 	"gitlab.com/thorchain/tss/go-tss/p2p"
 	"gitlab.com/thorchain/tss/go-tss/storage"
 )
@@ -38,12 +35,13 @@ type MoneroKeySign struct {
 	commStopChan       chan struct{}
 	p2pComm            *p2p.Communication
 	stateManager       storage.LocalStateManager
+	walletClient       moneroWallet.Client
 }
 
 func NewMoneroKeySign(localP2PID string,
 	conf common.TssConfig,
 	broadcastChan chan *messages.BroadcastMsgChan,
-	stopChan chan struct{}, localNodePubKey, msgID string, privKey tcrypto.PrivKey, p2pComm *p2p.Communication, stateManager storage.LocalStateManager) *MoneroKeySign {
+	stopChan chan struct{}, localNodePubKey, msgID string, privKey tcrypto.PrivKey, p2pComm *p2p.Communication) *MoneroKeySign {
 	logItems := []string{"keySign", msgID}
 	return &MoneroKeySign{
 		logger:             log.With().Strs("module", logItems).Logger(),
@@ -53,7 +51,6 @@ func NewMoneroKeySign(localP2PID string,
 		localParty:         nil,
 		commStopChan:       make(chan struct{}),
 		p2pComm:            p2pComm,
-		stateManager:       stateManager,
 	}
 }
 
@@ -65,7 +62,7 @@ func (tKeySign *MoneroKeySign) GetTssCommonStruct() *common.TssCommon {
 	return tKeySign.moneroCommonStruct
 }
 
-func (tKeySign *MoneroKeySign) amIFirstNode(msgID, localPubKey string, parties []string) (string, bool) {
+func (tKeySign *MoneroKeySign) amIFirstNode(msgID string, parties []string) ([]string, int) {
 	keyStore := make(map[string]string)
 	hashes := make([]string, len(parties))
 	for i, el := range parties {
@@ -75,8 +72,20 @@ func (tKeySign *MoneroKeySign) amIFirstNode(msgID, localPubKey string, parties [
 		hashes[i] = encodedSum
 	}
 	sort.Strings(hashes)
-	leader := keyStore[hashes[0]]
-	return leader, leader == localPubKey
+
+	var sortedOrder []string
+	myIndex := 0
+	myIndexFound := false
+	for i := 0; i < len(keyStore); i++ {
+		if tKeySign.localNodePubKey == keyStore[hashes[i]] {
+			myIndexFound = true
+		}
+		sortedOrder = append(sortedOrder, keyStore[hashes[i]])
+		if !myIndexFound {
+			myIndex += 1
+		}
+	}
+	return sortedOrder, myIndex
 }
 
 func (tKeySign *MoneroKeySign) packAndSend(info string, exchangeRound int, localPartyID *btss.PartyID, msgType string) error {
@@ -95,11 +104,20 @@ func (tKeySign *MoneroKeySign) packAndSend(info string, exchangeRound int, local
 		From:        localPartyID,
 		IsBroadcast: true,
 	}
-	return tKeySign.moneroCommonStruct.ProcessOutCh(msg, &r, "moneroMsg", messages.TSSKeyGenMsg)
+	return tKeySign.moneroCommonStruct.ProcessOutCh(msg, &r, "moneroMsg", messages.TSSKeySignMsg)
+}
+
+func (tKeySign *MoneroKeySign) submitSignature(signature string) ([]string, error) {
+	client2Submit := moneroWallet.RequestSubmitMultisig{
+		TxDataHex: signature,
+	}
+	signedTxHash, err := tKeySign.walletClient.SubmitMultisig(&client2Submit)
+	return signedTxHash.TxHashList, err
 }
 
 // signMessage
 func (tKeySign *MoneroKeySign) SignMessage(rpcAddress, encodedTx string, parties []string) (*signing.SignatureData, error) {
+	var globalErr error
 	partiesID, localPartyID, err := conversion.GetParties(parties, tKeySign.localNodePubKey)
 	tKeySign.localParty = localPartyID
 	if err != nil {
@@ -113,15 +131,8 @@ func (tKeySign *MoneroKeySign) SignMessage(rpcAddress, encodedTx string, parties
 
 	tKeySign.logger.Debug().Msgf("local party: %+v", localPartyID)
 
-	ctx := btss.NewPeerContext(partiesID)
-	params := btss.NewParameters(ctx, localPartyID, len(partiesID), 1)
-	outCh := make(chan btss.Message, len(partiesID))
-	endCh := make(chan *signing.SignatureData, len(partiesID))
-	errCh := make(chan struct{})
 	blameMgr := tKeySign.moneroCommonStruct.GetBlameMgr()
 
-	dummy := keygen.LocalPartySaveData{}
-	keySignParty := signing.NewLocalParty(big.NewInt(0), params, dummy, outCh, endCh)
 	partyIDMap := conversion.SetupPartyIDMap(partiesID)
 	err1 := conversion.SetupIDMaps(partyIDMap, tKeySign.moneroCommonStruct.PartyIDtoP2PID)
 	err2 := conversion.SetupIDMaps(partyIDMap, blameMgr.PartyIDtoP2PID)
@@ -131,204 +142,224 @@ func (tKeySign *MoneroKeySign) SignMessage(rpcAddress, encodedTx string, parties
 	}
 
 	tKeySign.moneroCommonStruct.SetPartyInfo(&common.PartyInfo{
-		Party:      keySignParty,
+		Party:      nil,
 		PartyIDMap: partyIDMap,
 	})
 
-	blameMgr.SetPartyInfo(keySignParty, partyIDMap)
-	tKeySign.moneroCommonStruct.P2PPeers = conversion.GetPeersID(tKeySign.tssCommonStruct.PartyIDtoP2PID, tKeySign.tssCommonStruct.GetLocalPeerID())
+	blameMgr.SetPartyInfo(nil, partyIDMap)
+	tKeySign.moneroCommonStruct.P2PPeers = conversion.GetPeersID(tKeySign.moneroCommonStruct.PartyIDtoP2PID, tKeySign.moneroCommonStruct.GetLocalPeerID())
 	var keySignWg sync.WaitGroup
-	keySignWg.Add(2)
 
 	// now we try to connect to the monero wallet rpc client
-	client := moneroWallet.New(moneroWallet.Config{
+	tKeySign.walletClient = moneroWallet.New(moneroWallet.Config{
 		Address: rpcAddress,
 	})
 
-	walletName := tKeySign.localNodePubKey + tKeySign.GetTssCommonStruct().GetMsgID() + ".mo"
+	walletName := tKeySign.localNodePubKey + ".mo"
+	// walletName := "1" + ".mo"
 	passcode := tKeySign.GetTssCommonStruct().GetNodePrivKey()
+	passcode = "123"
 	// now open the wallet
 	req := moneroWallet.RequestOpenWallet{
 		Filename: walletName,
 		Password: passcode,
 	}
-	err = client.OpenWallet(&req)
+
+	err = tKeySign.walletClient.OpenWallet(&req)
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		err := tKeySign.walletClient.CloseWallet()
+		if err != nil {
+			tKeySign.logger.Error().Err(err).Msg("fail to close the wallet")
+		}
+	}()
 
-	dat, err := base64.StdEncoding.DecodeString(encodedTx)
+	walletInfo, err := tKeySign.walletClient.IsMultisig()
+	if err != nil {
+		tKeySign.logger.Error().Err(err).Msg("fail to query the wallet info")
+		return nil, err
+	}
+	if !walletInfo.Multisig || !walletInfo.Ready {
+		tKeySign.logger.Error().Err(err).Msg("it is not a multisig wallet or wallet is not ready")
+		return nil, errors.New("not a multisig wallet or wallet is not ready(keygen done correctly?)")
+	}
+	balanceReq := moneroWallet.RequestGetBalance{
+		AccountIndex: 0,
+	}
+	counter := 0
+	for ; counter < 10; counter++ {
+		time.Sleep(time.Second * 1)
+		balance, err := tKeySign.walletClient.GetBalance(&balanceReq)
+		if err != nil {
+		}
+		if balance.UnlockedBalance > 1 {
+			tKeySign.logger.Info().Msgf("unlock balance is %v\n", balance.UnlockedBalance)
+			break
+		}
+	}
+	if counter >= 10 {
+		return nil, errors.New("not enough fund in wallet")
+	}
+
+	threshold := walletInfo.Threshold
+	needToWait := threshold - 1 // we do not need to wait for ourselves
+
+	tx, err := base64.StdEncoding.DecodeString(encodedTx)
 	if err != nil {
 		tKeySign.logger.Error().Err(err).Msg("fail to decode the transaction")
 		return nil, err
 	}
 
-	var tx moneroWallet.RequestTransfer
-	err = json.Unmarshal(dat, &tx)
+	var txSend moneroWallet.RequestTransfer
+	err = json.Unmarshal(tx, &txSend)
 	if err != nil {
 		tKeySign.logger.Error().Err(err).Msg("fail to unmarshal the transaction")
 		return nil, err
 	}
 
-	leader, isLeader := tKeySign.amIFirstNode(encodedTx, tKeySign.localNodePubKey, parties)
-
+	// inport message
+	orderedNodes, myIndex := tKeySign.amIFirstNode(tKeySign.GetTssCommonStruct().GetMsgID(), parties)
+	leader := orderedNodes[0]
+	isLeader := leader == tKeySign.localNodePubKey
 	var responseTransfer *moneroWallet.ResponseTransfer
-	if isLeader {
-		responseTransfer, err = client.Transfer(&tx)
-		if err != nil {
-			tKeySign.logger.Error().Err(err).Msg("fail to create the transfer data")
-			return nil, err
-		}
-	}
-	var exchangeRound int32
-	exchangeRound = 0
-	err = tKeySign.packAndSend(responseTransfer.MultisigTxset, int(exchangeRound), localPartyID, common.MoneroSharepre)
+	moneroShareChan := make(chan *common.MoneroShare, len(partiesID))
+
+	keySignWg.Add(1)
+	go func() {
+		tKeySign.moneroCommonStruct.ProcessInboundMessages(tKeySign.commStopChan, &keySignWg, moneroShareChan)
+	}()
+
+	// we exchange the prepre info
+	exportedMultisigInfo, err := tKeySign.walletClient.ExportMultisigInfo()
 	if err != nil {
 		return nil, err
 	}
-	exchangeRound += 1
 
-	// modify!!!!!!
+	err = tKeySign.packAndSend(exportedMultisigInfo.Info, 0, localPartyID, common.MoneroExportedSignMsg)
+	if err != nil {
+		return nil, err
+	}
 
-	// start the key sign
+	shareStore := monero_multi_sig.GenMoneroShareStore()
+	var myShare string
+	keySignWg.Add(1)
 	go func() {
-		defer keySignWg.Done()
-		if err := keySignParty.Start(); nil != err {
-			tKeySign.logger.Error().Err(err).Msg("fail to start key sign party")
-			close(errCh)
+		defer func() {
+			keySignWg.Done()
+			close(tKeySign.commStopChan)
+		}()
+		for {
+			select {
+			case <-time.After(time.Minute * 10):
+				close(tKeySign.commStopChan)
+
+			case share := <-moneroShareChan:
+				switch share.MsgType {
+				case common.MoneroExportedSignMsg:
+					shares, ready := shareStore.StoreAndCheck(0, share.MultisigInfo, int(needToWait))
+					if !ready {
+						continue
+					}
+
+					info := moneroWallet.RequestImportMultisigInfo{
+						Info: shares,
+					}
+					_, err := tKeySign.walletClient.ImportMultisigInfo(&info)
+					if err != nil {
+						tKeySign.logger.Error().Err(err).Msg("fail to import the multisig info")
+						globalErr = err
+						return
+					}
+
+					// if we are the leader, we need to initialise the wallet.
+					if isLeader {
+						responseTransfer, err = tKeySign.walletClient.Transfer(&txSend)
+						if err != nil {
+							tKeySign.logger.Error().Err(err).Msg("fail to create the transfer data")
+							// we will handle the error in the upper level
+							return
+						}
+
+						err = tKeySign.packAndSend(responseTransfer.MultisigTxset, 1, localPartyID, common.MoneroInitTransfer)
+						if err != nil {
+							// fixme notify the failure of keysign
+							tKeySign.logger.Error().Err(err).Msg("fail to send the initialization transfer info")
+							globalErr = err
+							return
+						}
+						tKeySign.logger.Info().Msg("leader have done the signature preparation")
+					}
+					// fixme what other nodes should do?
+					tKeySign.logger.Info().Msgf("we(%s) have done the signature preparation", tKeySign.localNodePubKey)
+
+				case common.MoneroInitTransfer, common.MoneroSignShares:
+					if myIndex == 0 || (share.Sender == leader && myIndex != 1) || (share.Sender != orderedNodes[myIndex-1]) {
+						continue
+					}
+					outData := moneroWallet.RequestSignMultisig{
+						TxDataHex: share.MultisigInfo,
+					}
+					ret, err := tKeySign.walletClient.SignMultisig(&outData)
+					if err != nil {
+						globalErr = err
+						tKeySign.logger.Error().Err(err).Msg("fail to sign the transaction")
+						return
+					}
+					myShare = ret.TxDataHex
+					err = tKeySign.packAndSend(myShare, 1, localPartyID, common.MoneroSignShares)
+					if err != nil {
+						globalErr = err
+						return
+					}
+					if myIndex == int(threshold-1) {
+						//	globalErr = tKeySign.moneroCommonStruct.NotifyTaskDone()
+						//	if globalErr != nil {
+						//		tKeySign.logger.Error().Err(err).Msg("fail to broadcast the keysign done")
+						//		return
+						//	}
+						//	return
+						//}
+						// we are the last node
+						//resp, globalErr := tKeySign.submitSignature(ret.TxDataHex)
+						//if globalErr != nil {
+						//	tKeySign.logger.Error().Err(globalErr).Msg("fail to submit the signature")
+						//}
+						tKeySign.logger.Info().Msg("################we have signed the signature successfully")
+
+						err = tKeySign.packAndSend("palceholder", 2, localPartyID, common.MoneroSignDone)
+						if err != nil {
+							globalErr = err
+							return
+						}
+						fmt.Printf("the last node quit!\n")
+
+					}
+
+				case common.MoneroSignDone:
+					// if share.Sender == orderedNodes[len(orderedNodes)-1] {
+					fmt.Printf("we received the messsage>>>>>>>>>>>\n")
+
+					//err = tKeySign.moneroCommonStruct.NotifyTaskDone()
+					//if err != nil {
+					//	tKeySign.logger.Error().Err(err).Msg("fail to broadcast the keysign done")
+					//}
+				}
+
+			case <-tKeySign.moneroCommonStruct.GetTaskDone():
+				fmt.Printf(">>>>>>>>>>>>>node %s quit", tKeySign.localNodePubKey)
+				return
+
+			}
 		}
-		tKeySign.tssCommonStruct.SetPartyInfo(&common.PartyInfo{
-			Party:      keySignParty,
-			PartyIDMap: partyIDMap,
-		})
-		tKeySign.logger.Debug().Msg("local party is ready")
 	}()
-	go tKeySign.tssCommonStruct.ProcessInboundMessages(tKeySign.commStopChan, &keySignWg)
-	result, err := tKeySign.processKeySign(errCh, outCh, endCh)
-	if err != nil {
-		close(tKeySign.commStopChan)
-		return nil, fmt.Errorf("fail to process key sign: %w", err)
-	}
 
-	select {
-	case <-time.After(time.Second * 5):
-		close(tKeySign.commStopChan)
-	case <-tKeySign.tssCommonStruct.GetTaskDone():
-		close(tKeySign.commStopChan)
-	}
 	keySignWg.Wait()
-
-	tKeySign.logger.Info().Msgf("%s successfully sign the message", tKeySign.p2pComm.GetHost().ID().String())
-	return result, nil
-}
-
-func (tKeySign *MoneroKeySign) processKeySign(errChan chan struct{}, outCh <-chan btss.Message, endCh <-chan *signing.SignatureData) (*signing.SignatureData, error) {
-	defer tKeySign.logger.Debug().Msg("key sign finished")
-	tKeySign.logger.Debug().Msg("start to read messages from local party")
-	tssConf := tKeySign.tssCommonStruct.GetConf()
-	blameMgr := tKeySign.tssCommonStruct.GetBlameMgr()
-
-	for {
-		select {
-		case <-errChan: // when key sign return
-			tKeySign.logger.Error().Msg("key sign failed")
-			return nil, errors.New("error channel closed fail to start local party")
-		case <-tKeySign.stopChan: // when TSS processor receive signal to quit
-			return nil, errors.New("received exit signal")
-		case <-time.After(tssConf.KeySignTimeout):
-			// we bail out after KeySignTimeoutSeconds
-			tKeySign.logger.Error().Msgf("fail to sign message with %s", tssConf.KeySignTimeout.String())
-			lastMsg := blameMgr.GetLastMsg()
-			failReason := blameMgr.GetBlame().FailReason
-			if failReason == "" {
-				failReason = blame.TssTimeout
-			}
-			threshold, err := conversion.GetThreshold(len(tKeySign.tssCommonStruct.P2PPeers) + 1)
-			if err != nil {
-				tKeySign.logger.Error().Err(err).Msg("error in get the threshold for generate blame")
-			}
-			if !lastMsg.IsBroadcast() {
-				blameNodesUnicast, err := blameMgr.GetUnicastBlame(lastMsg.Type())
-				if err != nil {
-					tKeySign.logger.Error().Err(err).Msg("error in get unicast blame")
-				}
-				if len(blameNodesUnicast) > 0 && len(blameNodesUnicast) <= threshold {
-					blameMgr.GetBlame().SetBlame(failReason, blameNodesUnicast, true)
-				}
-			} else {
-				blameNodesUnicast, err := blameMgr.GetUnicastBlame(conversion.GetPreviousKeySignUicast(lastMsg.Type()))
-				if err != nil {
-					tKeySign.logger.Error().Err(err).Msg("error in get unicast blame")
-				}
-				if len(blameNodesUnicast) > 0 && len(blameNodesUnicast) <= threshold {
-					blameMgr.GetBlame().SetBlame(failReason, blameNodesUnicast, true)
-				}
-			}
-
-			blameNodesBroadcast, err := blameMgr.GetBroadcastBlame(lastMsg.Type())
-			if err != nil {
-				tKeySign.logger.Error().Err(err).Msg("error in get broadcast blame")
-			}
-			blameMgr.GetBlame().AddBlameNodes(blameNodesBroadcast...)
-
-			// if we cannot find the blame node, we check whether everyone send me the share
-			if len(blameMgr.GetBlame().BlameNodes) == 0 {
-				blameNodesMisingShare, isUnicast, err := blameMgr.TssMissingShareBlame(messages.TSSKEYSIGNROUNDS)
-				if err != nil {
-					tKeySign.logger.Error().Err(err).Msg("fail to get the node of missing share ")
-				}
-
-				if len(blameNodesMisingShare) > 0 && len(blameNodesMisingShare) <= threshold {
-					blameMgr.GetBlame().AddBlameNodes(blameNodesMisingShare...)
-					blameMgr.GetBlame().IsUnicast = isUnicast
-				}
-			}
-
-			return nil, blame.ErrTssTimeOut
-		case msg := <-outCh:
-			tKeySign.logger.Debug().Msgf(">>>>>>>>>>key sign msg: %s", msg.String())
-			tKeySign.tssCommonStruct.GetBlameMgr().SetLastMsg(msg)
-			buf, r, err := msg.WireBytes()
-			// if we cannot get the wire share, the tss keygen will fail, we just quit.
-			if err != nil {
-				return nil, errors.New("invalid tss message")
-			}
-			err = tKeySign.tssCommonStruct.ProcessOutCh(buf, r, msg.Type(), messages.TSSKeySignMsg)
-			if err != nil {
-				return nil, err
-			}
-
-		case msg := <-endCh:
-			tKeySign.logger.Debug().Msg("we have done the key sign")
-			err := tKeySign.tssCommonStruct.NotifyTaskDone()
-			if err != nil {
-				tKeySign.logger.Error().Err(err).Msg("fail to broadcast the keysign done")
-			}
-			address := tKeySign.p2pComm.ExportPeerAddress()
-			if err := tKeySign.stateManager.SaveAddressBook(address); err != nil {
-				tKeySign.logger.Error().Err(err).Msg("fail to save the peer addresses")
-			}
-			return msg, nil
-		}
+	if globalErr != nil {
+		return nil, globalErr
 	}
-}
 
-func (tKeySign *MoneroKeySign) WriteKeySignResult(w http.ResponseWriter, R, S, recovertID string, status common.Status) {
-	signResp := Response{
-		R:          R,
-		S:          S,
-		RecoveryID: recovertID,
-		Status:     status,
-		Blame:      *tKeySign.tssCommonStruct.GetBlameMgr().GetBlame(),
-	}
-	jsonResult, err := json.MarshalIndent(signResp, "", "	")
-	if err != nil {
-		tKeySign.logger.Error().Err(err).Msg("fail to marshal response to json message")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	_, err = w.Write(jsonResult)
-	if err != nil {
-		tKeySign.logger.Error().Err(err).Msg("fail to write response")
-	}
+	tKeySign.logger.Debug().Msgf("%s successfully sign the message", tKeySign.p2pComm.GetHost().ID().String())
+	return nil, nil
 }

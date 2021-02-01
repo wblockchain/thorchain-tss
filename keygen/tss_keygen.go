@@ -119,7 +119,7 @@ func (tKeyGen *TssKeyGen) GenerateNewKey(keygenReq Request) (*bcrypto.ECPoint, e
 			close(errChan)
 		}
 	}()
-	go tKeyGen.tssCommonStruct.ProcessInboundMessages(tKeyGen.commStopChan, &keyGenWg)
+	go tKeyGen.tssCommonStruct.ProcessInboundMessages(tKeyGen.commStopChan, &keyGenWg, nil)
 
 	r, err := tKeyGen.processKeyGen(errChan, outCh, endCh, keyGenLocalStateItem)
 	if err != nil {

@@ -18,6 +18,7 @@ import (
 	"gitlab.com/thorchain/tss/go-tss/common"
 	"gitlab.com/thorchain/tss/go-tss/conversion"
 	"gitlab.com/thorchain/tss/go-tss/messages"
+	"gitlab.com/thorchain/tss/go-tss/monero_multi_sig"
 	"gitlab.com/thorchain/tss/go-tss/p2p"
 	"gitlab.com/thorchain/tss/go-tss/storage"
 )
@@ -34,41 +35,11 @@ type MoneroKeyGen struct {
 	p2pComm            *p2p.Communication
 }
 
-type MoneroSharesStore struct {
-	shares map[int][]string
-	locker sync.Mutex
-}
-
-func GenMoneroShareStore() *MoneroSharesStore {
-	shares := make(map[int][]string)
-	return &MoneroSharesStore{
-		shares,
-		sync.Mutex{},
-	}
-}
-
-func (ms *MoneroSharesStore) storeAndCheck(round int, share string, checkLength int) ([]string, bool) {
-	ms.locker.Lock()
-	defer ms.locker.Unlock()
-	shares, ok := ms.shares[round]
-	if ok {
-		shares = append(shares, share)
-		ms.shares[round] = shares
-		if len(shares) == checkLength {
-			return shares, true
-		}
-		return shares, false
-	}
-	ms.shares[round] = []string{share}
-	return ms.shares[round], false
-}
-
 func NewMoneroKeyGen(localP2PID string,
 	conf common.TssConfig,
 	localNodePubKey string,
 	broadcastChan chan *messages.BroadcastMsgChan,
 	stopChan chan struct{},
-	preParam *bkg.LocalPreParams,
 	msgID string,
 	stateManager storage.LocalStateManager,
 	privateKey tcrypto.PrivKey,
@@ -78,7 +49,6 @@ func NewMoneroKeyGen(localP2PID string,
 			Str("module", "keygen").
 			Str("msgID", msgID).Logger(),
 		localNodePubKey:    localNodePubKey,
-		preParams:          preParam,
 		moneroCommonStruct: common.NewTssCommon(localP2PID, broadcastChan, conf, msgID, privateKey),
 		stopChan:           stopChan,
 		localParty:         nil,
@@ -126,12 +96,15 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, error) {
 		return "", err
 	}
 
+	// since the defination of threshold of monero is different from the original tss, we need to adjust it 1 more node
+	threshold += 1
+
 	// now we try to connect to the monero wallet rpc client
 	client := moneroWallet.New(moneroWallet.Config{
 		Address: keygenReq.rpcAddress,
 	})
 
-	walletName := tKeyGen.localNodePubKey + tKeyGen.GetTssCommonStruct().GetMsgID() + ".mo"
+	walletName := tKeyGen.localNodePubKey + ".mo"
 	passcode := tKeyGen.GetTssCommonStruct().GetNodePrivKey()
 	walletDat := moneroWallet.RequestCreateWallet{
 		Filename: walletName,
@@ -143,16 +116,15 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, error) {
 		return "", err
 	}
 
-	var keyGenWg sync.WaitGroup
+	defer func() {
+		err := client.CloseWallet()
+		if err != nil {
+			tKeyGen.logger.Error().Err(err).Msg("fail to close the created wallet")
+		}
+	}()
 
 	blameMgr := tKeyGen.moneroCommonStruct.GetBlameMgr()
 
-	outCh := make(chan btss.Message, len(partiesID))
-	endCh := make(chan bkg.LocalPartySaveData, len(partiesID))
-
-	ctx := btss.NewPeerContext(partiesID)
-	params := btss.NewParameters(ctx, localPartyID, len(partiesID), threshold)
-	keyGenParty := bkg.NewLocalParty(params, outCh, endCh, *tKeyGen.preParams)
 	partyIDMap := conversion.SetupPartyIDMap(partiesID)
 	err1 := conversion.SetupIDMaps(partyIDMap, tKeyGen.moneroCommonStruct.PartyIDtoP2PID)
 	err2 := conversion.SetupIDMaps(partyIDMap, blameMgr.PartyIDtoP2PID)
@@ -162,20 +134,22 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, error) {
 	}
 
 	partyInfo := &common.PartyInfo{
-		Party:      keyGenParty,
+		Party:      nil,
 		PartyIDMap: partyIDMap,
 	}
 
 	tKeyGen.moneroCommonStruct.SetPartyInfo(partyInfo)
-	blameMgr.SetPartyInfo(keyGenParty, partyIDMap)
+	blameMgr.SetPartyInfo(nil, partyIDMap)
 	tKeyGen.moneroCommonStruct.P2PPeers = conversion.GetPeersID(tKeyGen.moneroCommonStruct.PartyIDtoP2PID, tKeyGen.moneroCommonStruct.GetLocalPeerID())
-	keyGenWg.Add(1)
 	// start keygen
 	defer tKeyGen.logger.Debug().Msg("generate monero share")
 
 	moneroShareChan := make(chan *common.MoneroShare, len(partiesID))
 
 	var address string
+
+	var keyGenWg sync.WaitGroup
+	keyGenWg.Add(1)
 	go func() {
 		tKeyGen.moneroCommonStruct.ProcessInboundMessages(tKeyGen.commStopChan, &keyGenWg, moneroShareChan)
 	}()
@@ -195,7 +169,7 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, error) {
 
 	var globalErr error
 	peerNum := len(partiesID) - 1
-	shareStore := GenMoneroShareStore()
+	shareStore := monero_multi_sig.GenMoneroShareStore()
 	keyGenWg.Add(1)
 	go func() {
 		defer keyGenWg.Done()
@@ -207,7 +181,8 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, error) {
 			case share := <-moneroShareChan:
 				switch share.MsgType {
 				case common.MoneroSharepre:
-					shares, ready := shareStore.storeAndCheck(int(exchangeRound)-1, share.MultisigInfo, peerNum)
+					currentRound := atomic.LoadInt32(&exchangeRound)
+					shares, ready := shareStore.StoreAndCheck(int(currentRound)-1, share.MultisigInfo, peerNum)
 					if !ready {
 						continue
 					}
@@ -222,7 +197,6 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, error) {
 						return
 					}
 
-					currentRound := atomic.LoadInt32(&exchangeRound)
 					err = tKeyGen.packAndSend(resp.MultisigInfo, int(currentRound), localPartyID, common.MoneroKeyGenShareExchange)
 					if err != nil {
 						globalErr = err
@@ -231,7 +205,8 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, error) {
 					atomic.AddInt32(&exchangeRound, 1)
 
 				case common.MoneroKeyGenShareExchange:
-					shares, ready := shareStore.storeAndCheck(int(exchangeRound)-1, share.MultisigInfo, peerNum)
+					currentRound := atomic.LoadInt32(&exchangeRound)
+					shares, ready := shareStore.StoreAndCheck(int(currentRound)-1, share.MultisigInfo, peerNum)
 					if !ready {
 						continue
 					}
@@ -256,7 +231,6 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, error) {
 						return
 					}
 
-					currentRound := atomic.LoadInt32(&exchangeRound)
 					err = tKeyGen.packAndSend(resp.MultisigInfo, int(currentRound), localPartyID, common.MoneroKeyGenShareExchange)
 					if err != nil {
 						globalErr = err

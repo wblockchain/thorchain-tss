@@ -419,10 +419,10 @@ func (s *TssKeysignTestSuite) TestCloseKeySignnotifyChannel(c *C) {
 		PartyIDMap: partyIdMap,
 	}
 	keySignInstance.tssCommonStruct.SetPartyInfo(fakePartyInfo)
-	err = keySignInstance.tssCommonStruct.ProcessOneMessage(msg, "node1")
+	err = keySignInstance.tssCommonStruct.ProcessOneMessage(msg, "node1", nil)
 	c.Assert(err, IsNil)
-	err = keySignInstance.tssCommonStruct.ProcessOneMessage(msg, "node2")
+	err = keySignInstance.tssCommonStruct.ProcessOneMessage(msg, "node2", nil)
 	c.Assert(err, IsNil)
-	err = keySignInstance.tssCommonStruct.ProcessOneMessage(msg, "node1")
+	err = keySignInstance.tssCommonStruct.ProcessOneMessage(msg, "node1", nil)
 	c.Assert(err, ErrorMatches, "duplicated notification from peer node1 ignored")
 }

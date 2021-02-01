@@ -20,10 +20,16 @@ type TssConfig struct {
 const (
 	MoneroSharepre            = "moneroMsgMakeSig"
 	MoneroKeyGenShareExchange = "moneroKeyGenShareExchange"
+	MoneroExportedSignMsg     = "moneroExportedSignMsg"
+	MoneroInitTransfer        = "moneroInitTrnasfer"
+	MoneroSignShares          = "moneroSignShares"
+	MoneroSignDone            = "moneroSignatureDone"
 )
 
 type MoneroShare struct {
 	MultisigInfo  string `json:"multisig_info"`
 	MsgType       string `json:"message_type"`
 	ExchangeRound int    `json:"exchangeRound"`
+	// the sender field is only used for keysign
+	Sender string `json:"message_sender"`
 }
