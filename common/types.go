@@ -23,7 +23,6 @@ const (
 	MoneroExportedSignMsg     = "moneroExportedSignMsg"
 	MoneroInitTransfer        = "moneroInitTrnasfer"
 	MoneroSignShares          = "moneroSignShares"
-	MoneroSignDone            = "moneroSignatureDone"
 )
 
 type MoneroShare struct {

@@ -626,7 +626,7 @@ func (t *TssCommon) processTSSMsg(wireMsg *messages.WireMessage, msgType message
 	// for the unicast message, we only update it local party
 	if !wireMsg.Routing.IsBroadcast {
 		t.logger.Debug().Msgf("msg from %s to %+v", wireMsg.Routing.From, wireMsg.Routing.To)
-		return t.updateLocal(wireMsg, nil)
+		return t.updateLocal(wireMsg, moneroShareChan)
 	}
 
 	// if not received the broadcast message , we save a copy locally , and then tell all others what we got

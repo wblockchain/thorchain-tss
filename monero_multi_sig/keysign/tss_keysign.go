@@ -88,7 +88,7 @@ func (tKeySign *MoneroKeySign) amIFirstNode(msgID string, parties []string) ([]s
 	return sortedOrder, myIndex
 }
 
-func (tKeySign *MoneroKeySign) packAndSend(info string, exchangeRound int, localPartyID *btss.PartyID, msgType string) error {
+func (tKeySign *MoneroKeySign) packAndSend(info string, exchangeRound int, localPartyID, toParty *btss.PartyID, msgType string) error {
 	sendShare := common.MoneroShare{
 		MultisigInfo:  info,
 		MsgType:       msgType,
@@ -100,9 +100,17 @@ func (tKeySign *MoneroKeySign) packAndSend(info string, exchangeRound int, local
 		return err
 	}
 
+	if toParty == nil {
+		r := btss.MessageRouting{
+			From:        localPartyID,
+			IsBroadcast: true,
+		}
+		return tKeySign.moneroCommonStruct.ProcessOutCh(msg, &r, "moneroMsg", messages.TSSKeySignMsg)
+	}
 	r := btss.MessageRouting{
 		From:        localPartyID,
-		IsBroadcast: true,
+		To:          []*btss.PartyID{toParty},
+		IsBroadcast: false,
 	}
 	return tKeySign.moneroCommonStruct.ProcessOutCh(msg, &r, "moneroMsg", messages.TSSKeySignMsg)
 }
@@ -113,6 +121,22 @@ func (tKeySign *MoneroKeySign) submitSignature(signature string) ([]string, erro
 	}
 	signedTxHash, err := tKeySign.walletClient.SubmitMultisig(&client2Submit)
 	return signedTxHash.TxHashList, err
+}
+
+func (tKeySign *MoneroKeySign) genOrderedParties(orderedNodes []string, parties map[string]*btss.PartyID) ([]*btss.PartyID, error) {
+	var orderedParties []*btss.PartyID
+	for _, target := range orderedNodes {
+		for _, el := range parties {
+			pubkey, err := conversion.PartyIDtoPubKey(el)
+			if err != nil {
+				return nil, err
+			}
+			if pubkey == target {
+				orderedParties = append(orderedParties, el)
+			}
+		}
+	}
+	return orderedParties, nil
 }
 
 // signMessage
@@ -222,6 +246,13 @@ func (tKeySign *MoneroKeySign) SignMessage(rpcAddress, encodedTx string, parties
 	// inport message
 	orderedNodes, myIndex := tKeySign.amIFirstNode(tKeySign.GetTssCommonStruct().GetMsgID(), parties)
 	leader := orderedNodes[0]
+
+	orderedParties, err := tKeySign.genOrderedParties(orderedNodes, partyIDMap)
+	if err != nil {
+		tKeySign.logger.Error().Err(err).Msg("fail to get the ordered parties")
+		return nil, err
+	}
+
 	isLeader := leader == tKeySign.localNodePubKey
 	var responseTransfer *moneroWallet.ResponseTransfer
 	moneroShareChan := make(chan *common.MoneroShare, len(partiesID))
@@ -236,8 +267,7 @@ func (tKeySign *MoneroKeySign) SignMessage(rpcAddress, encodedTx string, parties
 	if err != nil {
 		return nil, err
 	}
-
-	err = tKeySign.packAndSend(exportedMultisigInfo.Info, 0, localPartyID, common.MoneroExportedSignMsg)
+	err = tKeySign.packAndSend(exportedMultisigInfo.Info, 0, localPartyID, nil, common.MoneroExportedSignMsg)
 	if err != nil {
 		return nil, err
 	}
@@ -282,7 +312,7 @@ func (tKeySign *MoneroKeySign) SignMessage(rpcAddress, encodedTx string, parties
 							return
 						}
 
-						err = tKeySign.packAndSend(responseTransfer.MultisigTxset, 1, localPartyID, common.MoneroInitTransfer)
+						err = tKeySign.packAndSend(responseTransfer.MultisigTxset, 1, localPartyID, orderedParties[myIndex+1], common.MoneroInitTransfer)
 						if err != nil {
 							// fixme notify the failure of keysign
 							tKeySign.logger.Error().Err(err).Msg("fail to send the initialization transfer info")
@@ -290,6 +320,7 @@ func (tKeySign *MoneroKeySign) SignMessage(rpcAddress, encodedTx string, parties
 							return
 						}
 						tKeySign.logger.Info().Msg("leader have done the signature preparation")
+						return
 					}
 					// fixme what other nodes should do?
 					tKeySign.logger.Info().Msgf("we(%s) have done the signature preparation", tKeySign.localNodePubKey)
@@ -307,12 +338,7 @@ func (tKeySign *MoneroKeySign) SignMessage(rpcAddress, encodedTx string, parties
 						tKeySign.logger.Error().Err(err).Msg("fail to sign the transaction")
 						return
 					}
-					myShare = ret.TxDataHex
-					err = tKeySign.packAndSend(myShare, 1, localPartyID, common.MoneroSignShares)
-					if err != nil {
-						globalErr = err
-						return
-					}
+
 					if myIndex == int(threshold-1) {
 						//	globalErr = tKeySign.moneroCommonStruct.NotifyTaskDone()
 						//	if globalErr != nil {
@@ -327,24 +353,15 @@ func (tKeySign *MoneroKeySign) SignMessage(rpcAddress, encodedTx string, parties
 						//	tKeySign.logger.Error().Err(globalErr).Msg("fail to submit the signature")
 						//}
 						tKeySign.logger.Info().Msg("################we have signed the signature successfully")
-
-						err = tKeySign.packAndSend("palceholder", 2, localPartyID, common.MoneroSignDone)
-						if err != nil {
-							globalErr = err
-							return
-						}
-						fmt.Printf("the last node quit!\n")
-
+						return
 					}
-
-				case common.MoneroSignDone:
-					// if share.Sender == orderedNodes[len(orderedNodes)-1] {
-					fmt.Printf("we received the messsage>>>>>>>>>>>\n")
-
-					//err = tKeySign.moneroCommonStruct.NotifyTaskDone()
-					//if err != nil {
-					//	tKeySign.logger.Error().Err(err).Msg("fail to broadcast the keysign done")
-					//}
+					myShare = ret.TxDataHex
+					err = tKeySign.packAndSend(myShare, 1, localPartyID, orderedParties[myIndex+1], common.MoneroSignShares)
+					if err != nil {
+						globalErr = err
+						return
+					}
+					return
 				}
 
 			case <-tKeySign.moneroCommonStruct.GetTaskDone():
