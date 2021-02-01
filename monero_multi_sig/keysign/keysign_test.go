@@ -176,9 +176,11 @@ func (s *TssKeysignTestSuite) TestSignMessage(c *C) {
 	}
 
 	t := wallet.RequestTransfer{
-		Destinations: []*wallet.Destination{&dst},
-		GetTxHex:     true,
-		RingSize:     11,
+		Destinations:  []*wallet.Destination{&dst},
+		GetTxHex:      true,
+		RingSize:      11,
+		GetTxKey:      true,
+		GetTxMetadata: true,
 	}
 
 	tx, err := json.Marshal(t)
@@ -196,8 +198,6 @@ func (s *TssKeysignTestSuite) TestSignMessage(c *C) {
 	messageID, err := common.MsgToHashString([]byte(reqs[0].EncodedTx))
 	c.Assert(err, IsNil)
 	wg := sync.WaitGroup{}
-	lock := &sync.Mutex{}
-	// keysignResult := make(map[int]*signing.SignatureData)
 	conf := common.TssConfig{
 		KeyGenTimeout:   90 * time.Second,
 		KeySignTimeout:  90 * time.Second,
@@ -226,22 +226,20 @@ func (s *TssKeysignTestSuite) TestSignMessage(c *C) {
 			defer comm.CancelSubscribe(messages.TSSControlMsg, messageID)
 			defer comm.CancelSubscribe(messages.TSSTaskDone, messageID)
 
-			_, err := keysignIns.SignMessage(reqs[idx].RpcAddress, reqs[idx].EncodedTx, reqs[idx].SignerPubKeys)
+			signedTxHex, err := keysignIns.SignMessage(reqs[idx].RpcAddress, reqs[idx].EncodedTx, reqs[idx].SignerPubKeys)
 			c.Assert(err, IsNil)
-			lock.Lock()
-			defer lock.Unlock()
-			// keysignResult[idx] = sig
+			if signedTxHex != nil {
+				checkRequest := wallet.RequestCheckSpendProof{
+					TxID:    signedTxHex.transactionID,
+					Message: signedTxHex.signatureProof,
+				}
+				respCheck, err := keysignIns.walletClient.CheckSpendProof(&checkRequest)
+				c.Assert(err, IsNil)
+				c.Assert(respCheck.Good, Equals, true)
+			}
 		}(i)
 	}
 	wg.Wait()
-	//var signature string
-	//for _, item := range keysignResult {
-	//	if len(signature) == 0 {
-	//		signature = string(item.GetSignature().S) + string(item.GetSignature().R)
-	//		continue
-	//	}
-	//	c.Assert(signature, Equals, string(item.GetSignature().S)+string(item.GetSignature().R))
-	//}
 }
 
 //
