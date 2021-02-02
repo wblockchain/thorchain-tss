@@ -9,37 +9,35 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/peer"
+	"gitlab.com/thorchain/tss/monero-wallet-rpc/wallet"
 
 	"gitlab.com/thorchain/tss/go-tss/blame"
 	"gitlab.com/thorchain/tss/go-tss/common"
 	"gitlab.com/thorchain/tss/go-tss/conversion"
-	"gitlab.com/thorchain/tss/go-tss/keysign"
 	"gitlab.com/thorchain/tss/go-tss/messages"
+	"gitlab.com/thorchain/tss/go-tss/monero_multi_sig/keysign"
 	"gitlab.com/thorchain/tss/go-tss/p2p"
 	"gitlab.com/thorchain/tss/go-tss/storage"
 )
 
-func (t *TssServer) waitForSignatures(msgID, poolPubKey string, msgToSign []byte, sigChan chan string) (keysign.Response, error) {
+func (t *TssServer) waitForSignatures(msgID, receiverAddress string, walletClient wallet.Client, msgToSign []byte, sigChan chan string) (keysign.Response, error) {
 	// TSS keysign include both form party and keysign itself, thus we wait twice of the timeout
-	data, err := t.signatureNotifier.WaitForSignature(msgID, msgToSign, poolPubKey, t.conf.KeySignTimeout, sigChan)
+	data, err := t.signatureNotifier.WaitForSignature(msgID, msgToSign, receiverAddress, walletClient, t.conf.KeySignTimeout, sigChan)
 	if err != nil {
 		return keysign.Response{}, err
 	}
-	// for gg20, it wrap the signature R,S into ECSignature structure
-	// we do not need to check the length of R,S any longer, as the signature check will filter out invalid signature
-	if data == nil || data.GetSignature() == nil {
+	if data == nil {
 		return keysign.Response{}, errors.New("keysign failed with nil signature")
 	}
 	return keysign.NewResponse(
-		base64.StdEncoding.EncodeToString(data.R),
-		base64.StdEncoding.EncodeToString(data.S),
-		base64.StdEncoding.EncodeToString(data.GetSignatureRecovery()),
+		data.TransactionID,
+		data.SignatureProof,
 		common.Success,
 		blame.Blame{},
 	), nil
 }
 
-func (t *TssServer) generateSignature(msgID string, msgToSign []byte, req keysign.Request, threshold int, allParticipants []string, localStateItem storage.KeygenLocalState, blameMgr *blame.Manager, keysignInstance *keysign.TssKeySign, sigChan chan string) (keysign.Response, error) {
+func (t *TssServer) generateSignature(msgID string, msgToSign []byte, req keysign.Request, threshold int, allParticipants []string, localStateItem storage.KeygenLocalState, blameMgr *blame.Manager, keysignInstance *keysign.MoneroKeySign, sigChan chan string) (keysign.Response, error) {
 	allPeersID, err := conversion.GetPeerIDsFromPubKeys(allParticipants)
 	if err != nil {
 		t.logger.Error().Msg("invalid block height or public key")
@@ -154,10 +152,12 @@ func (t *TssServer) generateSignature(msgID string, msgToSign []byte, req keysig
 			Blame:  blame.Blame{},
 		}, nil
 	}
-	signatureData, err := keysignInstance.SignMessage(msgToSign, localStateItem, signers)
+
+	signedTx, err := keysignInstance.SignMessage(req.RpcAddress, req.EncodedTx, signers)
 	// the statistic of keygen only care about Tss it self, even if the following http response aborts,
 	// it still counted as a successful keygen as the Tss model runs successfully.
-	if err != nil {
+	// as only the last node submit the signature, others will return nil of the signedTx
+	if err != nil && signedTx != nil {
 		t.logger.Error().Err(err).Msg("err in keysign")
 		sigChan <- "signature generated"
 		t.broadcastKeysignFailure(msgID, allPeersID)
@@ -167,16 +167,14 @@ func (t *TssServer) generateSignature(msgID string, msgToSign []byte, req keysig
 			Blame:  blameNodes,
 		}, nil
 	}
-
 	sigChan <- "signature generated"
 	// update signature notification
-	if err := t.signatureNotifier.BroadcastSignature(msgID, signatureData, allPeersID); err != nil {
+	if err := t.signatureNotifier.BroadcastSignature(msgID, signedTx, allPeersID); err != nil {
 		return keysign.Response{}, fmt.Errorf("fail to broadcast signature:%w", err)
 	}
 	return keysign.NewResponse(
-		base64.StdEncoding.EncodeToString(signatureData.GetSignature().R),
-		base64.StdEncoding.EncodeToString(signatureData.GetSignature().S),
-		base64.StdEncoding.EncodeToString(signatureData.GetSignature().GetSignatureRecovery()),
+		signedTx.TransactionID,
+		signedTx.SignatureProof,
 		common.Success,
 		blame.Blame{},
 	), nil
@@ -202,16 +200,11 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 		return emptyResp, err
 	}
 
-	keysignInstance := keysign.NewTssKeySign(
-		t.p2pCommunication.GetLocalPeerID(),
+	keysignInstance := keysign.NewMoneroKeySign(t.p2pCommunication.GetLocalPeerID(),
 		t.conf,
 		t.p2pCommunication.BroadcastMsgChan,
-		t.stopChan,
-		msgID,
-		t.privateKey,
-		t.p2pCommunication,
-		t.stateManager,
-	)
+		t.stopChan, msgID,
+		t.privateKey, t.p2pCommunication)
 
 	keySignChannels := keysignInstance.GetTssKeySignChannels()
 	t.p2pCommunication.SetSubscribe(messages.TSSKeySignMsg, msgID, keySignChannels)

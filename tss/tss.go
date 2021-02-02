@@ -18,10 +18,9 @@ import (
 
 	"gitlab.com/thorchain/tss/go-tss/common"
 	"gitlab.com/thorchain/tss/go-tss/conversion"
-	"gitlab.com/thorchain/tss/go-tss/keygen"
-	"gitlab.com/thorchain/tss/go-tss/keysign"
 	"gitlab.com/thorchain/tss/go-tss/messages"
 	moneroKeyGen "gitlab.com/thorchain/tss/go-tss/monero_multi_sig/keygen"
+	moneroKeySign "gitlab.com/thorchain/tss/go-tss/monero_multi_sig/keysign"
 	"gitlab.com/thorchain/tss/go-tss/monitor"
 	"gitlab.com/thorchain/tss/go-tss/p2p"
 	"gitlab.com/thorchain/tss/go-tss/storage"
@@ -38,7 +37,7 @@ type TssServer struct {
 	stopChan          chan struct{}
 	partyCoordinator  *p2p.PartyCoordinator
 	stateManager      storage.LocalStateManager
-	signatureNotifier *keysign.SignatureNotifier
+	signatureNotifier *moneroKeySign.SignatureNotifier
 	privateKey        tcrypto.PrivKey
 	tssMetrics        *monitor.Metric
 }
@@ -103,7 +102,7 @@ func NewTss(
 		return nil, fmt.Errorf("fail to start p2p network: %w", err)
 	}
 	pc := p2p.NewPartyCoordinator(comm.GetHost(), conf.PartyTimeout)
-	sn := keysign.NewSignatureNotifier(comm.GetHost())
+	sn := moneroKeySign.NewSignatureNotifier(comm.GetHost())
 	metrics := monitor.NewMetric()
 	if conf.EnableMonitor {
 		metrics.Enable()
@@ -148,11 +147,9 @@ func (t *TssServer) requestToMsgId(request interface{}) (string, error) {
 	var dat []byte
 	var keys []string
 	switch value := request.(type) {
-	case keygen.Request:
-		keys = value.Keys
 	case moneroKeyGen.Request:
 		keys = value.Keys
-	case keysign.Request:
+	case moneroKeySign.Request:
 		msgToSign, err := base64.StdEncoding.DecodeString(value.Message)
 		if err != nil {
 			t.logger.Error().Err(err).Msg("error in decode the keysign req")

@@ -12,6 +12,8 @@ import (
 	"time"
 
 	btss "github.com/binance-chain/tss-lib/tss"
+	coskey "github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	tcrypto "github.com/tendermint/tendermint/crypto"
@@ -38,18 +40,24 @@ type MoneroKeySign struct {
 }
 
 type MoneroSpendProof struct {
-	transactionID  string
-	signatureProof string
+	TransactionID  string
+	SignatureProof string
 }
 
 func NewMoneroKeySign(localP2PID string,
 	conf common.TssConfig,
 	broadcastChan chan *messages.BroadcastMsgChan,
-	stopChan chan struct{}, localNodePubKey, msgID string, privKey tcrypto.PrivKey, p2pComm *p2p.Communication) *MoneroKeySign {
+	stopChan chan struct{}, msgID string, privKey tcrypto.PrivKey, p2pComm *p2p.Communication) *MoneroKeySign {
 	logItems := []string{"keySign", msgID}
+
+	pk := coskey.PubKey{
+		Key: privKey.Bytes(),
+	}
+	pubKey, _ := sdk.Bech32ifyPubKey(sdk.Bech32PubKeyTypeAccPub, &pk)
+
 	return &MoneroKeySign{
 		logger:             log.With().Strs("module", logItems).Logger(),
-		localNodePubKey:    localNodePubKey,
+		localNodePubKey:    pubKey,
 		moneroCommonStruct: common.NewTssCommon(localP2PID, broadcastChan, conf, msgID, privKey),
 		stopChan:           stopChan,
 		localParty:         nil,
@@ -357,7 +365,7 @@ func (tKeySign *MoneroKeySign) SignMessage(rpcAddress, encodedTx string, parties
 							Address: "48Qp1DYY95wF2BNbhQZDd5J8dZCucMRz99Y4wAUaDjQhjX8royowfog1sN9WAdVeshQuvU6qKFi9Ji4gj9ZREkjTFYsQbZX",
 						}
 
-						signedTx.transactionID = submittedResp[0]
+						signedTx.TransactionID = submittedResp[0]
 						sigRetry := 0
 						for ; sigRetry < 10; sigRetry++ {
 							proofResp, err := tKeySign.walletClient.GetTxProof(&spendProof)
@@ -367,7 +375,7 @@ func (tKeySign *MoneroKeySign) SignMessage(rpcAddress, encodedTx string, parties
 								time.Sleep(time.Second * 5)
 								continue
 							}
-							signedTx.signatureProof = proofResp.Signature
+							signedTx.SignatureProof = proofResp.Signature
 							globalErr = nil
 							return
 						}

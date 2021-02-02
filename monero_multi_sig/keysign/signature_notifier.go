@@ -2,12 +2,11 @@ package keysign
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
-	"github.com/binance-chain/tss-lib/common"
-	"github.com/binance-chain/tss-lib/ecdsa/signing"
 	"github.com/golang/protobuf/proto"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
@@ -15,6 +14,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"gitlab.com/thorchain/tss/monero-wallet-rpc/wallet"
 
 	"gitlab.com/thorchain/tss/go-tss/messages"
 	"gitlab.com/thorchain/tss/go-tss/p2p"
@@ -23,9 +23,9 @@ import (
 var signatureNotifierProtocol protocol.ID = "/p2p/signatureNotifier"
 
 type signatureItem struct {
-	messageID     string
-	peerID        peer.ID
-	signatureData *common.ECSignature
+	messageID string
+	peerID    peer.ID
+	signedTx  *MoneroSpendProof
 }
 
 // SignatureNotifier is design to notify the
@@ -75,9 +75,9 @@ func (s *SignatureNotifier) handleStream(stream network.Stream) {
 		return
 	}
 	s.streamMgr.AddStream(msg.ID, stream)
-	var signature common.ECSignature
+	var signedTxHex MoneroSpendProof
 	if len(msg.Signature) > 0 && msg.KeysignStatus == messages.KeysignSignature_Success {
-		if err := proto.Unmarshal(msg.Signature, &signature); err != nil {
+		if err := json.Unmarshal(msg.Signature, &signedTxHex); err != nil {
 			logger.Error().Err(err).Msg("fail to unmarshal signature data")
 			return
 		}
@@ -89,7 +89,7 @@ func (s *SignatureNotifier) handleStream(stream network.Stream) {
 		logger.Debug().Msgf("notifier for message id(%s) not exist", msg.ID)
 		return
 	}
-	finished, err := n.ProcessSignature(&signature)
+	finished, err := n.ProcessSignature(&signedTxHex)
 	if err != nil {
 		logger.Error().Err(err).Msg("fail to verify local signature data")
 		return
@@ -115,12 +115,12 @@ func (s *SignatureNotifier) sendOneMsgToPeer(m *signatureItem) error {
 		KeysignStatus: messages.KeysignSignature_Failed,
 	}
 
-	if m.signatureData != nil {
-		buf, err := proto.Marshal(m.signatureData)
+	if m.signedTx != nil {
+		serialSignedTx, err := json.Marshal(m.signedTx)
 		if err != nil {
 			return fmt.Errorf("fail to marshal signature data to bytes:%w", err)
 		}
-		ks.Signature = buf
+		ks.Signature = serialSignedTx
 		ks.KeysignStatus = messages.KeysignSignature_Success
 	}
 	ksBuf, err := proto.Marshal(ks)
@@ -141,11 +141,11 @@ func (s *SignatureNotifier) sendOneMsgToPeer(m *signatureItem) error {
 }
 
 // BroadcastSignature sending the keysign signature to all other peers
-func (s *SignatureNotifier) BroadcastSignature(messageID string, sig *signing.SignatureData, peers []peer.ID) error {
-	return s.broadcastCommon(messageID, sig, peers)
+func (s *SignatureNotifier) BroadcastSignature(messageID string, signedTxHex *MoneroSpendProof, peers []peer.ID) error {
+	return s.broadcastCommon(messageID, signedTxHex, peers)
 }
 
-func (s *SignatureNotifier) broadcastCommon(messageID string, sig *signing.SignatureData, peers []peer.ID) error {
+func (s *SignatureNotifier) broadcastCommon(messageID string, signedTxHex *MoneroSpendProof, peers []peer.ID) error {
 	wg := sync.WaitGroup{}
 	for _, p := range peers {
 		if p == s.host.ID() {
@@ -153,9 +153,9 @@ func (s *SignatureNotifier) broadcastCommon(messageID string, sig *signing.Signa
 			continue
 		}
 		signature := &signatureItem{
-			messageID:     messageID,
-			peerID:        p,
-			signatureData: sig.GetSignature(),
+			messageID: messageID,
+			peerID:    p,
+			signedTx:  signedTxHex,
 		}
 		wg.Add(1)
 		go func() {
@@ -188,8 +188,8 @@ func (s *SignatureNotifier) removeNotifier(n *Notifier) {
 }
 
 // WaitForSignature wait until keysign finished and signature is available
-func (s *SignatureNotifier) WaitForSignature(messageID string, message []byte, poolPubKey string, timeout time.Duration, sigChan chan string) (*common.ECSignature, error) {
-	n, err := NewNotifier(messageID, message, poolPubKey)
+func (s *SignatureNotifier) WaitForSignature(messageID string, message []byte, receiverAddress string, walletClient wallet.Client, timeout time.Duration, sigChan chan string) (*MoneroSpendProof, error) {
+	n, err := NewNotifier(messageID, message, receiverAddress, walletClient)
 	if err != nil {
 		return nil, fmt.Errorf("fail to create notifier")
 	}

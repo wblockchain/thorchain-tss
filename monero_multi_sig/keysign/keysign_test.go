@@ -213,7 +213,7 @@ func (s *TssKeysignTestSuite) TestSignMessage(c *C) {
 			keysignIns := NewMoneroKeySign(comm.GetLocalPeerID(),
 				conf,
 				comm.BroadcastMsgChan,
-				stopChan, testPubKeys[idx], messageID,
+				stopChan, messageID,
 				s.nodePrivKeys[idx], s.comms[idx])
 			keysignMsgChannel := keysignIns.GetTssKeySignChannels()
 
@@ -230,8 +230,8 @@ func (s *TssKeysignTestSuite) TestSignMessage(c *C) {
 			c.Assert(err, IsNil)
 			if signedTx != nil {
 				checkRequest := wallet.RequestCheckTxProof{
-					TxID:      signedTx.transactionID,
-					Signature: signedTx.signatureProof,
+					TxID:      signedTx.TransactionID,
+					Signature: signedTx.SignatureProof,
 					Address:   "48Qp1DYY95wF2BNbhQZDd5J8dZCucMRz99Y4wAUaDjQhjX8royowfog1sN9WAdVeshQuvU6qKFi9Ji4gj9ZREkjTFYsQbZX",
 				}
 				respCheck, err := keysignIns.walletClient.CheckTxProof(&checkRequest)
