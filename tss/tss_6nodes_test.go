@@ -2,6 +2,7 @@ package tss
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -16,11 +17,13 @@ import (
 
 	btsskeygen "github.com/binance-chain/tss-lib/ecdsa/keygen"
 	maddr "github.com/multiformats/go-multiaddr"
+	"gitlab.com/thorchain/tss/monero-wallet-rpc/wallet"
 	. "gopkg.in/check.v1"
 
 	"gitlab.com/thorchain/tss/go-tss/common"
 	"gitlab.com/thorchain/tss/go-tss/conversion"
 	"gitlab.com/thorchain/tss/go-tss/monero_multi_sig/keygen"
+	"gitlab.com/thorchain/tss/go-tss/monero_multi_sig/keysign"
 )
 
 const (
@@ -47,6 +50,8 @@ var (
 		"MjQ1MDc2MmM4MjU5YjRhZjhhNmFjMmI0ZDBkNzBkOGE1ZTBmNDQ5NGI4NzM4OTYyM2E3MmI0OWMzNmE1ODZhNw==",
 		"YmNiMzA2ODU1NWNjMzk3NDE1OWMwMTM3MDU0NTNjN2YwMzYzZmVhZDE5NmU3NzRhOTMwOWIxN2QyZTQ0MzdkNg==",
 	}
+	//double check you really want to send the money to this account
+	const receiverAddress="48Qp1DYY95wF2BNbhQZDd5J8dZCucMRz99Y4wAUaDjQhjX8royowfog1sN9WAdVeshQuvU6qKFi9Ji4gj9ZREkjTFYsQbZX"
 )
 
 func TestPackage(t *testing.T) {
@@ -117,17 +122,9 @@ func hash(payload []byte) []byte {
 
 // we do for both join party schemes
 func (s *FourNodeTestSuite) Test4NodesTss(c *C) {
-	s.doTestKeygen(c, true)
+	//s.doTestKeygen(c, true)
+	s.doTestKeySign(c, true)
 
-	//time.Sleep(time.Second * 2)
-	//s.doTestFailJoinParty(c, false)
-	//time.Sleep(time.Second * 2)
-	//s.doTestFailJoinParty(c, true)
-	//
-	//time.Sleep(time.Second * 2)
-	//s.doTestBlame(c, false)
-	//time.Sleep(time.Second * 2)
-	//s.doTestBlame(c, true)
 }
 
 // generate a new key
@@ -165,53 +162,44 @@ func (s *FourNodeTestSuite) doTestKeygen(c *C, newJoinParty bool) {
 
 // you need to ensure that you have enough money to run the keysign
 func (s *FourNodeTestSuite) doTestKeySign(c *C, newJoinParty bool) {
-	//keysignReqWithErr := keysign.NewRequest(poolPubKey, "helloworld", 10, testPubKeys, "0.13.0")
-	//if newJoinParty {
-	//	keysignReqWithErr = keysign.NewRequest(poolPubKey, "helloworld", 10, testPubKeys, "0.14.0")
-	//}
-	//
-	//resp, err := s.servers[0].KeySign(keysignReqWithErr)
-	//c.Assert(err, NotNil)
-	//c.Assert(resp.S, Equals, "")
-	//if !newJoinParty {
-	//	keysignReqWithErr1 := keysign.NewRequest(poolPubKey, base64.StdEncoding.EncodeToString(hash([]byte("helloworld"))), 10, testPubKeys[:1], "0.13.0")
-	//	resp, err = s.servers[0].KeySign(keysignReqWithErr1)
-	//	c.Assert(err, NotNil)
-	//	c.Assert(resp.S, Equals, "")
-	//}
-	//if !newJoinParty {
-	//	keysignReqWithErr2 := keysign.NewRequest(poolPubKey, base64.StdEncoding.EncodeToString(hash([]byte("helloworld"))), 10, nil, "0.13.0")
-	//	resp, err = s.servers[0].KeySign(keysignReqWithErr2)
-	//	c.Assert(err, NotNil)
-	//	c.Assert(resp.S, Equals, "")
-	//}
-	//var keysignReq keysign.Request
-	//if newJoinParty {
-	//	keysignReq = keysign.NewRequest(poolPubKey, base64.StdEncoding.EncodeToString(hash([]byte("helloworld"))), 10, testPubKeys, "0.14.0")
-	//} else {
-	//	keysignReq = keysign.NewRequest(poolPubKey, base64.StdEncoding.EncodeToString(hash([]byte("helloworld"))), 10, testPubKeys, "0.13.0")
-	//}
-	//keysignResult := make(map[int]keysign.Response)
-	//for i := 0; i < partyNum; i++ {
-	//	wg.Add(1)
-	//	go func(idx int) {
-	//		defer wg.Done()
-	//		res, err := s.servers[idx].KeySign(keysignReq)
-	//		c.Assert(err, IsNil)
-	//		lock.Lock()
-	//		defer lock.Unlock()
-	//		keysignResult[idx] = res
-	//	}(i)
-	//}
-	//wg.Wait()
-	//var signature string
-	//for _, item := range keysignResult {
-	//	if len(signature) == 0 {
-	//		signature = item.S + item.R
-	//		continue
-	//	}
-	//	c.Assert(signature, Equals, item.S+item.R)
-	//}
+	var wg sync.WaitGroup
+	var lock sync.Locker
+
+
+
+	dst := wallet.Destination{
+		Amount:  500,
+		Address: "48Qp1DYY95wF2BNbhQZDd5J8dZCucMRz99Y4wAUaDjQhjX8royowfog1sN9WAdVeshQuvU6qKFi9Ji4gj9ZREkjTFYsQbZX",
+	}
+
+	t := wallet.RequestTransfer{
+		Destinations:  []*wallet.Destination{&dst},
+		GetTxHex:      true,
+		RingSize:      11,
+		GetTxKey:      true,
+		GetTxMetadata: true,
+	}
+
+	tx, err := json.Marshal(t)
+	c.Assert(err, IsNil)
+	encodedTx := base64.StdEncoding.EncodeToString(tx)
+
+
+	keysignResult := make(map[int]keysign.Response)
+	for i := 0; i < partyNum; i++ {
+		wg.Add(1)
+		go func(idx int) {
+
+			keysignReq := keysign.NewRequest( 10, testPubKeys, s.rpcAddress[idx],"0.14.0",encodedTx)
+			defer wg.Done()
+			res, err := s.servers[idx].KeySign(keysignReq)
+			c.Assert(err, IsNil)
+			lock.Lock()
+			defer lock.Unlock()
+			keysignResult[idx] = res
+		}(i)
+	}
+
 	//if newJoinParty {
 	//	keysignReq = keysign.NewRequest(poolPubKey, base64.StdEncoding.EncodeToString(hash([]byte("helloworld"))), 10, nil, "0.14.0")
 	//} else {

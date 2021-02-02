@@ -191,7 +191,7 @@ func (s *TssKeysignTestSuite) TestSignMessage(c *C) {
 	for i := 0; i < s.partyNum; i++ {
 		var rpcaddress string
 		rpcaddress = fmt.Sprintf("http://%s:18083/json_rpc", remoteAddress[i])
-		req := NewRequest("thorpub1addwnpepqv6xp3fmm47dfuzglywqvpv8fdjv55zxte4a26tslcezns5czv586u2fw33", "helloworld-test111", 10, testPubKeys[:4], "", rpcaddress, encodedTx)
+		req := NewRequest(10, testPubKeys[:4], "0.16.0", rpcaddress, encodedTx)
 		reqs = append(reqs, req)
 	}
 
@@ -210,7 +210,7 @@ func (s *TssKeysignTestSuite) TestSignMessage(c *C) {
 			defer wg.Done()
 			comm := s.comms[idx]
 			stopChan := make(chan struct{})
-			keysignIns := NewMoneroKeySign(comm.GetLocalPeerID(),
+			keysignIns, _ := NewMoneroKeySign(comm.GetLocalPeerID(),
 				conf,
 				comm.BroadcastMsgChan,
 				stopChan, messageID,

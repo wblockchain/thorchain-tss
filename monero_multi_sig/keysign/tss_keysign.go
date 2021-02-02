@@ -47,7 +47,7 @@ type MoneroSpendProof struct {
 func NewMoneroKeySign(localP2PID string,
 	conf common.TssConfig,
 	broadcastChan chan *messages.BroadcastMsgChan,
-	stopChan chan struct{}, msgID string, privKey tcrypto.PrivKey, p2pComm *p2p.Communication) *MoneroKeySign {
+	stopChan chan struct{}, msgID string, privKey tcrypto.PrivKey, p2pComm *p2p.Communication) (*MoneroKeySign, moneroWallet.Client) {
 	logItems := []string{"keySign", msgID}
 
 	pk := coskey.PubKey{
@@ -55,7 +55,9 @@ func NewMoneroKeySign(localP2PID string,
 	}
 	pubKey, _ := sdk.Bech32ifyPubKey(sdk.Bech32PubKeyTypeAccPub, &pk)
 
-	return &MoneroKeySign{
+	// walletName := tKeySign.localNodePubKey + ".mo"
+
+	moneroSignClient := MoneroKeySign{
 		logger:             log.With().Strs("module", logItems).Logger(),
 		localNodePubKey:    pubKey,
 		moneroCommonStruct: common.NewTssCommon(localP2PID, broadcastChan, conf, msgID, privKey),
@@ -64,6 +66,28 @@ func NewMoneroKeySign(localP2PID string,
 		commStopChan:       make(chan struct{}),
 		p2pComm:            p2pComm,
 	}
+
+	walletName := "1" + ".mo"
+	// passcode := privKey
+	passcode := "123"
+	// now open the wallet
+	req := moneroWallet.RequestOpenWallet{
+		Filename: walletName,
+		Password: passcode,
+	}
+	var walletClient moneroWallet.Client
+	err := walletClient.OpenWallet(&req)
+	if err != nil {
+		return nil, nil
+	}
+	defer func() {
+		err := walletClient.CloseWallet()
+		if err != nil {
+			moneroSignClient.logger.Error().Err(err).Msg("fail to close the wallet")
+		}
+	}()
+	moneroSignClient.walletClient = walletClient
+	return &moneroSignClient, walletClient
 }
 
 func (tKeySign *MoneroKeySign) GetTssKeySignChannels() chan *p2p.Message {
@@ -190,27 +214,6 @@ func (tKeySign *MoneroKeySign) SignMessage(rpcAddress, encodedTx string, parties
 	tKeySign.walletClient = moneroWallet.New(moneroWallet.Config{
 		Address: rpcAddress,
 	})
-
-	// walletName := tKeySign.localNodePubKey + ".mo"
-	walletName := "1" + ".mo"
-	passcode := tKeySign.GetTssCommonStruct().GetNodePrivKey()
-	passcode = "123"
-	// now open the wallet
-	req := moneroWallet.RequestOpenWallet{
-		Filename: walletName,
-		Password: passcode,
-	}
-
-	err = tKeySign.walletClient.OpenWallet(&req)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		err := tKeySign.walletClient.CloseWallet()
-		if err != nil {
-			tKeySign.logger.Error().Err(err).Msg("fail to close the wallet")
-		}
-	}()
 
 	walletInfo, err := tKeySign.walletClient.IsMultisig()
 	if err != nil {

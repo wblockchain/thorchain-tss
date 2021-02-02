@@ -190,9 +190,8 @@ func (t *TssServer) updateKeySignResult(result keysign.Response, timeSpent time.
 }
 
 func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
-	t.logger.Info().Str("pool pub key", req.PoolPubKey).
+	t.logger.Info().
 		Str("signer pub keys", strings.Join(req.SignerPubKeys, ",")).
-		Str("msg", req.Message).
 		Msg("received keysign request")
 	emptyResp := keysign.Response{}
 	msgID, err := t.requestToMsgId(req)
@@ -200,7 +199,7 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 		return emptyResp, err
 	}
 
-	keysignInstance := keysign.NewMoneroKeySign(t.p2pCommunication.GetLocalPeerID(),
+	keysignInstance, walletClient := keysign.NewMoneroKeySign(t.p2pCommunication.GetLocalPeerID(),
 		t.conf,
 		t.p2pCommunication.BroadcastMsgChan,
 		t.stopChan, msgID,
@@ -222,15 +221,6 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 		t.signatureNotifier.ReleaseStream(msgID)
 		t.partyCoordinator.ReleaseStream(msgID)
 	}()
-
-	localStateItem, err := t.stateManager.GetLocalState(req.PoolPubKey)
-	if err != nil {
-		return emptyResp, fmt.Errorf("fail to get local keygen state: %w", err)
-	}
-	msgToSign, err := base64.StdEncoding.DecodeString(req.Message)
-	if err != nil {
-		return emptyResp, fmt.Errorf("fail to decode message(%s): %w", req.Message, err)
-	}
 
 	oldJoinParty, err := conversion.VersionLTCheck(req.Version, messages.NEWJOINPARTYVERSION)
 	if err != nil {
@@ -265,7 +255,7 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 	// we wait for signatures
 	go func() {
 		defer wg.Done()
-		receivedSig, errWait = t.waitForSignatures(msgID, req.PoolPubKey, msgToSign, sigChan)
+		receivedSig, errWait = t.waitForSignatures(msgID, req.RpcAddress, walletClient, sigChan)
 		// we received an valid signature indeed
 		if errWait == nil {
 			sigChan <- "signature received"
