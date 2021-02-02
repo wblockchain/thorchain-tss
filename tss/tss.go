@@ -21,6 +21,7 @@ import (
 	"gitlab.com/thorchain/tss/go-tss/keygen"
 	"gitlab.com/thorchain/tss/go-tss/keysign"
 	"gitlab.com/thorchain/tss/go-tss/messages"
+	moneroKeyGen "gitlab.com/thorchain/tss/go-tss/monero_multi_sig/keygen"
 	"gitlab.com/thorchain/tss/go-tss/monitor"
 	"gitlab.com/thorchain/tss/go-tss/p2p"
 	"gitlab.com/thorchain/tss/go-tss/storage"
@@ -148,6 +149,8 @@ func (t *TssServer) requestToMsgId(request interface{}) (string, error) {
 	var keys []string
 	switch value := request.(type) {
 	case keygen.Request:
+		keys = value.Keys
+	case moneroKeyGen.Request:
 		keys = value.Keys
 	case keysign.Request:
 		msgToSign, err := base64.StdEncoding.DecodeString(value.Message)

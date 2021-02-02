@@ -114,7 +114,7 @@ func (tKeySign *TssKeySign) SignMessage(msgToSign []byte, localStateItem storage
 		})
 		tKeySign.logger.Debug().Msg("local party is ready")
 	}()
-	go tKeySign.tssCommonStruct.ProcessInboundMessages(tKeySign.commStopChan, &keySignWg)
+	go tKeySign.tssCommonStruct.ProcessInboundMessages(tKeySign.commStopChan, &keySignWg, nil)
 	result, err := tKeySign.processKeySign(errCh, outCh, endCh)
 	if err != nil {
 		close(tKeySign.commStopChan)

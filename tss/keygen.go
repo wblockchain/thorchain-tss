@@ -6,8 +6,8 @@ import (
 	"gitlab.com/thorchain/tss/go-tss/blame"
 	"gitlab.com/thorchain/tss/go-tss/common"
 	"gitlab.com/thorchain/tss/go-tss/conversion"
-	"gitlab.com/thorchain/tss/go-tss/keygen"
 	"gitlab.com/thorchain/tss/go-tss/messages"
+	"gitlab.com/thorchain/tss/go-tss/monero_multi_sig/keygen"
 )
 
 func (t *TssServer) Keygen(req keygen.Request) (keygen.Response, error) {
@@ -19,17 +19,14 @@ func (t *TssServer) Keygen(req keygen.Request) (keygen.Response, error) {
 		return keygen.Response{}, err
 	}
 
-	keygenInstance := keygen.NewTssKeyGen(
+	keygenInstance := keygen.NewMoneroKeyGen(
 		t.p2pCommunication.GetLocalPeerID(),
 		t.conf,
 		t.localNodePubKey,
 		t.p2pCommunication.BroadcastMsgChan,
 		t.stopChan,
-		t.preParams,
 		msgID,
-		t.stateManager,
-		t.privateKey,
-		t.p2pCommunication)
+		t.stateManager, t.privateKey, t.p2pCommunication)
 
 	keygenMsgChannel := keygenInstance.GetTssKeyGenChannels()
 	t.p2pCommunication.SetSubscribe(messages.TSSKeyGenMsg, msgID, keygenMsgChannel)
@@ -109,27 +106,20 @@ func (t *TssServer) Keygen(req keygen.Request) (keygen.Response, error) {
 	// following http response aborts, it still counted as a successful keygen
 	// as the Tss model runs successfully.
 	beforeKeygen := time.Now()
-	k, err := keygenInstance.GenerateNewKey(req)
+	address, err := keygenInstance.GenerateNewKey(req)
 	keygenTime := time.Since(beforeKeygen)
 	if err != nil {
 		t.tssMetrics.UpdateKeyGen(keygenTime, false)
 		t.logger.Error().Err(err).Msg("err in keygen")
 		blameNodes := *blameMgr.GetBlame()
-		return keygen.NewResponse("", "", common.Fail, blameNodes), err
+		return keygen.NewResponse("", common.Fail, blameNodes), err
 	} else {
 		t.tssMetrics.UpdateKeyGen(keygenTime, true)
 	}
 
-	newPubKey, addr, err := conversion.GetTssPubKey(k)
-	if err != nil {
-		t.logger.Error().Err(err).Msg("fail to generate the new Tss key")
-		status = common.Fail
-	}
-
 	blameNodes := *blameMgr.GetBlame()
 	return keygen.NewResponse(
-		newPubKey,
-		addr.String(),
+		address,
 		status,
 		blameNodes,
 	), nil
