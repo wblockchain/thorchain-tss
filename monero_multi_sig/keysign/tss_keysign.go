@@ -12,7 +12,6 @@ import (
 	"time"
 
 	btss "github.com/binance-chain/tss-lib/tss"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	tcrypto "github.com/tendermint/tendermint/crypto"
@@ -184,27 +183,26 @@ func (tKeySign *MoneroKeySign) SignMessage(rpcAddress, encodedTx string, parties
 		Address: rpcAddress,
 	})
 
-	walletName := tKeySign.localNodePubKey + ".mo"
+	//walletName := tKeySign.localNodePubKey + ".mo"
 	// walletName := "1" + ".mo"
-	passcode := tKeySign.GetTssCommonStruct().GetNodePrivKey()
-	passcode = "123"
-	// now open the wallet
-	req := moneroWallet.RequestOpenWallet{
-		Filename: walletName,
-		Password: passcode,
-	}
-
-	err = tKeySign.walletClient.OpenWallet(&req)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		time.Sleep(time.Minute)
-		err := tKeySign.walletClient.CloseWallet()
-		if err != nil {
-			tKeySign.logger.Error().Err(err).Msg("fail to close the wallet")
-		}
-	}()
+	//passcode := tKeySign.GetTssCommonStruct().GetNodePrivKey()
+	//passcode = "123"
+	//// now open the wallet
+	//req := moneroWallet.RequestOpenWallet{
+	//	Filename: walletName,
+	//	Password: passcode,
+	//}
+	//
+	//err = tKeySign.walletClient.OpenWallet(&req)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//defer func() {
+	//	err := tKeySign.walletClient.CloseWallet()
+	//	if err != nil {
+	//		tKeySign.logger.Error().Err(err).Msg("fail to close the wallet")
+	//	}
+	//}()
 
 	walletInfo, err := tKeySign.walletClient.IsMultisig()
 	if err != nil {
@@ -348,27 +346,34 @@ func (tKeySign *MoneroKeySign) SignMessage(rpcAddress, encodedTx string, parties
 
 					if myIndex == int(threshold-1) {
 
-						//submittedResp, globalErr := tKeySign.submitSignature(ret.TxDataHex)
-						//if globalErr != nil {
-						//	tKeySign.logger.Error().Err(globalErr).Msg("fail to submit the signature")
-						//}
-						tKeySign.logger.Info().Msg("################we have signed the signature successfully")
-						spendProof := moneroWallet.RequestGetSpendProof{
-							TxID: "3866d17987b8dcad530c83b6718cbaa6624290cf3e1eee64766ddf712d8520f0",
+						submittedResp, globalErr := tKeySign.submitSignature(ret.TxDataHex)
+						if globalErr != nil {
+							tKeySign.logger.Error().Err(globalErr).Msg("fail to submit the signature")
 						}
-						str := spew.Sdump(spendProof)
-						fmt.Printf("tx hash>>>>>>>>>>>>%v\n", str)
-
-						proofResp, err := tKeySign.walletClient.GetSpendProof(&spendProof)
-						if err != nil {
-							globalErr = err
-							tKeySign.logger.Error().Err(err).Msgf("fail to get the proof of the spend transaction")
+						tKeySign.logger.Info().Msgf("we have signed the tx(%v) successfully\n", submittedResp)
+						spendProof := moneroWallet.RequestGetTxProof{
+							TxID:    submittedResp[0],
+							Address: "48Qp1DYY95wF2BNbhQZDd5J8dZCucMRz99Y4wAUaDjQhjX8royowfog1sN9WAdVeshQuvU6qKFi9Ji4gj9ZREkjTFYsQbZX",
 						}
 
-						// we only support once transaction a time
-						signedTx.transactionID = "3866d17987b8dcad530c83b6718cbaa6624290cf3e1eee64766ddf712d8520f0"
-						signedTx.signatureProof = proofResp.Signature
-						return
+						signedTx.transactionID = submittedResp[0]
+						sigRetry := 0
+						for ; sigRetry < 10; sigRetry++ {
+							proofResp, err := tKeySign.walletClient.GetTxProof(&spendProof)
+							if err != nil {
+								globalErr = err
+								tKeySign.logger.Error().Err(err).Msgf("fail to get the proof of the spend transaction")
+								time.Sleep(time.Second * 5)
+								continue
+							}
+							signedTx.signatureProof = proofResp.Signature
+							globalErr = nil
+							return
+						}
+						if sigRetry >= 10 {
+							tKeySign.logger.Error().Err(globalErr).Msgf("fail to get the transaction proof")
+							return
+						}
 					}
 					myShare = ret.TxDataHex
 					err = tKeySign.packAndSend(myShare, 1, localPartyID, orderedParties[myIndex+1], common.MoneroSignShares)
