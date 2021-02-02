@@ -38,7 +38,7 @@ type MoneroKeySign struct {
 }
 
 type MoneroSpendProof struct {
-	transactionID,
+	transactionID  string
 	signatureProof string
 }
 
@@ -183,26 +183,26 @@ func (tKeySign *MoneroKeySign) SignMessage(rpcAddress, encodedTx string, parties
 		Address: rpcAddress,
 	})
 
-	//walletName := tKeySign.localNodePubKey + ".mo"
-	// walletName := "1" + ".mo"
-	//passcode := tKeySign.GetTssCommonStruct().GetNodePrivKey()
-	//passcode = "123"
-	//// now open the wallet
-	//req := moneroWallet.RequestOpenWallet{
-	//	Filename: walletName,
-	//	Password: passcode,
-	//}
-	//
-	//err = tKeySign.walletClient.OpenWallet(&req)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//defer func() {
-	//	err := tKeySign.walletClient.CloseWallet()
-	//	if err != nil {
-	//		tKeySign.logger.Error().Err(err).Msg("fail to close the wallet")
-	//	}
-	//}()
+	// walletName := tKeySign.localNodePubKey + ".mo"
+	walletName := "1" + ".mo"
+	passcode := tKeySign.GetTssCommonStruct().GetNodePrivKey()
+	passcode = "123"
+	// now open the wallet
+	req := moneroWallet.RequestOpenWallet{
+		Filename: walletName,
+		Password: passcode,
+	}
+
+	err = tKeySign.walletClient.OpenWallet(&req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		err := tKeySign.walletClient.CloseWallet()
+		if err != nil {
+			tKeySign.logger.Error().Err(err).Msg("fail to close the wallet")
+		}
+	}()
 
 	walletInfo, err := tKeySign.walletClient.IsMultisig()
 	if err != nil {
@@ -277,6 +277,7 @@ func (tKeySign *MoneroKeySign) SignMessage(rpcAddress, encodedTx string, parties
 	}
 
 	shareStore := monero_multi_sig.GenMoneroShareStore()
+	tssConf := tKeySign.moneroCommonStruct.GetConf()
 	var myShare string
 	var signedTx MoneroSpendProof
 	keySignWg.Add(1)
@@ -287,7 +288,7 @@ func (tKeySign *MoneroKeySign) SignMessage(rpcAddress, encodedTx string, parties
 		}()
 		for {
 			select {
-			case <-time.After(time.Minute * 10):
+			case <-time.After(tssConf.KeySignTimeout):
 				close(tKeySign.commStopChan)
 
 			case share := <-moneroShareChan:
