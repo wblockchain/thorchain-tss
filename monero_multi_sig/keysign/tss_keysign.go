@@ -215,6 +215,7 @@ func (tKeySign *MoneroKeySign) SignMessage(encodedTx string, parties []string) (
 		tKeySign.logger.Error().Err(err).Msg("it is not a multisig wallet or wallet is not ready")
 		return nil, errors.New("not a multisig wallet or wallet is not ready(keygen done correctly?)")
 	}
+
 	balanceReq := moneroWallet.RequestGetBalance{
 		AccountIndex: 0,
 	}
@@ -223,9 +224,17 @@ func (tKeySign *MoneroKeySign) SignMessage(encodedTx string, parties []string) (
 		time.Sleep(time.Second * 1)
 		balance, err := tKeySign.walletClient.GetBalance(&balanceReq)
 		if err != nil {
+			tKeySign.logger.Error().Err(err).Msg("fail to get the balance of the wallet")
+			return nil, err
 		}
-		if balance.UnlockedBalance > 1 {
-			tKeySign.logger.Info().Msgf("unlock balance is %v\n", balance.UnlockedBalance)
+		height, err := tKeySign.walletClient.GetHeight()
+		if err != nil {
+			tKeySign.logger.Error().Err(err).Msg("fail to get the height of the wallet block")
+			return nil, err
+		}
+
+		if balance.UnlockedBalance > 0 {
+			tKeySign.logger.Info().Msgf("unlock balance is %v with height %d\n", balance.UnlockedBalance, height.Height)
 			break
 		}
 		tKeySign.logger.Warn().Msgf("fail to get the unlock balance, the wallet end may be slow")

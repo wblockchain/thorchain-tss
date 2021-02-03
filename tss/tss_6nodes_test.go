@@ -196,121 +196,12 @@ func (s *FourNodeTestSuite) doTestKeySign(c *C, newJoinParty bool) {
 
 	wg.Wait()
 	proofSignature := keysignResult[0].ProofSignature
+	c.Assert(len(proofSignature) == 0, Equals, false)
 	for i, item := range keysignResult {
 		c.Assert(proofSignature, Equals, item.ProofSignature)
 		c.Logf("%d for the transaction %v the proof signature is %s\n", i, item.SignedTxHex, item.ProofSignature)
 	}
-
-	//if newJoinParty {
-	//	keysignReq = keysign.NewRequest(poolPubKey, base64.StdEncoding.EncodeToString(hash([]byte("helloworld"))), 10, nil, "0.14.0")
-	//} else {
-	//	keysignReq = keysign.NewRequest(poolPubKey, base64.StdEncoding.EncodeToString(hash([]byte("helloworld"))), 10, testPubKeys[:3], "0.13.0")
-	//}
-	//keysignResult1 := make(map[int]keysign.Response)
-	//for i := 0; i < partyNum; i++ {
-	//	wg.Add(1)
-	//	go func(idx int) {
-	//		defer wg.Done()
-	//		res, err := s.servers[idx].KeySign(keysignReq)
-	//		c.Assert(err, IsNil)
-	//		lock.Lock()
-	//		defer lock.Unlock()
-	//		keysignResult1[idx] = res
-	//	}(i)
-	//}
 }
-
-//
-//func (s *FourNodeTestSuite) doTestFailJoinParty(c *C, newJoinParty bool) {
-//	// JoinParty should fail if there is a node that suppose to be in the keygen , but we didn't send request in
-//	var req keygen.Request
-//	if newJoinParty {
-//		req = keygen.NewRequest(testPubKeys, 10, "0.14.0")
-//	} else {
-//		req = keygen.NewRequest(testPubKeys, 10, "0.13.0")
-//	}
-//	wg := sync.WaitGroup{}
-//	lock := &sync.Mutex{}
-//	keygenResult := make(map[int]keygen.Response)
-//	// here we skip the first node
-//	for i := 1; i < partyNum; i++ {
-//		wg.Add(1)
-//		go func(idx int) {
-//			defer wg.Done()
-//			res, err := s.servers[idx].Keygen(req)
-//			c.Assert(err, IsNil)
-//			lock.Lock()
-//			defer lock.Unlock()
-//			keygenResult[idx] = res
-//		}(i)
-//	}
-//
-//	wg.Wait()
-//	c.Logf("result:%+v", keygenResult)
-//	for _, item := range keygenResult {
-//		c.Assert(item.PubKey, Equals, "")
-//		c.Assert(item.Status, Equals, common.Fail)
-//		var expectedFailNode string
-//		if newJoinParty {
-//			c.Assert(item.Blame.BlameNodes, HasLen, 2)
-//			expectedFailNode := []string{"thorpub1addwnpepqtdklw8tf3anjz7nn5fly3uvq2e67w2apn560s4smmrt9e3x52nt2svmmu3", "thorpub1addwnpepq2ryyje5zr09lq7gqptjwnxqsy2vcdngvwd6z7yt5yjcnyj8c8cn559xe69"}
-//			c.Assert(item.Blame.BlameNodes[0].Pubkey, Equals, expectedFailNode[0])
-//			c.Assert(item.Blame.BlameNodes[1].Pubkey, Equals, expectedFailNode[1])
-//		} else {
-//			expectedFailNode = "thorpub1addwnpepqtdklw8tf3anjz7nn5fly3uvq2e67w2apn560s4smmrt9e3x52nt2svmmu3"
-//			c.Assert(item.Blame.BlameNodes[0].Pubkey, Equals, expectedFailNode)
-//		}
-//	}
-//}
-
-//func (s *FourNodeTestSuite) doTestBlame(c *C, newJoinParty bool) {
-//	expectedFailNode := "thorpub1addwnpepqtdklw8tf3anjz7nn5fly3uvq2e67w2apn560s4smmrt9e3x52nt2svmmu3"
-//	var req keygen.Request
-//	if newJoinParty {
-//		req = keygen.NewRequest(testPubKeys, 10, "0.14.0")
-//	} else {
-//		req = keygen.NewRequest(testPubKeys, 10, "0.13.0")
-//	}
-//	wg := sync.WaitGroup{}
-//	lock := &sync.Mutex{}
-//	keygenResult := make(map[int]keygen.Response)
-//	for i := 0; i < partyNum; i++ {
-//		wg.Add(1)
-//		go func(idx int) {
-//			defer wg.Done()
-//			res, err := s.servers[idx].Keygen(req)
-//			c.Assert(err, NotNil)
-//			lock.Lock()
-//			defer lock.Unlock()
-//			keygenResult[idx] = res
-//		}(i)
-//	}
-//	// if we shutdown one server during keygen , he should be blamed
-//
-//	time.Sleep(time.Millisecond * 100)
-//	s.servers[0].Stop()
-//	defer func() {
-//		conf := common.TssConfig{
-//			KeyGenTimeout:   60 * time.Second,
-//			KeySignTimeout:  60 * time.Second,
-//			PreParamTimeout: 5 * time.Second,
-//		}
-//		s.servers[0] = s.getTssServer(c, 0, conf, s.bootstrapPeer)
-//		c.Assert(s.servers[0].Start(), IsNil)
-//		c.Log("we start the first server again")
-//	}()
-//	wg.Wait()
-//	c.Logf("result:%+v", keygenResult)
-//	for idx, item := range keygenResult {
-//		if idx == 0 {
-//			continue
-//		}
-//		c.Assert(item.PubKey, Equals, "")
-//		c.Assert(item.Status, Equals, common.Fail)
-//		c.Assert(item.Blame.BlameNodes, HasLen, 1)
-//		c.Assert(item.Blame.BlameNodes[0].Pubkey, Equals, expectedFailNode)
-//	}
-//}
 
 func (s *FourNodeTestSuite) TearDownTest(c *C) {
 	// give a second before we shutdown the network
