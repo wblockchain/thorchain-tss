@@ -1,7 +1,6 @@
 package tss
 
 import (
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"strings"
@@ -17,12 +16,11 @@ import (
 	"gitlab.com/thorchain/tss/go-tss/messages"
 	"gitlab.com/thorchain/tss/go-tss/monero_multi_sig/keysign"
 	"gitlab.com/thorchain/tss/go-tss/p2p"
-	"gitlab.com/thorchain/tss/go-tss/storage"
 )
 
-func (t *TssServer) waitForSignatures(msgID, receiverAddress string, walletClient wallet.Client, msgToSign []byte, sigChan chan string) (keysign.Response, error) {
+func (t *TssServer) waitForSignatures(msgID, receiverAddress string, walletClient wallet.Client, sigChan chan string) (keysign.Response, error) {
 	// TSS keysign include both form party and keysign itself, thus we wait twice of the timeout
-	data, err := t.signatureNotifier.WaitForSignature(msgID, msgToSign, receiverAddress, walletClient, t.conf.KeySignTimeout, sigChan)
+	data, err := t.signatureNotifier.WaitForSignature(msgID, receiverAddress, walletClient, t.conf.KeySignTimeout, sigChan)
 	if err != nil {
 		return keysign.Response{}, err
 	}
@@ -37,7 +35,7 @@ func (t *TssServer) waitForSignatures(msgID, receiverAddress string, walletClien
 	), nil
 }
 
-func (t *TssServer) generateSignature(msgID string, msgToSign []byte, req keysign.Request, threshold int, allParticipants []string, localStateItem storage.KeygenLocalState, blameMgr *blame.Manager, keysignInstance *keysign.MoneroKeySign, sigChan chan string) (keysign.Response, error) {
+func (t *TssServer) generateSignature(msgID string, req keysign.Request, threshold int, allParticipants []string, blameMgr *blame.Manager, keysignInstance *keysign.MoneroKeySign, sigChan chan string) (keysign.Response, error) {
 	allPeersID, err := conversion.GetPeerIDsFromPubKeys(allParticipants)
 	if err != nil {
 		t.logger.Error().Msg("invalid block height or public key")
@@ -153,11 +151,11 @@ func (t *TssServer) generateSignature(msgID string, msgToSign []byte, req keysig
 		}, nil
 	}
 
-	signedTx, err := keysignInstance.SignMessage(req.RpcAddress, req.EncodedTx, signers)
+	signedTx, err := keysignInstance.SignMessage(req.EncodedTx, signers)
 	// the statistic of keygen only care about Tss it self, even if the following http response aborts,
 	// it still counted as a successful keygen as the Tss model runs successfully.
 	// as only the last node submit the signature, others will return nil of the signedTx
-	if err != nil && signedTx != nil {
+	if err != nil {
 		t.logger.Error().Err(err).Msg("err in keysign")
 		sigChan <- "signature generated"
 		t.broadcastKeysignFailure(msgID, allPeersID)
@@ -167,11 +165,23 @@ func (t *TssServer) generateSignature(msgID string, msgToSign []byte, req keysig
 			Blame:  blameNodes,
 		}, nil
 	}
+
+	// this indicates we are not the last node who submit the transaction
+	if signedTx == nil {
+		return keysign.NewResponse(
+			"",
+			"",
+			common.Fail,
+			blame.Blame{},
+		), errors.New("not the final signer")
+	}
+
 	sigChan <- "signature generated"
 	// update signature notification
 	if err := t.signatureNotifier.BroadcastSignature(msgID, signedTx, allPeersID); err != nil {
 		return keysign.Response{}, fmt.Errorf("fail to broadcast signature:%w", err)
 	}
+
 	return keysign.NewResponse(
 		signedTx.TransactionID,
 		signedTx.SignatureProof,
@@ -199,11 +209,21 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 		return emptyResp, err
 	}
 
-	keysignInstance, walletClient := keysign.NewMoneroKeySign(t.p2pCommunication.GetLocalPeerID(),
+	keysignInstance, walletClient, err := keysign.NewMoneroKeySign(t.p2pCommunication.GetLocalPeerID(),
 		t.conf,
 		t.p2pCommunication.BroadcastMsgChan,
 		t.stopChan, msgID,
-		t.privateKey, t.p2pCommunication)
+		t.privateKey, t.p2pCommunication, req.RpcAddress)
+	if err != nil {
+		t.logger.Error().Err(err).Msgf("fail to create the monero keysign instance")
+		return keysign.Response{}, err
+	}
+	defer func() {
+		err := walletClient.CloseWallet()
+		if err != nil {
+			t.logger.Error().Err(err).Msgf("fail to close the wallet")
+		}
+	}()
 
 	keySignChannels := keysignInstance.GetTssKeySignChannels()
 	t.p2pCommunication.SetSubscribe(messages.TSSKeySignMsg, msgID, keySignChannels)
@@ -234,11 +254,13 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 		return emptyResp, errors.New("empty signer pub keys")
 	}
 
-	threshold, err := conversion.GetThreshold(len(localStateItem.ParticipantKeys))
+	walletInfo, err := walletClient.IsMultisig()
 	if err != nil {
-		t.logger.Error().Err(err).Msg("fail to get the threshold")
-		return emptyResp, errors.New("fail to get threshold")
+		t.logger.Error().Err(err).Msgf("fail to get the wallet info")
 	}
+	// monero wallet threshold=ecdsa tss threshold+1
+	threshold := int(walletInfo.Threshold) - 1
+
 	if len(req.SignerPubKeys) <= threshold && oldJoinParty {
 		t.logger.Error().Msgf("not enough signers, threshold=%d and signers=%d", threshold, len(req.SignerPubKeys))
 		return emptyResp, errors.New("not enough signers")
@@ -268,7 +290,7 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 	// we generate the signature ourselves
 	go func() {
 		defer wg.Done()
-		generatedSig, errGen = t.generateSignature(msgID, msgToSign, req, threshold, localStateItem.ParticipantKeys, localStateItem, blameMgr, keysignInstance, sigChan)
+		generatedSig, errGen = t.generateSignature(msgID, req, threshold, req.SignerPubKeys, blameMgr, keysignInstance, sigChan)
 	}()
 	wg.Wait()
 	close(sigChan)

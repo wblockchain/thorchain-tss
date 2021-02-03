@@ -47,16 +47,17 @@ type MoneroSpendProof struct {
 func NewMoneroKeySign(localP2PID string,
 	conf common.TssConfig,
 	broadcastChan chan *messages.BroadcastMsgChan,
-	stopChan chan struct{}, msgID string, privKey tcrypto.PrivKey, p2pComm *p2p.Communication) (*MoneroKeySign, moneroWallet.Client) {
+	stopChan chan struct{}, msgID string, privKey tcrypto.PrivKey, p2pComm *p2p.Communication, rpcAddress string) (*MoneroKeySign, moneroWallet.Client, error) {
 	logItems := []string{"keySign", msgID}
 
 	pk := coskey.PubKey{
-		Key: privKey.Bytes(),
+		Key: privKey.PubKey().Bytes(),
 	}
 	pubKey, _ := sdk.Bech32ifyPubKey(sdk.Bech32PubKeyTypeAccPub, &pk)
 
-	// walletName := tKeySign.localNodePubKey + ".mo"
-
+	rpcWalletConfig := moneroWallet.Config{
+		Address: rpcAddress,
+	}
 	moneroSignClient := MoneroKeySign{
 		logger:             log.With().Strs("module", logItems).Logger(),
 		localNodePubKey:    pubKey,
@@ -65,29 +66,24 @@ func NewMoneroKeySign(localP2PID string,
 		localParty:         nil,
 		commStopChan:       make(chan struct{}),
 		p2pComm:            p2pComm,
+		walletClient:       moneroWallet.New(rpcWalletConfig),
 	}
 
-	walletName := "1" + ".mo"
-	// passcode := privKey
-	passcode := "123"
+	walletName := pubKey + ".mo"
+	passcode := moneroSignClient.GetTssCommonStruct().GetNodePrivKey()
 	// now open the wallet
-	req := moneroWallet.RequestOpenWallet{
+	walletOpenReq := moneroWallet.RequestOpenWallet{
 		Filename: walletName,
 		Password: passcode,
 	}
-	var walletClient moneroWallet.Client
-	err := walletClient.OpenWallet(&req)
+
+	err := moneroSignClient.walletClient.OpenWallet(&walletOpenReq)
 	if err != nil {
-		return nil, nil
+		moneroSignClient.logger.Error().Err(err).Msgf("fail to open the wallet")
+		return nil, nil, err
 	}
-	defer func() {
-		err := walletClient.CloseWallet()
-		if err != nil {
-			moneroSignClient.logger.Error().Err(err).Msg("fail to close the wallet")
-		}
-	}()
-	moneroSignClient.walletClient = walletClient
-	return &moneroSignClient, walletClient
+
+	return &moneroSignClient, moneroSignClient.walletClient, nil
 }
 
 func (tKeySign *MoneroKeySign) GetTssKeySignChannels() chan *p2p.Message {
@@ -176,7 +172,7 @@ func (tKeySign *MoneroKeySign) genOrderedParties(orderedNodes []string, parties 
 }
 
 // signMessage
-func (tKeySign *MoneroKeySign) SignMessage(rpcAddress, encodedTx string, parties []string) (*MoneroSpendProof, error) {
+func (tKeySign *MoneroKeySign) SignMessage(encodedTx string, parties []string) (*MoneroSpendProof, error) {
 	var globalErr error
 	partiesID, localPartyID, err := conversion.GetParties(parties, tKeySign.localNodePubKey)
 	tKeySign.localParty = localPartyID
@@ -210,11 +206,6 @@ func (tKeySign *MoneroKeySign) SignMessage(rpcAddress, encodedTx string, parties
 	tKeySign.moneroCommonStruct.P2PPeers = conversion.GetPeersID(tKeySign.moneroCommonStruct.PartyIDtoP2PID, tKeySign.moneroCommonStruct.GetLocalPeerID())
 	var keySignWg sync.WaitGroup
 
-	// now we try to connect to the monero wallet rpc client
-	tKeySign.walletClient = moneroWallet.New(moneroWallet.Config{
-		Address: rpcAddress,
-	})
-
 	walletInfo, err := tKeySign.walletClient.IsMultisig()
 	if err != nil {
 		tKeySign.logger.Error().Err(err).Msg("fail to query the wallet info")
@@ -228,7 +219,7 @@ func (tKeySign *MoneroKeySign) SignMessage(rpcAddress, encodedTx string, parties
 		AccountIndex: 0,
 	}
 	counter := 0
-	for ; counter < 10; counter++ {
+	for ; counter < monero_multi_sig.MoneroWalletRetry; counter++ {
 		time.Sleep(time.Second * 1)
 		balance, err := tKeySign.walletClient.GetBalance(&balanceReq)
 		if err != nil {
@@ -237,8 +228,9 @@ func (tKeySign *MoneroKeySign) SignMessage(rpcAddress, encodedTx string, parties
 			tKeySign.logger.Info().Msgf("unlock balance is %v\n", balance.UnlockedBalance)
 			break
 		}
+		tKeySign.logger.Warn().Msgf("fail to get the unlock balance, the wallet end may be slow")
 	}
-	if counter >= 10 {
+	if counter >= 20 {
 		return nil, errors.New("not enough fund in wallet")
 	}
 
@@ -300,7 +292,7 @@ func (tKeySign *MoneroKeySign) SignMessage(rpcAddress, encodedTx string, parties
 		for {
 			select {
 			case <-time.After(tssConf.KeySignTimeout):
-				close(tKeySign.commStopChan)
+				return
 
 			case share := <-moneroShareChan:
 				switch share.MsgType {
@@ -324,7 +316,8 @@ func (tKeySign *MoneroKeySign) SignMessage(rpcAddress, encodedTx string, parties
 					if isLeader {
 						responseTransfer, err = tKeySign.walletClient.Transfer(&txSend)
 						if err != nil {
-							tKeySign.logger.Error().Err(err).Msg("fail to create the transfer data")
+							globalErr = err
+							tKeySign.logger.Error().Err(err).Msgf("we(%s) fail to create the transfer data ", tKeySign.localNodePubKey)
 							// we will handle the error in the upper level
 							return
 						}

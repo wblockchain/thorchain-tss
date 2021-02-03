@@ -29,6 +29,8 @@ import (
 	"gitlab.com/thorchain/tss/go-tss/storage"
 )
 
+const destWallet = "48Qp1DYY95wF2BNbhQZDd5J8dZCucMRz99Y4wAUaDjQhjX8royowfog1sN9WAdVeshQuvU6qKFi9Ji4gj9ZREkjTFYsQbZX"
+
 var (
 	testPubKeys = []string{
 		"thorpub1addwnpepq2m5ng0e6vm66feecrwxp37cdvmezsysghskz3t5w2du4c48qwupxn96nrr",
@@ -172,7 +174,7 @@ func (s *TssKeysignTestSuite) TestSignMessage(c *C) {
 
 	dst := wallet.Destination{
 		Amount:  500,
-		Address: "48Qp1DYY95wF2BNbhQZDd5J8dZCucMRz99Y4wAUaDjQhjX8royowfog1sN9WAdVeshQuvU6qKFi9Ji4gj9ZREkjTFYsQbZX",
+		Address: "",
 	}
 
 	t := wallet.RequestTransfer{
@@ -210,11 +212,17 @@ func (s *TssKeysignTestSuite) TestSignMessage(c *C) {
 			defer wg.Done()
 			comm := s.comms[idx]
 			stopChan := make(chan struct{})
-			keysignIns, _ := NewMoneroKeySign(comm.GetLocalPeerID(),
+			keysignIns, walletClient, err := NewMoneroKeySign(comm.GetLocalPeerID(),
 				conf,
 				comm.BroadcastMsgChan,
 				stopChan, messageID,
-				s.nodePrivKeys[idx], s.comms[idx])
+				s.nodePrivKeys[idx], s.comms[idx], reqs[idx].RpcAddress)
+			c.Assert(err, IsNil)
+
+			defer func() {
+				err := walletClient.CloseWallet()
+				c.Assert(err, IsNil)
+			}()
 			keysignMsgChannel := keysignIns.GetTssKeySignChannels()
 
 			comm.SetSubscribe(messages.TSSKeySignMsg, messageID, keysignMsgChannel)
@@ -225,15 +233,15 @@ func (s *TssKeysignTestSuite) TestSignMessage(c *C) {
 			defer comm.CancelSubscribe(messages.TSSKeySignVerMsg, messageID)
 			defer comm.CancelSubscribe(messages.TSSControlMsg, messageID)
 			defer comm.CancelSubscribe(messages.TSSTaskDone, messageID)
-
-			signedTx, err := keysignIns.SignMessage(reqs[idx].RpcAddress, reqs[idx].EncodedTx, reqs[idx].SignerPubKeys)
+			signedTx, err := keysignIns.SignMessage(reqs[idx].EncodedTx, reqs[idx].SignerPubKeys)
 			c.Assert(err, IsNil)
 			if signedTx != nil {
 				checkRequest := wallet.RequestCheckTxProof{
 					TxID:      signedTx.TransactionID,
 					Signature: signedTx.SignatureProof,
-					Address:   "48Qp1DYY95wF2BNbhQZDd5J8dZCucMRz99Y4wAUaDjQhjX8royowfog1sN9WAdVeshQuvU6qKFi9Ji4gj9ZREkjTFYsQbZX",
+					Address:   destWallet,
 				}
+				fmt.Printf("-------->signedTx%v:%v\n", signedTx.SignatureProof, signedTx.SignatureProof)
 				respCheck, err := keysignIns.walletClient.CheckTxProof(&checkRequest)
 				c.Assert(err, IsNil)
 				c.Assert(respCheck.Good, Equals, true)

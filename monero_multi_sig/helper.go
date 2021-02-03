@@ -2,6 +2,9 @@ package monero_multi_sig
 
 import "sync"
 
+// since monero wallet is slow in synchronization, we need to have the retry
+const MoneroWalletRetry = 20
+
 type MoneroSharesStore struct {
 	shares map[int][]string
 	locker sync.Mutex

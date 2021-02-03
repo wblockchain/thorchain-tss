@@ -30,6 +30,7 @@ const (
 	partyNum         = 6
 	testFileLocation = "../test_data"
 	preParamTestFile = "preParam_test.data"
+	receiverAddress  = "48Qp1DYY95wF2BNbhQZDd5J8dZCucMRz99Y4wAUaDjQhjX8royowfog1sN9WAdVeshQuvU6qKFi9Ji4gj9ZREkjTFYsQbZX"
 )
 
 var (
@@ -50,8 +51,7 @@ var (
 		"MjQ1MDc2MmM4MjU5YjRhZjhhNmFjMmI0ZDBkNzBkOGE1ZTBmNDQ5NGI4NzM4OTYyM2E3MmI0OWMzNmE1ODZhNw==",
 		"YmNiMzA2ODU1NWNjMzk3NDE1OWMwMTM3MDU0NTNjN2YwMzYzZmVhZDE5NmU3NzRhOTMwOWIxN2QyZTQ0MzdkNg==",
 	}
-	//double check you really want to send the money to this account
-	const receiverAddress="48Qp1DYY95wF2BNbhQZDd5J8dZCucMRz99Y4wAUaDjQhjX8royowfog1sN9WAdVeshQuvU6qKFi9Ji4gj9ZREkjTFYsQbZX"
+	// double check you really want to send the money to this account
 )
 
 func TestPackage(t *testing.T) {
@@ -81,7 +81,7 @@ func (s *FourNodeTestSuite) SetUpTest(c *C) {
 	s.rpcAddress = make([]string, partyNum)
 	conf := common.TssConfig{
 		KeyGenTimeout:   60 * time.Second,
-		KeySignTimeout:  60 * time.Second,
+		KeySignTimeout:  90 * time.Second,
 		PreParamTimeout: 5 * time.Second,
 		EnableMonitor:   false,
 	}
@@ -121,10 +121,9 @@ func hash(payload []byte) []byte {
 }
 
 // we do for both join party schemes
-func (s *FourNodeTestSuite) Test4NodesTss(c *C) {
-	//s.doTestKeygen(c, true)
+func (s *FourNodeTestSuite) Test6NodesTss(c *C) {
+	// s.doTestKeygen(c, true)
 	s.doTestKeySign(c, true)
-
 }
 
 // generate a new key
@@ -162,14 +161,11 @@ func (s *FourNodeTestSuite) doTestKeygen(c *C, newJoinParty bool) {
 
 // you need to ensure that you have enough money to run the keysign
 func (s *FourNodeTestSuite) doTestKeySign(c *C, newJoinParty bool) {
-	var wg sync.WaitGroup
-	var lock sync.Locker
-
-
-
+	wg := sync.WaitGroup{}
+	lock := sync.Mutex{}
 	dst := wallet.Destination{
 		Amount:  500,
-		Address: "48Qp1DYY95wF2BNbhQZDd5J8dZCucMRz99Y4wAUaDjQhjX8royowfog1sN9WAdVeshQuvU6qKFi9Ji4gj9ZREkjTFYsQbZX",
+		Address: receiverAddress,
 	}
 
 	t := wallet.RequestTransfer{
@@ -184,13 +180,11 @@ func (s *FourNodeTestSuite) doTestKeySign(c *C, newJoinParty bool) {
 	c.Assert(err, IsNil)
 	encodedTx := base64.StdEncoding.EncodeToString(tx)
 
-
 	keysignResult := make(map[int]keysign.Response)
 	for i := 0; i < partyNum; i++ {
 		wg.Add(1)
 		go func(idx int) {
-
-			keysignReq := keysign.NewRequest( 10, testPubKeys, s.rpcAddress[idx],"0.14.0",encodedTx)
+			keysignReq := keysign.NewRequest(10, testPubKeys, "0.14.0", s.rpcAddress[idx], encodedTx)
 			defer wg.Done()
 			res, err := s.servers[idx].KeySign(keysignReq)
 			c.Assert(err, IsNil)
@@ -198,6 +192,13 @@ func (s *FourNodeTestSuite) doTestKeySign(c *C, newJoinParty bool) {
 			defer lock.Unlock()
 			keysignResult[idx] = res
 		}(i)
+	}
+
+	wg.Wait()
+	proofSignature := keysignResult[0].ProofSignature
+	for i, item := range keysignResult {
+		c.Assert(proofSignature, Equals, item.ProofSignature)
+		c.Logf("%d for the transaction %v the proof signature is %s\n", i, item.SignedTxHex, item.ProofSignature)
 	}
 
 	//if newJoinParty {
@@ -216,15 +217,6 @@ func (s *FourNodeTestSuite) doTestKeySign(c *C, newJoinParty bool) {
 	//		defer lock.Unlock()
 	//		keysignResult1[idx] = res
 	//	}(i)
-	//}
-	//wg.Wait()
-	//signature = ""
-	//for _, item := range keysignResult1 {
-	//	if len(signature) == 0 {
-	//		signature = item.S + item.R
-	//		continue
-	//	}
-	//	c.Assert(signature, Equals, item.S+item.R)
 	//}
 }
 

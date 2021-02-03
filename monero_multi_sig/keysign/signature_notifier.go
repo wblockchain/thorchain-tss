@@ -188,8 +188,8 @@ func (s *SignatureNotifier) removeNotifier(n *Notifier) {
 }
 
 // WaitForSignature wait until keysign finished and signature is available
-func (s *SignatureNotifier) WaitForSignature(messageID string, message []byte, receiverAddress string, walletClient wallet.Client, timeout time.Duration, sigChan chan string) (*MoneroSpendProof, error) {
-	n, err := NewNotifier(messageID, message, receiverAddress, walletClient)
+func (s *SignatureNotifier) WaitForSignature(messageID string, receiverAddress string, walletClient wallet.Client, timeout time.Duration, sigChan chan string) (*MoneroSpendProof, error) {
+	n, err := NewNotifier(messageID, receiverAddress, walletClient)
 	if err != nil {
 		return nil, fmt.Errorf("fail to create notifier")
 	}

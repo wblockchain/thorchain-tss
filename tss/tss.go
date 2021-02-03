@@ -150,7 +150,7 @@ func (t *TssServer) requestToMsgId(request interface{}) (string, error) {
 	case moneroKeyGen.Request:
 		keys = value.Keys
 	case moneroKeySign.Request:
-		msgToSign, err := base64.StdEncoding.DecodeString(value.Message)
+		msgToSign, err := base64.StdEncoding.DecodeString(value.EncodedTx)
 		if err != nil {
 			t.logger.Error().Err(err).Msg("error in decode the keysign req")
 			return "", err
