@@ -11,12 +11,27 @@
 
 
 ****
+## Monero Client Updates
+This branch of go-tss is dedicated for monero chain. If you want to generate the 
+ECDSA signature, please swith to `master` branch. 
+
+Monero Tss takes advantage of the features like reliable broadcasting,
+error share auto-recorrectin from the Thorchain ECDSA TSS. It is the
+framework that generates the Monero pool address and the signatures
+to a give transaction with the collaborations from a set of nodes.
+
+It hides the details of generating the Monero pool address and the valid
+ring signatures. Different from the ECDSA tss, Monero tss needs to have the
+[Monero wallet daemon](https://gitlab.com/thorchain/tss/monero-sign) running before any keygen/keysign request being processed.
+
 
 ## How to play
 
+* run the monero wallet daemon compiled from the [Thorchain customised Monero](https://gitlab.com/thorchain/tss/monero-sign) on each node.
+
 * modilfy the docker-compose file at build/docker-compose.yml according to your local paths.
 
-* run the docker-compose, itl will create 4 parties with threshold of 2.
+* run the docker-compose to create at 6 nodes to have the ready Monero tss environment.
 
 
 ### How to contribute
