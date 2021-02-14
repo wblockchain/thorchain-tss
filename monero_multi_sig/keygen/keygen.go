@@ -182,12 +182,16 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, error) {
 				switch share.MsgType {
 				case common.MoneroSharepre:
 					currentRound := atomic.LoadInt32(&exchangeRound)
-					shares, ready := shareStore.StoreAndCheck(int(currentRound)-1, share.MultisigInfo, peerNum)
+					shares, ready := shareStore.StoreAndCheck(int(currentRound)-1, share, peerNum)
 					if !ready {
 						continue
 					}
+					dat := make([]string, len(shares))
+					for i, el := range shares {
+						dat[i] = el.MultisigInfo
+					}
 					request := moneroWallet.RequestMakeMultisig{
-						MultisigInfo: shares,
+						MultisigInfo: dat,
 						Threshold:    uint64(threshold),
 						Password:     passcode,
 					}
@@ -206,13 +210,17 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, error) {
 
 				case common.MoneroKeyGenShareExchange:
 					currentRound := atomic.LoadInt32(&exchangeRound)
-					shares, ready := shareStore.StoreAndCheck(int(currentRound)-1, share.MultisigInfo, peerNum)
+					shares, ready := shareStore.StoreAndCheck(int(currentRound)-1, share, peerNum)
 					if !ready {
 						continue
 					}
+					dat := make([]string, len(shares))
+					for i, el := range shares {
+						dat[i] = el.MultisigInfo
+					}
 
 					finRequest := moneroWallet.RequestExchangeMultisigKeys{
-						MultisigInfo: shares,
+						MultisigInfo: dat,
 						Password:     passcode,
 					}
 					resp, err := client.ExchangeMultiSigKeys(&finRequest)

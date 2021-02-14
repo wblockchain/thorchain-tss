@@ -174,7 +174,7 @@ func (s *TssKeysignTestSuite) TestSignMessage(c *C) {
 
 	dst := wallet.Destination{
 		Amount:  500,
-		Address: "",
+		Address: "48Qp1DYY95wF2BNbhQZDd5J8dZCucMRz99Y4wAUaDjQhjX8royowfog1sN9WAdVeshQuvU6qKFi9Ji4gj9ZREkjTFYsQbZX",
 	}
 
 	t := wallet.RequestTransfer{

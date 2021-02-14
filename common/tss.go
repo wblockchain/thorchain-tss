@@ -223,9 +223,16 @@ func (t *TssCommon) updateLocal(wireMsg *messages.WireMessage, moneroShareChan c
 	} else {
 		// it is the monero message
 		var share MoneroShare
+		allMsgTypes := []string{MoneroSharepre, MoneroKeyGenShareExchange, MoneroExportedSignMsg, MoneroInitTransfer, MoneroSignShares}
 		err := json.Unmarshal(wireMsg.Message, &share)
-		// fixme for testing now
-		if true || err == nil && (share.MsgType == MoneroSharepre || share.MsgType == MoneroKeyGenShareExchange) {
+		moneroType := false
+		for _, el := range allMsgTypes {
+			if el == share.MsgType {
+				moneroType = true
+				break
+			}
+		}
+		if err == nil && moneroType {
 			partyPubKey, err := conversion.PartyIDtoPubKey(wireMsg.Routing.From)
 			if err != nil {
 				t.logger.Error().Err(err).Msg("fail to parse the peer pubkey")

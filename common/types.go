@@ -32,3 +32,7 @@ type MoneroShare struct {
 	// the sender field is only used for keysign
 	Sender string `json:"message_sender"`
 }
+
+func (s *MoneroShare) Equal(in *MoneroShare) bool {
+	return (in.Sender == s.Sender) && (s.MultisigInfo == in.MultisigInfo)
+}
