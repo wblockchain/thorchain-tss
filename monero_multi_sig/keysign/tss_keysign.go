@@ -458,30 +458,32 @@ func (tKeySign *MoneroKeySign) SignMessage(encodedTx string, parties []string) (
 					if err != nil {
 						tKeySign.logger.Error().Err(err).Msgf("fail to submit the signature")
 					}
+					//txID := moneroWallet.ResponseSubmitMultisig{
+					//	TxHashList: []string{"aa"},
+					//}
 					tKeySign.logger.Info().Msgf("transaction %s has been submitted successfully", txID)
 
 					signedTx.TransactionID = txID.TxHashList[0]
-					spendProof := moneroWallet.RequestGetTxProof{
+					// currently, we only hanle one tx a keysign one request
+					sendProof := moneroWallet.RequestGetTxProof{
 						TxID:    txID.TxHashList[0],
 						Address: txSend.Destinations[0].Address,
 					}
-
-					sigRetry := 0
-					for ; sigRetry < 10; sigRetry++ {
-						proofResp, err := tKeySign.walletClient.GetTxProof(&spendProof)
-						if err != nil {
-							globalErr = err
-							tKeySign.logger.Error().Err(err).Msgf("fail to get the proof of the spend transaction")
-							time.Sleep(time.Second * 5)
-							continue
-						}
-						signedTx.SignatureProof = proofResp.Signature
-						globalErr = nil
+					proofResp, err := tKeySign.getTxProof(&sendProof)
+					if err != nil {
+						tKeySign.logger.Error().Err(err).Msgf("fail to get the tx send proof")
+						globalErr = err
 						return
 					}
-					return
+					signedTx.SignatureProof = proofResp.Signature
+					globalErr = nil
+					err = tKeySign.moneroCommonStruct.NotifyTaskDone()
+					if err != nil {
+						tKeySign.logger.Error().Err(err).Msg("fail to broadcast the keysign done")
+					}
 				}
-
+			case <-tKeySign.moneroCommonStruct.GetTaskDone():
+				return
 			}
 		}
 	}()
@@ -493,4 +495,24 @@ func (tKeySign *MoneroKeySign) SignMessage(encodedTx string, parties []string) (
 
 	tKeySign.logger.Debug().Msgf("%s successfully sign the message", tKeySign.p2pComm.GetHost().ID().String())
 	return &signedTx, nil
+}
+
+func (tKeySign *MoneroKeySign) getTxProof(sendProof *moneroWallet.RequestGetTxProof) (*moneroWallet.ResponseGetTxProof, error) {
+	var proofResp *moneroWallet.ResponseGetTxProof
+	var err error
+	sigRetry := 0
+	for ; sigRetry < 10; sigRetry++ {
+		proofResp, err = tKeySign.walletClient.GetTxProof(sendProof)
+		if err != nil || proofResp == nil {
+			tKeySign.logger.Error().Err(err).Msgf("fail to get the proof of the spend transaction")
+			time.Sleep(time.Second * 5)
+			continue
+		}
+		break
+	}
+	if sigRetry < 10 {
+		tKeySign.logger.Info().Msgf("we get the proof of the submitted transaction %v successfully", sendProof.TxID)
+		return proofResp, nil
+	}
+	return nil, fmt.Errorf("fail to ge the tx proof with %d retries", sigRetry)
 }

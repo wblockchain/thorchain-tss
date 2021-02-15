@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p-peerstore/addr"
+	"github.com/rs/zerolog/log"
 	"gitlab.com/thorchain/tss/monero-wallet-rpc/wallet"
 
 	"gitlab.com/thorchain/tss/go-tss/conversion"
@@ -241,7 +242,7 @@ func (s *TssKeysignTestSuite) TestSignMessage(c *C) {
 					Signature: signedTx.SignatureProof,
 					Address:   destWallet,
 				}
-				fmt.Printf("-------->signedTx%v:%v\n", signedTx.SignatureProof, signedTx.SignatureProof)
+				log.Printf("-------->signedTx%v:%v\n", signedTx.SignatureProof, signedTx.SignatureProof)
 				respCheck, err := keysignIns.walletClient.CheckTxProof(&checkRequest)
 				c.Assert(err, IsNil)
 				c.Assert(respCheck.Good, Equals, true)

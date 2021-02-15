@@ -81,7 +81,7 @@ func (s *FourNodeTestSuite) SetUpTest(c *C) {
 	s.rpcAddress = make([]string, partyNum)
 	conf := common.TssConfig{
 		KeyGenTimeout:   60 * time.Second,
-		KeySignTimeout:  90 * time.Second,
+		KeySignTimeout:  120 * time.Second,
 		PreParamTimeout: 5 * time.Second,
 		EnableMonitor:   false,
 	}
