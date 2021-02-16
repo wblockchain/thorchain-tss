@@ -85,15 +85,15 @@ func (tKeyGen *MoneroKeyGen) packAndSend(info string, exchangeRound int, localPa
 	return tKeyGen.moneroCommonStruct.ProcessOutCh(msg, &r, "moneroMsg", messages.TSSKeyGenMsg)
 }
 
-func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, error) {
+func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, string, error) {
 	partiesID, localPartyID, err := conversion.GetParties(keygenReq.Keys, tKeyGen.localNodePubKey)
 	if err != nil {
-		return "", fmt.Errorf("fail to get keygen parties: %w", err)
+		return "", "", fmt.Errorf("fail to get keygen parties: %w", err)
 	}
 
 	threshold, err := conversion.GetThreshold(len(partiesID))
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	// since the defination of threshold of monero is different from the original tss, we need to adjust it 1 more node
@@ -113,7 +113,7 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, error) {
 	}
 	err = client.CreateWallet(&walletDat)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	defer func() {
@@ -130,7 +130,7 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, error) {
 	err2 := conversion.SetupIDMaps(partyIDMap, blameMgr.PartyIDtoP2PID)
 	if err1 != nil || err2 != nil {
 		tKeyGen.logger.Error().Msgf("error in creating mapping between partyID and P2P ID")
-		return "", err
+		return "", "", err
 	}
 
 	partyInfo := &common.PartyInfo{
@@ -156,14 +156,14 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, error) {
 
 	share, err := client.PrepareMultisig()
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	var exchangeRound int32
 	exchangeRound = 0
 	err = tKeyGen.packAndSend(share.MultisigInfo, int(exchangeRound), localPartyID, common.MoneroSharepre)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	exchangeRound += 1
 
@@ -256,6 +256,14 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, error) {
 	if globalErr != nil {
 		tKeyGen.logger.Error().Err(err).Msg("fail to create the monero multisig wallet")
 	}
-	tKeyGen.logger.Info().Msgf("wallet address is  %v\n", address)
-	return address, err
+	req := moneroWallet.RequestQueryKey{
+		KeyType: "view_key",
+	}
+	resp, err := client.QueryKey(&req)
+	if err != nil {
+		tKeyGen.logger.Error().Err(err).Msgf("fail to query the key")
+		return "", "", err
+	}
+	tKeyGen.logger.Info().Msgf("wallet address is  %v\n with private view key", address, resp.Key)
+	return address, resp.Key, err
 }

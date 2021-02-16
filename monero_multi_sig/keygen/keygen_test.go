@@ -213,7 +213,7 @@ func (s *TssKeygenTestSuite) TestGenerateNewKey(c *C) {
 			defer comm.CancelSubscribe(messages.TSSKeyGenVerMsg, messageID)
 			defer comm.CancelSubscribe(messages.TSSControlMsg, messageID)
 			defer comm.CancelSubscribe(messages.TSSTaskDone, messageID)
-			resp, err := keygenInstance.GenerateNewKey(reqs[idx])
+			resp, _, err := keygenInstance.GenerateNewKey(reqs[idx])
 			c.Assert(err, IsNil)
 			lock.Lock()
 			defer lock.Unlock()

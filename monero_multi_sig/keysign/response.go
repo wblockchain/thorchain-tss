@@ -7,17 +7,17 @@ import (
 
 // Response key sign response
 type Response struct {
-	SignedTxHex    string        `json:"signed_tx_hex"`
-	ProofSignature string        `json:"proof_signature"`
-	Status         common.Status `json:"status"`
-	Blame          blame.Blame   `json:"blame"`
+	SignedTxHex string        `json:"signed_tx_hex"`
+	TxKey       string        `json:"tx_key"`
+	Status      common.Status `json:"status"`
+	Blame       blame.Blame   `json:"blame"`
 }
 
-func NewResponse(signedTxHex, proofSignature string, status common.Status, blame blame.Blame) Response {
+func NewResponse(signedTxHex, txKey string, status common.Status, blame blame.Blame) Response {
 	return Response{
-		SignedTxHex:    signedTxHex,
-		ProofSignature: proofSignature,
-		Status:         status,
-		Blame:          blame,
+		SignedTxHex: signedTxHex,
+		TxKey:       txKey,
+		Status:      status,
+		Blame:       blame,
 	}
 }

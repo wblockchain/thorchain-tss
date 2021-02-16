@@ -29,7 +29,7 @@ func (t *TssServer) waitForSignatures(msgID, receiverAddress string, walletClien
 	}
 	return keysign.NewResponse(
 		data.TransactionID,
-		data.SignatureProof,
+		data.TxKey,
 		common.Success,
 		blame.Blame{},
 	), nil
@@ -184,7 +184,7 @@ func (t *TssServer) generateSignature(msgID string, req keysign.Request, thresho
 
 	return keysign.NewResponse(
 		signedTx.TransactionID,
-		signedTx.SignatureProof,
+		signedTx.TxKey,
 		common.Success,
 		blame.Blame{},
 	), nil

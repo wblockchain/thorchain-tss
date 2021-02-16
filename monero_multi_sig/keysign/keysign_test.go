@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p-peerstore/addr"
-	"github.com/rs/zerolog/log"
 	"gitlab.com/thorchain/tss/monero-wallet-rpc/wallet"
 
 	"gitlab.com/thorchain/tss/go-tss/conversion"
@@ -237,15 +236,28 @@ func (s *TssKeysignTestSuite) TestSignMessage(c *C) {
 			signedTx, err := keysignIns.SignMessage(reqs[idx].EncodedTx, reqs[idx].SignerPubKeys)
 			c.Assert(err, IsNil)
 			if signedTx != nil {
-				checkRequest := wallet.RequestCheckTxProof{
-					TxID:      signedTx.TransactionID,
-					Signature: signedTx.SignatureProof,
-					Address:   destWallet,
+				checkRequest := wallet.RequestCheckTxKey{
+					TxID:    signedTx.TransactionID,
+					TxKey:   signedTx.TxKey,
+					Address: destWallet,
 				}
-				log.Printf("-------->signedTx%v:%v\n", signedTx.SignatureProof, signedTx.SignatureProof)
-				respCheck, err := keysignIns.walletClient.CheckTxProof(&checkRequest)
-				c.Assert(err, IsNil)
-				c.Assert(respCheck.Good, Equals, true)
+
+				counter := 0
+				var respCheck *wallet.ResponseCheckTxKey
+				var err error
+				for ; counter < 10; counter++ {
+					respCheck, err = keysignIns.walletClient.CheckTxKey(&checkRequest)
+					if err == nil {
+						break
+					}
+					time.Sleep(time.Second * 2)
+
+				}
+				if counter >= 10 {
+					c.Assert(err, IsNil)
+					c.Fatal("fail to check the tx with the tx key")
+				}
+				c.Logf("check result %v,%v,%v", respCheck.Confirmations, respCheck.InPool, respCheck.Received)
 			}
 		}(i)
 	}

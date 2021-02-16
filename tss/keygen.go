@@ -106,13 +106,13 @@ func (t *TssServer) Keygen(req keygen.Request) (keygen.Response, error) {
 	// following http response aborts, it still counted as a successful keygen
 	// as the Tss model runs successfully.
 	beforeKeygen := time.Now()
-	address, err := keygenInstance.GenerateNewKey(req)
+	address, viewKey, err := keygenInstance.GenerateNewKey(req)
 	keygenTime := time.Since(beforeKeygen)
 	if err != nil {
 		t.tssMetrics.UpdateKeyGen(keygenTime, false)
 		t.logger.Error().Err(err).Msg("err in keygen")
 		blameNodes := *blameMgr.GetBlame()
-		return keygen.NewResponse("", common.Fail, blameNodes), err
+		return keygen.NewResponse("", "", common.Fail, blameNodes), err
 	} else {
 		t.tssMetrics.UpdateKeyGen(keygenTime, true)
 	}
@@ -120,6 +120,7 @@ func (t *TssServer) Keygen(req keygen.Request) (keygen.Response, error) {
 	blameNodes := *blameMgr.GetBlame()
 	return keygen.NewResponse(
 		address,
+		viewKey,
 		status,
 		blameNodes,
 	), nil

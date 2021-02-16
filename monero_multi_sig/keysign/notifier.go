@@ -40,23 +40,26 @@ func NewNotifier(messageID string, receiverAddress string, client wallet.Client)
 	}, nil
 }
 
+// fixme the protobuf is incorrect
 func (n *Notifier) verifySignature(data *MoneroSpendProof) (bool, error) {
-	checkRequest := wallet.RequestCheckTxProof{
-		TxID:      data.TransactionID,
-		Signature: data.SignatureProof,
-		Address:   n.receiverAddress,
+	req := wallet.RequestCheckTxKey{
+		TxID:    data.TransactionID,
+		TxKey:   data.TxKey,
+		Address: n.receiverAddress,
 	}
+	fmt.Printf("-------txid:%s, txkey:%s, address:%s\n", req.TxID, req.TxKey, req.Address)
 	retry := 0
 	var err error
 	var checkResult bool
 	for ; retry < monero_multi_sig.MoneroWalletRetry; retry++ {
-		respCheck, err := n.walletClient.CheckTxProof(&checkRequest)
+		respCheck, err := n.walletClient.CheckTxKey(&req)
 		if err != nil {
-			n.logger.Warn().Msgf("we retry (%d) to get the transaction verified", retry)
+			n.logger.Warn().Msgf("we retry (%d) to get the transaction verified with error %v", retry, err)
 			time.Sleep(time.Second * 2)
 			continue
 		}
-		checkResult = respCheck.Good
+		n.logger.Info().Msgf("the transaction %s has %s confirmation with send amount %s", req.TxID, respCheck.Confirmations, respCheck.Received)
+		checkResult = respCheck.InPool
 		break
 	}
 
@@ -67,7 +70,8 @@ func (n *Notifier) verifySignature(data *MoneroSpendProof) (bool, error) {
 // return value bool , true indicated we already gather all the signature from keysign party, and they are all match
 // false means we are still waiting for more signature from keysign party
 func (n *Notifier) ProcessSignature(data *MoneroSpendProof) (bool, error) {
-	if data != nil && data.SignatureProof != "" && data.TransactionID != "" {
+	if data != nil && data.TxKey != "" && data.TransactionID != "" {
+
 		verify, err := n.verifySignature(data)
 		if err != nil || !verify {
 			return false, fmt.Errorf("fail to verify signature: %w", err)

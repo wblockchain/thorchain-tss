@@ -195,11 +195,11 @@ func (s *FourNodeTestSuite) doTestKeySign(c *C, newJoinParty bool) {
 	}
 
 	wg.Wait()
-	proofSignature := keysignResult[0].ProofSignature
-	c.Assert(len(proofSignature) == 0, Equals, false)
+	txKey := keysignResult[0].TxKey
+	c.Assert(len(txKey) == 0, Equals, false)
 	for i, item := range keysignResult {
-		c.Assert(proofSignature, Equals, item.ProofSignature)
-		c.Logf("%d for the transaction %v the proof signature is %s\n", i, item.SignedTxHex, item.ProofSignature)
+		c.Logf("%d for the transaction %v the proof signature is %s\n", i, item.SignedTxHex, item.TxKey)
+		c.Assert(txKey, Equals, item.TxKey)
 	}
 }
 
