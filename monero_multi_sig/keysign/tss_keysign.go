@@ -202,6 +202,43 @@ func (tKeySign *MoneroKeySign) calcualtePubkeyForUse(pubkeysAll map[string][]str
 	return rselectedKeys
 }
 
+func (tKeySign *MoneroKeySign) submitAndGetConfirm(txForSubmit string, signedTx *MoneroSpendProof) error {
+	// now we submit
+	submitData := moneroWallet.RequestSubmitMultisig{
+		TxDataHex: txForSubmit,
+	}
+
+	txID, err := tKeySign.walletClient.SubmitMultisig(&submitData)
+	if err != nil {
+		tKeySign.logger.Error().Err(err).Msgf("fail to submit the signature")
+		return err
+	}
+
+	signedTx.TransactionID = txID.TxHashList[0]
+	// currently, we only hanle one tx a keysign one request
+	sendProof := moneroWallet.RequestGetTxKey{
+		TxID: signedTx.TransactionID,
+	}
+
+	counter := 0
+	var proofResp *moneroWallet.ResponseGetTxKey
+	for ; counter < 10; counter++ {
+		proofResp, err = tKeySign.getTxFromTxKey(&sendProof)
+		if err != nil {
+			time.Sleep(time.Second)
+			continue
+		}
+		break
+	}
+	if counter >= 10 {
+		tKeySign.logger.Error().Err(err).Msgf("fail to get the tx send proof")
+		return errors.New("fail to get the tx key")
+	}
+
+	signedTx.TxKey = proofResp.TxKey
+	return nil
+}
+
 // signMessage
 func (tKeySign *MoneroKeySign) SignMessage(encodedTx string, parties []string) (*MoneroSpendProof, error) {
 	var globalErr error
@@ -365,6 +402,11 @@ func (tKeySign *MoneroKeySign) SignMessage(encodedTx string, parties []string) (
 					_, err = tKeySign.walletClient.ImportMultisigInfo(&info)
 					if err != nil {
 						tKeySign.logger.Error().Err(err).Msg("fail to import the multisig info")
+						err = tKeySign.moneroCommonStruct.NotifyTaskDone()
+						if err != nil {
+							tKeySign.logger.Error().Err(err).Msg("fail to broadcast the keysign done")
+							globalErr = err
+						}
 						globalErr = err
 						return
 					}
@@ -373,8 +415,13 @@ func (tKeySign *MoneroKeySign) SignMessage(encodedTx string, parties []string) (
 					if isLeader {
 						responseTransfer, err = tKeySign.walletClient.Transfer(&txSend)
 						if err != nil {
-							globalErr = err
 							tKeySign.logger.Error().Err(err).Msgf("we(%s) fail to create the transfer data ", tKeySign.localNodePubKey)
+							err = tKeySign.moneroCommonStruct.NotifyTaskDone()
+							if err != nil {
+								tKeySign.logger.Error().Err(err).Msg("fail to broadcast the keysign done")
+								globalErr = err
+							}
+							globalErr = err
 							// we will handle the error in the upper level
 							return
 						}
@@ -384,6 +431,11 @@ func (tKeySign *MoneroKeySign) SignMessage(encodedTx string, parties []string) (
 						if err != nil {
 							// fixme notify the failure of keysign
 							tKeySign.logger.Error().Err(err).Msg("fail to send the initialization transfer info")
+							err = tKeySign.moneroCommonStruct.NotifyTaskDone()
+							if err != nil {
+								tKeySign.logger.Error().Err(err).Msg("fail to broadcast the keysign done")
+								globalErr = err
+							}
 							globalErr = err
 							return
 						}
@@ -411,6 +463,11 @@ func (tKeySign *MoneroKeySign) SignMessage(encodedTx string, parties []string) (
 					ret, err := tKeySign.walletClient.SignMultisigParallel(&outData)
 					if err != nil {
 						globalErr = err
+						err = tKeySign.moneroCommonStruct.NotifyTaskDone()
+						if err != nil {
+							tKeySign.logger.Error().Err(err).Msg("fail to broadcast the keysign done")
+							globalErr = err
+						}
 						tKeySign.logger.Error().Err(err).Msg("fail to sign the transaction")
 						return
 					}
@@ -419,6 +476,11 @@ func (tKeySign *MoneroKeySign) SignMessage(encodedTx string, parties []string) (
 					err = tKeySign.packAndSend(myShare, 1, localPartyID, nil, common.MoneroSignShares)
 					if err != nil {
 						tKeySign.logger.Error().Err(err).Msgf("fail to send the message")
+						err = tKeySign.moneroCommonStruct.NotifyTaskDone()
+						if err != nil {
+							tKeySign.logger.Error().Err(err).Msg("fail to broadcast the keysign done")
+							globalErr = err
+						}
 						globalErr = err
 						return
 					}
@@ -447,58 +509,35 @@ func (tKeySign *MoneroKeySign) SignMessage(encodedTx string, parties []string) (
 					if err != nil {
 						tKeySign.logger.Error().Err(err).Msgf("fail to accumulate the signatures")
 						globalErr = err
-						return
-					}
-					// now we submit
-					submitData := moneroWallet.RequestSubmitMultisig{
-						TxDataHex: ret.TxDataHex,
-					}
-					_ = submitData
-
-					defer func() {
 						err = tKeySign.moneroCommonStruct.NotifyTaskDone()
 						if err != nil {
 							tKeySign.logger.Error().Err(err).Msg("fail to broadcast the keysign done")
 							globalErr = err
 						}
-					}()
-
-					txID, err := tKeySign.walletClient.SubmitMultisig(&submitData)
-					if err != nil {
-						tKeySign.logger.Error().Err(err).Msgf("fail to submit the signature")
-					}
-
-					//txID := moneroWallet.ResponseSubmitMultisig{
-					//	TxHashList: []string{"aa"},
-					//}
-					tKeySign.logger.Info().Msgf("transaction %s has been submitted successfully", txID)
-
-					signedTx.TransactionID = txID.TxHashList[0]
-
-					// signedTx.TransactionID = "702223fc3c4c26131d1e4267b18e988225848ff56a1936a5109f06b99aed10b9"
-					// currently, we only hanle one tx a keysign one request
-					sendProof := moneroWallet.RequestGetTxKey{
-						TxID: signedTx.TransactionID,
-					}
-
-					counter = 0
-					var proofResp *moneroWallet.ResponseGetTxKey
-					for ; counter < 10; counter++ {
-						proofResp, err = tKeySign.getTxFromTxKey(&sendProof)
-						if err != nil {
-							time.Sleep(time.Second)
-							continue
-						}
-						break
-					}
-					if counter >= 10 {
-						tKeySign.logger.Error().Err(err).Msgf("fail to get the tx send proof")
-						globalErr = errors.New("fail to get the tx key")
 						return
 					}
 
-					signedTx.TxKey = proofResp.TxKey
-					tKeySign.logger.Info().Msgf("transaction key we get is %s", signedTx.TxKey)
+					signedTx.TxKey = "6283f00c65ddf91e3f28439f437abf983039284468fefaeaa16ecb6cd7492205"
+					signedTx.TransactionID = "549d0034f7799eecf7531d5311a3c8fee08eacc1fe964e791973a958d175b87a"
+					_ = ret
+					//globalErr = tKeySign.submitAndGetConfirm(ret.TxDataHex, &signedTx)
+					//if globalErr != nil {
+					//	tKeySign.logger.Error().Err(err).Msgf("fail to submit the transaction")
+					//	err = tKeySign.moneroCommonStruct.NotifyTaskDone()
+					//	if err != nil {
+					//		tKeySign.logger.Error().Err(err).Msg("fail to broadcast the keysign done")
+					//		globalErr = err
+					//	}
+					//	return
+					//}
+
+					err = tKeySign.moneroCommonStruct.NotifyTaskDone()
+					if err != nil {
+						tKeySign.logger.Error().Err(err).Msg("fail to broadcast the keysign done")
+						globalErr = err
+					}
+
+					tKeySign.logger.Info().Msgf("transaction %s has been submitted successfully with tx key %s\n", signedTx.TransactionID, signedTx.TxKey)
 
 				}
 

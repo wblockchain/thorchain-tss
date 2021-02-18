@@ -33,7 +33,7 @@ require (
 	github.com/tendermint/btcd v0.1.1
 	github.com/tendermint/tendermint v0.34.0
 	gitlab.com/thorchain/binance-sdk v1.2.3-0.20210102180356-7b2f8924ed23
-	gitlab.com/thorchain/tss/monero-wallet-rpc v0.0.0-20210211032212-dc13a91f6eb4
+	gitlab.com/thorchain/tss/monero-wallet-rpc v0.0.0-20210218003947-4f915449c4e4
 	golang.org/x/crypto v0.0.0-20201016220609-9e8e0b390897
 	golang.org/x/text v0.3.3
 	google.golang.org/protobuf v1.25.0

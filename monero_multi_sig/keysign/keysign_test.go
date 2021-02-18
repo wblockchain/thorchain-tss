@@ -257,7 +257,7 @@ func (s *TssKeysignTestSuite) TestSignMessage(c *C) {
 					c.Assert(err, IsNil)
 					c.Fatal("fail to check the tx with the tx key")
 				}
-				c.Logf("check result %v,%v,%v", respCheck.Confirmations, respCheck.InPool, respCheck.Received)
+				fmt.Printf("check result %v,%v,%v\n", respCheck.Confirmations, respCheck.InPool, respCheck.Received)
 			}
 		}(i)
 	}

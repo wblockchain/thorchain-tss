@@ -17,6 +17,7 @@ import (
 
 	btsskeygen "github.com/binance-chain/tss-lib/ecdsa/keygen"
 	maddr "github.com/multiformats/go-multiaddr"
+	"github.com/rs/zerolog/log"
 	"gitlab.com/thorchain/tss/monero-wallet-rpc/wallet"
 	. "gopkg.in/check.v1"
 
@@ -81,7 +82,7 @@ func (s *FourNodeTestSuite) SetUpTest(c *C) {
 	s.rpcAddress = make([]string, partyNum)
 	conf := common.TssConfig{
 		KeyGenTimeout:   60 * time.Second,
-		KeySignTimeout:  120 * time.Second,
+		KeySignTimeout:  60 * time.Second,
 		PreParamTimeout: 5 * time.Second,
 		EnableMonitor:   false,
 	}
@@ -198,7 +199,7 @@ func (s *FourNodeTestSuite) doTestKeySign(c *C, newJoinParty bool) {
 	txKey := keysignResult[0].TxKey
 	c.Assert(len(txKey) == 0, Equals, false)
 	for i, item := range keysignResult {
-		c.Logf("%d for the transaction %v the proof signature is %s\n", i, item.SignedTxHex, item.TxKey)
+		log.Info().Msgf("Node %d for the transaction %v the tx key is %s\n", i, item.SignedTxHex, item.TxKey)
 		c.Assert(txKey, Equals, item.TxKey)
 	}
 }

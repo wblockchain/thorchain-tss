@@ -18,9 +18,8 @@ import (
 	"gitlab.com/thorchain/tss/go-tss/p2p"
 )
 
-func (t *TssServer) waitForSignatures(msgID, receiverAddress string, walletClient wallet.Client, sigChan chan string) (keysign.Response, error) {
-	// TSS keysign include both form party and keysign itself, thus we wait twice of the timeout
-	data, err := t.signatureNotifier.WaitForSignature(msgID, receiverAddress, walletClient, t.conf.KeySignTimeout, sigChan)
+func (t *TssServer) waitForSignatures(msgID, encodedTx string, walletClient wallet.Client, sigChan chan string) (keysign.Response, error) {
+	data, err := t.signatureNotifier.WaitForSignature(msgID, encodedTx, walletClient, t.conf.KeySignTimeout, sigChan)
 	if err != nil {
 		return keysign.Response{}, err
 	}
@@ -277,14 +276,14 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 	// we wait for signatures
 	go func() {
 		defer wg.Done()
-		receivedSig, errWait = t.waitForSignatures(msgID, req.RpcAddress, walletClient, sigChan)
+		receivedSig, errWait = t.waitForSignatures(msgID, req.EncodedTx, walletClient, sigChan)
 		// we received an valid signature indeed
 		if errWait == nil {
 			sigChan <- "signature received"
-			t.logger.Log().Msgf("for message %s we get the signature from the peer", msgID)
+			t.logger.Info().Msgf("for message %s we get the signature from the peer", msgID)
 			return
 		}
-		t.logger.Log().Msgf("we fail to get the valid signature with error %v", errWait)
+		t.logger.Info().Msgf("we fail to get the valid signature with error %v", errWait)
 	}()
 
 	// we generate the signature ourselves

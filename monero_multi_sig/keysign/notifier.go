@@ -1,6 +1,8 @@
 package keysign
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -14,56 +16,78 @@ import (
 
 // Notifier is design to receive keysign signature, success or failure
 type Notifier struct {
-	MessageID       string
-	resp            chan *MoneroSpendProof
-	receiverAddress string
-	walletClient    wallet.Client
-	logger          zerolog.Logger
+	MessageID      string
+	resp           chan *MoneroSpendProof
+	encodedAddress string
+	walletClient   wallet.Client
+	logger         zerolog.Logger
 }
 
 // NewNotifier create a new instance of Notifier
-func NewNotifier(messageID string, receiverAddress string, client wallet.Client) (*Notifier, error) {
+func NewNotifier(messageID string, encodedAddress string, client wallet.Client) (*Notifier, error) {
 	if len(messageID) == 0 {
 		return nil, errors.New("messageID is empty")
 	}
 
-	if len(receiverAddress) == 0 {
+	if len(encodedAddress) == 0 {
 		return nil, errors.New("empty receiver address")
 	}
 
 	return &Notifier{
-		MessageID:       messageID,
-		receiverAddress: receiverAddress,
-		resp:            make(chan *MoneroSpendProof, 1),
-		walletClient:    client,
-		logger:          log.With().Str("module", "signature notifier").Logger(),
+		MessageID:      messageID,
+		encodedAddress: encodedAddress,
+		resp:           make(chan *MoneroSpendProof, 1),
+		walletClient:   client,
+		logger:         log.With().Str("module", "signature notifier").Logger(),
 	}, nil
 }
 
-// fixme the protobuf is incorrect
-func (n *Notifier) verifySignature(data *MoneroSpendProof) (bool, error) {
-	req := wallet.RequestCheckTxKey{
-		TxID:    data.TransactionID,
-		TxKey:   data.TxKey,
-		Address: n.receiverAddress,
-	}
-	fmt.Printf("-------txid:%s, txkey:%s, address:%s\n", req.TxID, req.TxKey, req.Address)
+func (n *Notifier) checkEachTransaction(dest *wallet.Destination, req wallet.RequestCheckTxKey) (bool, error) {
 	retry := 0
 	var err error
-	var checkResult bool
+	var respCheck *wallet.ResponseCheckTxKey
 	for ; retry < monero_multi_sig.MoneroWalletRetry; retry++ {
-		respCheck, err := n.walletClient.CheckTxKey(&req)
+		respCheck, err = n.walletClient.CheckTxKey(&req)
 		if err != nil {
 			n.logger.Warn().Msgf("we retry (%d) to get the transaction verified with error %v", retry, err)
 			time.Sleep(time.Second * 2)
 			continue
 		}
-		n.logger.Info().Msgf("the transaction %s has %s confirmation with send amount %s", req.TxID, respCheck.Confirmations, respCheck.Received)
-		checkResult = respCheck.InPool
-		break
+		if respCheck.Received == dest.Amount {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (n *Notifier) verifySignature(data *MoneroSpendProof) (bool, error) {
+	var err error
+	tx, err := base64.StdEncoding.DecodeString(n.encodedAddress)
+	if err != nil {
+		return false, err
+	}
+	var txSend wallet.RequestTransfer
+	err = json.Unmarshal(tx, &txSend)
+	if err != nil {
+		return false, err
 	}
 
-	return checkResult, err
+	dests := txSend.Destinations
+	for _, dest := range dests {
+		req := wallet.RequestCheckTxKey{
+			TxID:    data.TransactionID,
+			TxKey:   data.TxKey,
+			Address: dest.Address,
+		}
+		ret, err := n.checkEachTransaction(dest, req)
+		if err != nil {
+			return false, err
+		}
+		if !ret {
+			return ret, nil
+		}
+	}
+	return true, err
 }
 
 // ProcessSignature is to verify whether the signature is valid
