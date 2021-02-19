@@ -19,6 +19,7 @@ type Notifier struct {
 	MessageID      string
 	resp           chan *MoneroSpendProof
 	encodedAddress string
+	txSend         *wallet.RequestTransfer
 	walletClient   wallet.Client
 	logger         zerolog.Logger
 }
@@ -29,8 +30,14 @@ func NewNotifier(messageID string, encodedAddress string, client wallet.Client) 
 		return nil, errors.New("messageID is empty")
 	}
 
-	if len(encodedAddress) == 0 {
-		return nil, errors.New("empty receiver address")
+	tx, err := base64.StdEncoding.DecodeString(encodedAddress)
+	if err != nil {
+		return nil, err
+	}
+	var txSend wallet.RequestTransfer
+	err = json.Unmarshal(tx, &txSend)
+	if err != nil {
+		return nil, err
 	}
 
 	return &Notifier{
@@ -38,6 +45,7 @@ func NewNotifier(messageID string, encodedAddress string, client wallet.Client) 
 		encodedAddress: encodedAddress,
 		resp:           make(chan *MoneroSpendProof, 1),
 		walletClient:   client,
+		txSend:         &txSend,
 		logger:         log.With().Str("module", "signature notifier").Logger(),
 	}, nil
 }
@@ -62,17 +70,8 @@ func (n *Notifier) checkEachTransaction(dest *wallet.Destination, req wallet.Req
 
 func (n *Notifier) verifySignature(data *MoneroSpendProof) (bool, error) {
 	var err error
-	tx, err := base64.StdEncoding.DecodeString(n.encodedAddress)
-	if err != nil {
-		return false, err
-	}
-	var txSend wallet.RequestTransfer
-	err = json.Unmarshal(tx, &txSend)
-	if err != nil {
-		return false, err
-	}
 
-	dests := txSend.Destinations
+	dests := n.txSend.Destinations
 	for _, dest := range dests {
 		req := wallet.RequestCheckTxKey{
 			TxID:    data.TransactionID,

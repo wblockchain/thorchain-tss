@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p-peerstore/addr"
+	"github.com/rs/zerolog/log"
 	"gitlab.com/thorchain/tss/monero-wallet-rpc/wallet"
 
 	"gitlab.com/thorchain/tss/go-tss/conversion"
@@ -62,6 +63,8 @@ var (
 		"16Uiu2HAmACG5DtqmQsHtXg4G2sLS65ttv84e7MrL4kapkjfmhxAp", "16Uiu2HAm4TmEzUqy3q3Dv7HvdoSboHk5sFj2FH3npiN5vDbJC6gh",
 		"16Uiu2HAm2FzqoUdS6Y9Esg2EaGcAG5rVe1r6BFNnmmQr2H3bqafa",
 	}
+	// you have to setup the wallet before you run this test, change the IP as needed
+	remoteAddress = []string{"188.166.183.111", "178.128.155.101", "188.166.158.53", "104.236.7.106", "104.248.200.163", "139.59.237.127"}
 )
 
 func TestPackage(t *testing.T) {
@@ -109,7 +112,7 @@ var _ = Suite(&TssKeysignTestSuite{})
 func (s *TssKeysignTestSuite) SetUpSuite(c *C) {
 	conversion.SetupBech32Prefix()
 	common.InitLog("info", true, "keysign_test")
-
+	EnableTest = true
 	for _, el := range testNodePrivkey {
 		priHexBytes, err := base64.StdEncoding.DecodeString(el)
 		c.Assert(err, IsNil)
@@ -189,7 +192,6 @@ func (s *TssKeysignTestSuite) TestSignMessage(c *C) {
 	c.Assert(err, IsNil)
 	encodedTx := base64.StdEncoding.EncodeToString(tx)
 	var reqs []Request
-	remoteAddress := []string{"188.166.183.111", "178.128.155.101", "188.166.158.53", "104.236.7.106", "104.248.200.163", "139.59.237.127"}
 	for i := 0; i < s.partyNum; i++ {
 		var rpcaddress string
 		rpcaddress = fmt.Sprintf("http://%s:18083/json_rpc", remoteAddress[i])
@@ -257,7 +259,8 @@ func (s *TssKeysignTestSuite) TestSignMessage(c *C) {
 					c.Assert(err, IsNil)
 					c.Fatal("fail to check the tx with the tx key")
 				}
-				fmt.Printf("check result %v,%v,%v\n", respCheck.Confirmations, respCheck.InPool, respCheck.Received)
+				c.Assert(respCheck.Received, Equals, uint64(500))
+				log.Info().Msgf("check result %v,%v,%v\n", respCheck.Confirmations, respCheck.InPool, respCheck.Received)
 			}
 		}(i)
 	}

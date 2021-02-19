@@ -2,32 +2,23 @@ package keysign
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
-	"io/ioutil"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/binance-chain/tss-lib/ecdsa/signing"
 	"github.com/libp2p/go-libp2p-core/peer"
 	tnet "github.com/libp2p/go-libp2p-testing/net"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/assert"
+	moneroWallet "gitlab.com/thorchain/tss/monero-wallet-rpc/wallet"
 
-	"gitlab.com/thorchain/tss/go-tss/common"
 	"gitlab.com/thorchain/tss/go-tss/conversion"
 	"gitlab.com/thorchain/tss/go-tss/p2p"
 )
 
 func TestSignatureNotifierHappyPath(t *testing.T) {
 	conversion.SetupBech32Prefix()
-	poolPubKey := `thorpub1addwnpepq0ul3xt882a6nm6m7uhxj4tk2n82zyu647dyevcs5yumuadn4uamqx7neak`
-	messageToSign := "yhEwrxWuNBGnPT/L7PNnVWg7gFWNzCYTV+GuX3tKRH8="
-	buf, err := base64.StdEncoding.DecodeString(messageToSign)
-	assert.Nil(t, err)
-	messageID, err := common.MsgToHashString(buf)
-	assert.Nil(t, err)
 	p2p.ApplyDeadline = false
 	id1 := tnet.RandIdentityOrFatal(t)
 	id2 := tnet.RandIdentityOrFatal(t)
@@ -66,26 +57,41 @@ func TestSignatureNotifierHappyPath(t *testing.T) {
 	assert.NotNil(t, n1)
 	assert.NotNil(t, n2)
 	assert.NotNil(t, n3)
-	sigFile := "../test_data/signature_notify/sig1.json"
-	content, err := ioutil.ReadFile(sigFile)
+
+	messageID := "testMessage"
+	rpcAddress := fmt.Sprintf("http://%s:18083/json_rpc", remoteAddress[0])
+	rpcWalletConfig := moneroWallet.Config{
+		Address: rpcAddress,
+	}
+	wallet := moneroWallet.New(rpcWalletConfig)
+	walletName := "thorpub1addwnpepq2m5ng0e6vm66feecrwxp37cdvmezsysghskz3t5w2du4c48qwupxn96nrr.mo"
+	passcode := "f754b5c0b920f5ec3e364b1bf30947dd8a84eccc5cf14bd07a6fd227d0d36f25"
+	// now open the wallet
+	walletOpenReq := moneroWallet.RequestOpenWallet{
+		Filename: walletName,
+		Password: passcode,
+	}
+	err = wallet.OpenWallet(&walletOpenReq)
 	assert.Nil(t, err)
-	assert.NotNil(t, content)
-	var signature signing.SignatureData
-	err = json.Unmarshal(content, &signature)
-	assert.Nil(t, err)
+
+	spendProof := MoneroSpendProof{
+		TxKey:         "6283f00c65ddf91e3f28439f437abf983039284468fefaeaa16ecb6cd7492205",
+		TransactionID: "549d0034f7799eecf7531d5311a3c8fee08eacc1fe964e791973a958d175b87a",
+	}
+
 	sigChan := make(chan string)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		sig, err := n1.WaitForSignature(messageID, buf, poolPubKey, time.Second*30, sigChan)
+		sig, err := n1.WaitForSignature(messageID, testEncodedTransaction, wallet, time.Second*30, sigChan)
 		assert.Nil(t, err)
 		assert.NotNil(t, sig)
 	}()
-	assert.Nil(t, n2.BroadcastSignature(messageID, &signature, []peer.ID{
+	assert.Nil(t, n2.BroadcastSignature(messageID, &spendProof, []peer.ID{
 		p1, p3,
 	}))
-	assert.Nil(t, n3.BroadcastSignature(messageID, &signature, []peer.ID{
+	assert.Nil(t, n3.BroadcastSignature(messageID, &spendProof, []peer.ID{
 		p1, p2,
 	}))
 	wg.Wait()

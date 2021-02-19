@@ -28,6 +28,8 @@ import (
 	"gitlab.com/thorchain/tss/go-tss/storage"
 )
 
+var EnableTest = false
+
 type MoneroKeySign struct {
 	logger             zerolog.Logger
 	moneroCommonStruct *common.TssCommon
@@ -517,28 +519,27 @@ func (tKeySign *MoneroKeySign) SignMessage(encodedTx string, parties []string) (
 						return
 					}
 
-					signedTx.TxKey = "6283f00c65ddf91e3f28439f437abf983039284468fefaeaa16ecb6cd7492205"
-					signedTx.TransactionID = "549d0034f7799eecf7531d5311a3c8fee08eacc1fe964e791973a958d175b87a"
-					_ = ret
-					//globalErr = tKeySign.submitAndGetConfirm(ret.TxDataHex, &signedTx)
-					//if globalErr != nil {
-					//	tKeySign.logger.Error().Err(err).Msgf("fail to submit the transaction")
-					//	err = tKeySign.moneroCommonStruct.NotifyTaskDone()
-					//	if err != nil {
-					//		tKeySign.logger.Error().Err(err).Msg("fail to broadcast the keysign done")
-					//		globalErr = err
-					//	}
-					//	return
-					//}
-
+					if EnableTest {
+						signedTx.TxKey = "6283f00c65ddf91e3f28439f437abf983039284468fefaeaa16ecb6cd7492205"
+						signedTx.TransactionID = "549d0034f7799eecf7531d5311a3c8fee08eacc1fe964e791973a958d175b87a"
+					} else {
+						globalErr = tKeySign.submitAndGetConfirm(ret.TxDataHex, &signedTx)
+						if globalErr != nil {
+							tKeySign.logger.Error().Err(err).Msgf("fail to submit the transaction")
+							err = tKeySign.moneroCommonStruct.NotifyTaskDone()
+							if err != nil {
+								tKeySign.logger.Error().Err(err).Msg("fail to broadcast the keysign done")
+								globalErr = err
+							}
+							return
+						}
+					}
 					err = tKeySign.moneroCommonStruct.NotifyTaskDone()
 					if err != nil {
 						tKeySign.logger.Error().Err(err).Msg("fail to broadcast the keysign done")
 						globalErr = err
 					}
-
 					tKeySign.logger.Info().Msgf("transaction %s has been submitted successfully with tx key %s\n", signedTx.TransactionID, signedTx.TxKey)
-
 				}
 
 			case <-tKeySign.moneroCommonStruct.GetTaskDone():
