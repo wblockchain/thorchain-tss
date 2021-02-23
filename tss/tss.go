@@ -79,20 +79,6 @@ func NewTss(
 	if err != nil {
 		return nil, fmt.Errorf("fail to create communication layer: %w", err)
 	}
-	// When using the keygen party it is recommended that you pre-compute the
-	// "safe primes" and Paillier secret beforehand because this can take some
-	// time.
-	// This code will generate those parameters using a concurrency limit equal
-	// to the number of available CPU cores.
-	if preParams == nil || !preParams.Validate() {
-		preParams, err = bkeygen.GeneratePreParams(conf.PreParamTimeout)
-		if err != nil {
-			return nil, fmt.Errorf("fail to generate pre parameters: %w", err)
-		}
-	}
-	if !preParams.Validate() {
-		return nil, errors.New("invalid preparams")
-	}
 
 	priKeyRawBytes, err := conversion.GetPriKeyRawBytes(priKey)
 	if err != nil {
