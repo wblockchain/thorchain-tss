@@ -13,8 +13,8 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
-	"gitlab.com/thorchain/tss/go-tss/keygen"
-	"gitlab.com/thorchain/tss/go-tss/keysign"
+	"gitlab.com/thorchain/tss/go-tss/monero_multi_sig/keygen"
+	"gitlab.com/thorchain/tss/go-tss/monero_multi_sig/keysign"
 	"gitlab.com/thorchain/tss/go-tss/tss"
 )
 

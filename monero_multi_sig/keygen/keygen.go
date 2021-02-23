@@ -101,7 +101,7 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, string, 
 
 	// now we try to connect to the monero wallet rpc client
 	client := moneroWallet.New(moneroWallet.Config{
-		Address: keygenReq.rpcAddress,
+		Address: keygenReq.RpcAddress,
 	})
 
 	walletName := tKeyGen.localNodePubKey + ".mo"
@@ -264,6 +264,6 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, string, 
 		tKeyGen.logger.Error().Err(err).Msgf("fail to query the key")
 		return "", "", err
 	}
-	tKeyGen.logger.Info().Msgf("wallet address is  %v\n with private view key", address, resp.Key)
+	tKeyGen.logger.Info().Msgf("wallet address is  %v with private view key %v\n", address, resp.Key)
 	return address, resp.Key, err
 }
