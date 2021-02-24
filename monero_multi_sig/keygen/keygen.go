@@ -235,8 +235,7 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, string, 
 						if err != nil {
 							tKeyGen.logger.Error().Err(err).Msg("fail to broadcast the keysign done")
 						}
-						close(tKeyGen.commStopChan)
-						return
+						continue
 					}
 
 					err = tKeyGen.packAndSend(resp.MultisigInfo, int(currentRound), localPartyID, common.MoneroKeyGenShareExchange)
@@ -248,6 +247,7 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, string, 
 				}
 			case <-tKeyGen.moneroCommonStruct.GetTaskDone():
 				close(tKeyGen.commStopChan)
+				return
 			}
 		}
 	}()
