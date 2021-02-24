@@ -15,9 +15,9 @@ import (
 
 const (
 	LengthHeader        = 4 // LengthHeader represent how many bytes we used as header
-	TimeoutReadPayload  = time.Second * 10
-	TimeoutWritePayload = time.Second * 10
-	MaxPayload          = 512000 // 512kb
+	TimeoutReadPayload  = time.Second * 30
+	TimeoutWritePayload = time.Second * 30
+	MaxPayload          = 512000000 // 512kb
 )
 
 // applyDeadline will be true , and only disable it when we are doing test
