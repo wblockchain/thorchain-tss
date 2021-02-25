@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -134,20 +135,20 @@ func (tKeySign *MoneroKeySign) packAndSend(info string, exchangeRound int, local
 		tKeySign.logger.Error().Err(err).Msg("fail to encode the wallet share")
 		return err
 	}
-
+	roundInfo := "moneroMsgKeySign" + strconv.FormatInt(int64(exchangeRound), 10)
 	if toParty == nil {
 		r := btss.MessageRouting{
 			From:        localPartyID,
 			IsBroadcast: true,
 		}
-		return tKeySign.moneroCommonStruct.ProcessOutCh(msg, &r, "moneroMsg", messages.TSSKeySignMsg)
+		return tKeySign.moneroCommonStruct.ProcessOutCh(msg, &r, roundInfo, messages.TSSKeySignMsg)
 	}
 	r := btss.MessageRouting{
 		From:        localPartyID,
 		To:          []*btss.PartyID{toParty},
 		IsBroadcast: false,
 	}
-	return tKeySign.moneroCommonStruct.ProcessOutCh(msg, &r, "moneroMsg", messages.TSSKeySignMsg)
+	return tKeySign.moneroCommonStruct.ProcessOutCh(msg, &r, roundInfo, messages.TSSKeySignMsg)
 }
 
 func (tKeySign *MoneroKeySign) submitSignature(signature string) ([]string, error) {

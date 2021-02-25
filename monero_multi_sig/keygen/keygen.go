@@ -85,7 +85,7 @@ func (tKeyGen *MoneroKeyGen) packAndSend(info string, exchangeRound int, localPa
 		From:        localPartyID,
 		IsBroadcast: true,
 	}
-	roundInfo := "moneroMsg" + strconv.FormatInt(int64(exchangeRound), 10)
+	roundInfo := "moneroMsgKeyGen" + strconv.FormatInt(int64(exchangeRound), 10)
 	return tKeyGen.moneroCommonStruct.ProcessOutCh(msg, &r, roundInfo, messages.TSSKeyGenMsg)
 }
 
