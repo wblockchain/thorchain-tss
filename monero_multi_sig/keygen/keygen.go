@@ -179,7 +179,7 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, string, 
 		defer keyGenWg.Done()
 		for {
 			select {
-			case <-time.After(time.Minute * 10):
+			case <-time.After(tKeyGen.GetTssCommonStruct().GetConf().KeyGenTimeout):
 				close(tKeyGen.commStopChan)
 
 			case share := <-moneroShareChan:
