@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	btss "github.com/binance-chain/tss-lib/tss"
@@ -225,9 +226,10 @@ func (t *TssCommon) updateLocal(wireMsg *messages.WireMessage, moneroShareChan c
 		var share MoneroShare
 		allMsgTypes := []string{MoneroSharepre, MoneroKeyGenShareExchange, MoneroExportedSignMsg, MoneroInitTransfer, MoneroSignShares}
 		err := json.Unmarshal(wireMsg.Message, &share)
+		result := strings.Split(share.MsgType, "@")
 		moneroType := false
 		for _, el := range allMsgTypes {
-			if el == share.MsgType {
+			if el == result[0] {
 				moneroType = true
 				break
 			}

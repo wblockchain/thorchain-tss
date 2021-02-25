@@ -2,7 +2,10 @@ package keygen
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -82,7 +85,8 @@ func (tKeyGen *MoneroKeyGen) packAndSend(info string, exchangeRound int, localPa
 		From:        localPartyID,
 		IsBroadcast: true,
 	}
-	return tKeyGen.moneroCommonStruct.ProcessOutCh(msg, &r, "moneroMsg", messages.TSSKeyGenMsg)
+	roundInfo := "moneroMsg" + strconv.FormatInt(int64(exchangeRound), 10)
+	return tKeyGen.moneroCommonStruct.ProcessOutCh(msg, &r, roundInfo, messages.TSSKeyGenMsg)
 }
 
 func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, string, error) {
@@ -200,15 +204,29 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, string, 
 						globalErr = err
 						return
 					}
-
-					err = tKeyGen.packAndSend(resp.MultisigInfo, int(currentRound), localPartyID, common.MoneroKeyGenShareExchange)
+					currentMsgType := common.MoneroKeyGenShareExchange + "@" + strconv.FormatInt(int64(currentRound), 10)
+					err = tKeyGen.packAndSend(resp.MultisigInfo, int(currentRound), localPartyID, currentMsgType)
 					if err != nil {
 						globalErr = err
 						return
 					}
 					atomic.AddInt32(&exchangeRound, 1)
 
-				case common.MoneroKeyGenShareExchange:
+				default:
+					receivedMsgType := share.MsgType
+					checkStr := strings.Split(receivedMsgType, "@")
+					if len(checkStr) != 2 || checkStr[0] != common.MoneroKeyGenShareExchange {
+						tKeyGen.logger.Error().Msg("not a valid monero share")
+						globalErr = errors.New("not a valid share")
+						return
+					}
+					_, err := strconv.ParseInt(checkStr[1], 10, 32)
+					if err != nil {
+						tKeyGen.logger.Error().Msg("not a valid monero share")
+						globalErr = errors.New("not a valid share")
+						return
+					}
+
 					currentRound := atomic.LoadInt32(&exchangeRound)
 					shares, ready := shareStore.StoreAndCheck(int(currentRound)-1, share, peerNum)
 					if !ready {
@@ -238,7 +256,8 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, string, 
 						continue
 					}
 
-					err = tKeyGen.packAndSend(resp.MultisigInfo, int(currentRound), localPartyID, common.MoneroKeyGenShareExchange)
+					currentMsgType := common.MoneroKeyGenShareExchange + "@" + strconv.FormatInt(int64(currentRound), 10)
+					err = tKeyGen.packAndSend(resp.MultisigInfo, int(currentRound), localPartyID, currentMsgType)
 					if err != nil {
 						globalErr = err
 						return
