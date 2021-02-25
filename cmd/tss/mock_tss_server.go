@@ -6,8 +6,8 @@ import (
 	"gitlab.com/thorchain/tss/go-tss/blame"
 	"gitlab.com/thorchain/tss/go-tss/common"
 	"gitlab.com/thorchain/tss/go-tss/conversion"
-	"gitlab.com/thorchain/tss/go-tss/keygen"
-	"gitlab.com/thorchain/tss/go-tss/keysign"
+	"gitlab.com/thorchain/tss/go-tss/monero_multi_sig/keygen"
+	"gitlab.com/thorchain/tss/go-tss/monero_multi_sig/keysign"
 )
 
 type MockTssServer struct {
@@ -41,5 +41,5 @@ func (mts *MockTssServer) KeySign(req keysign.Request) (keysign.Response, error)
 	if mts.failToKeySign {
 		return keysign.Response{}, errors.New("you ask for it")
 	}
-	return keysign.NewResponse("", "", "", common.Success, blame.Blame{}), nil
+	return keysign.NewResponse("", "", common.Success, blame.Blame{}), nil
 }
