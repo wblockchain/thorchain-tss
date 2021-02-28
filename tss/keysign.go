@@ -256,6 +256,10 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 	walletInfo, err := walletClient.IsMultisig()
 	if err != nil {
 		t.logger.Error().Err(err).Msgf("fail to get the wallet info")
+		return keysign.Response{
+			Status: common.Fail,
+			Blame:  blame.NewBlame(blame.InternalError, []blame.Node{}),
+		}, errors.New("fail to get the wallet info")
 	}
 	// monero wallet threshold=ecdsa tss threshold+1
 	threshold := int(walletInfo.Threshold) - 1
