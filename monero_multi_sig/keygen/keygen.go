@@ -181,6 +181,8 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, string, 
 			select {
 			case <-time.After(tKeyGen.GetTssCommonStruct().GetConf().KeyGenTimeout):
 				close(tKeyGen.commStopChan)
+				globalErr = errors.New("keygen timeout")
+				return
 
 			case share := <-moneroShareChan:
 				switch share.MsgType {
@@ -273,7 +275,8 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, string, 
 
 	keyGenWg.Wait()
 	if globalErr != nil {
-		tKeyGen.logger.Error().Err(err).Msg("fail to create the monero multisig wallet")
+		tKeyGen.logger.Error().Err(globalErr).Msg("fail to create the monero multisig wallet")
+		return "", "", globalErr
 	}
 	req := moneroWallet.RequestQueryKey{
 		KeyType: "view_key",

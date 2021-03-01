@@ -108,7 +108,8 @@ func (s *FourNodeTestSuite) SetUpTest(c *C) {
 	}
 
 	// update the remote wallet address once you want to test
-	remoteAddress := []string{"188.166.183.111", "178.128.155.101", "188.166.158.53", "104.236.7.106", "104.248.200.163", "139.59.237.127"}
+	remoteAddress := []string{"134.209.108.57", "167.99.11.83", "46.101.91.4", "134.209.35.249", "174.138.10.57", "134.209.101.44"}
+
 	for i := 0; i < partyNum; i++ {
 		var rpcAddress string
 		rpcAddress = fmt.Sprintf("http://%s:18083/json_rpc", remoteAddress[i])
@@ -125,7 +126,8 @@ func hash(payload []byte) []byte {
 // we do for both join party schemes
 func (s *FourNodeTestSuite) Test6NodesTss(c *C) {
 	// s.doTestKeygen(c, true)
-	s.doTestKeySign(c, true)
+	// s.doTestKeySign(c, true)
+	s.doTestBlame(c)
 }
 
 // generate a new key
@@ -252,4 +254,49 @@ func getPreparams(c *C) []*btsskeygen.LocalPreParams {
 		preParamArray = append(preParamArray, &preParam)
 	}
 	return preParamArray
+}
+
+func (s *FourNodeTestSuite) doTestBlame(c *C) {
+	expectedFailNode := "thorpub1addwnpepqtdklw8tf3anjz7nn5fly3uvq2e67w2apn560s4smmrt9e3x52nt2svmmu3"
+	var req keygen.Request
+
+	wg := sync.WaitGroup{}
+	lock := &sync.Mutex{}
+	keygenResult := make(map[int]keygen.Response)
+	for i := 0; i < partyNum; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			req = keygen.NewRequest(testPubKeys, 10, "0.14.0", s.rpcAddress[idx])
+			defer wg.Done()
+			res, err := s.servers[idx].Keygen(req)
+			c.Assert(err, NotNil)
+			lock.Lock()
+			defer lock.Unlock()
+			keygenResult[idx] = res
+		}(i)
+	}
+	// if we shutdown one server during keygen , he should be blamed
+	time.Sleep(time.Millisecond * 100)
+	s.servers[0].Stop()
+	defer func() {
+		conf := common.TssConfig{
+			KeyGenTimeout:   60 * time.Second,
+			KeySignTimeout:  60 * time.Second,
+			PreParamTimeout: 5 * time.Second,
+		}
+		s.servers[0] = s.getTssServer(c, 0, conf, "")
+		c.Assert(s.servers[0].Start(), IsNil)
+		c.Log("we start the first server again")
+	}()
+	wg.Wait()
+	c.Logf("result:%+v", keygenResult)
+	for idx, item := range keygenResult {
+		if idx == 0 {
+			continue
+		}
+		c.Assert(item.PoolAddress, Equals, "")
+		c.Assert(item.Status, Equals, common.Fail)
+		c.Assert(item.Blame.BlameNodes, HasLen, 1)
+		c.Assert(item.Blame.BlameNodes[0].Pubkey, Equals, expectedFailNode)
+	}
 }
