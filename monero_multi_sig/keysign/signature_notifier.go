@@ -3,6 +3,7 @@ package keysign
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -89,11 +90,21 @@ func (s *SignatureNotifier) handleStream(stream network.Stream) {
 		logger.Debug().Msgf("notifier for message id(%s) not exist", msg.ID)
 		return
 	}
+
+	n.threshold -= 1
 	finished, err := n.ProcessSignature(&signedTxHex)
+	if n.threshold < 1 {
+		logger.Error().Err(err).Msg("we have enough nodes report the failure of signature generation")
+		n.resp <- nil
+		delete(s.notifiers, msg.ID)
+		return
+	}
+
 	if err != nil {
 		logger.Error().Err(err).Msg("fail to verify local signature data")
 		return
 	}
+
 	if finished {
 		delete(s.notifiers, msg.ID)
 	}
@@ -188,8 +199,10 @@ func (s *SignatureNotifier) removeNotifier(n *Notifier) {
 }
 
 // WaitForSignature wait until keysign finished and signature is available
-func (s *SignatureNotifier) WaitForSignature(messageID string, encodeddest string, walletClient wallet.Client, timeout time.Duration, sigChan chan string) (*MoneroSpendProof, error) {
-	n, err := NewNotifier(messageID, encodeddest, walletClient)
+func (s *SignatureNotifier) WaitForSignature(messageID string, encodeddest string, walletClient wallet.Client, timeout time.Duration, sigChan chan string, threshold int) (*MoneroSpendProof, error) {
+	numWait := threshold/2 + 1
+	s.logger.Info().Msgf("we need to wait for %d signature notifications", numWait)
+	n, err := NewNotifier(messageID, encodeddest, walletClient, numWait)
 	if err != nil {
 		return nil, fmt.Errorf("fail to create notifier")
 	}
@@ -198,6 +211,10 @@ func (s *SignatureNotifier) WaitForSignature(messageID string, encodeddest strin
 
 	select {
 	case d := <-n.GetResponseChannel():
+		if d == nil {
+			s.logger.Error().Msg("the majority report the failure of the signature generation")
+			return nil, errors.New("the majority report the failure of signature generation")
+		}
 		return d, nil
 	case <-time.After(timeout):
 		return nil, fmt.Errorf("timeout: didn't receive signature after %s", timeout)

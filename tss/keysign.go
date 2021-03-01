@@ -18,8 +18,8 @@ import (
 	"gitlab.com/thorchain/tss/go-tss/p2p"
 )
 
-func (t *TssServer) waitForSignatures(msgID, encodedTx string, walletClient wallet.Client, sigChan chan string) (keysign.Response, error) {
-	data, err := t.signatureNotifier.WaitForSignature(msgID, encodedTx, walletClient, t.conf.KeySignTimeout, sigChan)
+func (t *TssServer) waitForSignatures(msgID, encodedTx string, walletClient wallet.Client, sigChan chan string, threshold int) (keysign.Response, error) {
+	data, err := t.signatureNotifier.WaitForSignature(msgID, encodedTx, walletClient, t.conf.KeySignTimeout, sigChan, threshold)
 	if err != nil {
 		return keysign.Response{}, err
 	}
@@ -280,7 +280,7 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 	// we wait for signatures
 	go func() {
 		defer wg.Done()
-		receivedSig, errWait = t.waitForSignatures(msgID, req.EncodedTx, walletClient, sigChan)
+		receivedSig, errWait = t.waitForSignatures(msgID, req.EncodedTx, walletClient, sigChan, threshold)
 		// we received an valid signature indeed
 		if errWait == nil {
 			sigChan <- "signature received"

@@ -22,10 +22,11 @@ type Notifier struct {
 	txSend         *wallet.RequestTransfer
 	walletClient   wallet.Client
 	logger         zerolog.Logger
+	threshold      int
 }
 
 // NewNotifier create a new instance of Notifier
-func NewNotifier(messageID string, encodedAddress string, client wallet.Client) (*Notifier, error) {
+func NewNotifier(messageID string, encodedAddress string, client wallet.Client, threshold int) (*Notifier, error) {
 	if len(messageID) == 0 {
 		return nil, errors.New("messageID is empty")
 	}
@@ -47,6 +48,7 @@ func NewNotifier(messageID string, encodedAddress string, client wallet.Client) 
 		walletClient:   client,
 		txSend:         &txSend,
 		logger:         log.With().Str("module", "signature notifier").Logger(),
+		threshold:      threshold,
 	}, nil
 }
 
