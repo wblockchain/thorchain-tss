@@ -287,35 +287,6 @@ func (tKeySign *MoneroKeySign) SignMessage(encodedTx string, parties []string) (
 		return nil, errors.New("not a multisig wallet or wallet is not ready(keygen done correctly?)")
 	}
 
-	balanceReq := moneroWallet.RequestGetBalance{
-		AccountIndex: 0,
-	}
-	counter := 0
-	for ; counter < monero_multi_sig.MoneroWalletRetry; counter++ {
-		time.Sleep(time.Second * 5)
-		balance, err := tKeySign.walletClient.GetBalance(&balanceReq)
-		if err != nil {
-			tKeySign.logger.Error().Err(err).Msg("fail to get the balance of the wallet")
-			return nil, err
-		}
-		height, err := tKeySign.walletClient.GetHeight()
-		if err != nil {
-			tKeySign.logger.Error().Err(err).Msg("fail to get the height of the wallet block")
-			return nil, err
-		}
-		if balance.UnlockedBalance > 0 {
-			tKeySign.logger.Info().Msgf("unlock balance is %v with height %d\n", balance.UnlockedBalance, height.Height)
-			break
-		}
-		tKeySign.logger.Warn().Msgf("fail to get the unlock balance, the wallet end may be slow")
-	}
-	if counter >= 30 {
-		return nil, errors.New("not enough fund in wallet")
-	}
-
-	threshold := walletInfo.Threshold
-	needToWait := threshold - 1 // we do not need to wait for ourselves
-
 	tx, err := base64.StdEncoding.DecodeString(encodedTx)
 	if err != nil {
 		tKeySign.logger.Error().Err(err).Msg("fail to decode the transaction")
@@ -328,6 +299,49 @@ func (tKeySign *MoneroKeySign) SignMessage(encodedTx string, parties []string) (
 		tKeySign.logger.Error().Err(err).Msg("fail to unmarshal the transaction")
 		return nil, err
 	}
+
+	balanceReq := moneroWallet.RequestGetBalance{
+		AccountIndex: 0,
+	}
+	// we check whether we have enough fund to transfer
+	var totalAmount uint64
+	for _, el := range txSend.Destinations {
+		totalAmount += el.Amount
+	}
+
+	counter := 0
+	// because the monero wallet has high possibility to report incorrect balance when it is just opened,
+	// we need to see 3 confirmations of the balance
+	totalConfirmed := 0
+	for ; counter < monero_multi_sig.MoneroWalletRetry; counter++ {
+		time.Sleep(time.Second * 2)
+		balance, err := tKeySign.walletClient.GetBalance(&balanceReq)
+		if err != nil {
+			tKeySign.logger.Error().Err(err).Msg("fail to get the balance of the wallet")
+			return nil, err
+		}
+		height, err := tKeySign.walletClient.GetHeight()
+		if err != nil {
+			tKeySign.logger.Error().Err(err).Msg("fail to get the height of the wallet block")
+			return nil, err
+		}
+
+		// it fail still lack of fund as the fee is not added here
+		if balance.UnlockedBalance > totalAmount {
+			tKeySign.logger.Info().Msgf("unlock balance is %v with height %d\n", balance.UnlockedBalance, height.Height)
+			totalConfirmed += 1
+			if totalAmount > 3 {
+				break
+			}
+		}
+		tKeySign.logger.Warn().Msgf("fail to get the unlock balance, the wallet end may be slow")
+	}
+	if counter >= 10 {
+		return nil, errors.New("not enough fund in wallet")
+	}
+
+	threshold := walletInfo.Threshold
+	needToWait := threshold - 1 // we do not need to wait for ourselves
 
 	// import message
 	orderedNodes, _ := tKeySign.amIFirstNode(tKeySign.GetTssCommonStruct().GetMsgID(), parties)
