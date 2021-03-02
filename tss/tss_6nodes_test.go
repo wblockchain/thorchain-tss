@@ -125,9 +125,10 @@ func hash(payload []byte) []byte {
 
 // we do for both join party schemes
 func (s *FourNodeTestSuite) Test6NodesTss(c *C) {
-	// s.doTestKeygen(c, true)
+	s.doTestKeygen(c, true)
 	// s.doTestKeySign(c, true)
-	s.doTestBlame(c)
+	// s.doTestBlame(c)
+	s.doTestFailJoinParty(c)
 }
 
 // generate a new key
@@ -257,7 +258,7 @@ func getPreparams(c *C) []*btsskeygen.LocalPreParams {
 }
 
 func (s *FourNodeTestSuite) doTestBlame(c *C) {
-	expectedFailNode := "thorpub1addwnpepqtdklw8tf3anjz7nn5fly3uvq2e67w2apn560s4smmrt9e3x52nt2svmmu3"
+	expectedFailNode := "thorpub1addwnpepq2m5ng0e6vm66feecrwxp37cdvmezsysghskz3t5w2du4c48qwupxn96nrr"
 	var req keygen.Request
 
 	wg := sync.WaitGroup{}
@@ -298,5 +299,37 @@ func (s *FourNodeTestSuite) doTestBlame(c *C) {
 		c.Assert(item.Status, Equals, common.Fail)
 		c.Assert(item.Blame.BlameNodes, HasLen, 1)
 		c.Assert(item.Blame.BlameNodes[0].Pubkey, Equals, expectedFailNode)
+	}
+}
+
+func (s *FourNodeTestSuite) doTestFailJoinParty(c *C) {
+	// JoinParty should fail if there is a node that suppose to be in the keygen , but we didn't send request in
+	wg := sync.WaitGroup{}
+	lock := &sync.Mutex{}
+	keygenResult := make(map[int]keygen.Response)
+	// here we skip the first node
+	for i := 1; i < partyNum; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			var req keygen.Request
+			req = keygen.NewRequest(testPubKeys, 10, "0.14.0", s.rpcAddress[idx])
+			res, err := s.servers[idx].Keygen(req)
+			c.Assert(err, IsNil)
+			lock.Lock()
+			defer lock.Unlock()
+			keygenResult[idx] = res
+		}(i)
+	}
+
+	wg.Wait()
+	c.Logf("result:%+v", keygenResult)
+	for _, item := range keygenResult {
+		c.Assert(item.PoolAddress, Equals, "")
+		c.Assert(item.Status, Equals, common.Fail)
+		c.Assert(item.Blame.BlameNodes, HasLen, 2)
+		expectedFailNode := []string{"thorpub1addwnpepq2m5ng0e6vm66feecrwxp37cdvmezsysghskz3t5w2du4c48qwupxn96nrr", "thorpub1addwnpepqtdklw8tf3anjz7nn5fly3uvq2e67w2apn560s4smmrt9e3x52nt2svmmu3"}
+		c.Assert(item.Blame.BlameNodes[0].Pubkey, Equals, expectedFailNode[0])
+		c.Assert(item.Blame.BlameNodes[1].Pubkey, Equals, expectedFailNode[1])
 	}
 }

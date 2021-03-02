@@ -25,7 +25,7 @@ var (
 
 // PartyInfo the information used by tss key gen and key sign
 type PartyInfo struct {
-	Party      btss.Party
+	Party      *btss.PartyID
 	PartyIDMap map[string]*btss.PartyID
 }
 

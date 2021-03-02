@@ -18,7 +18,7 @@ type TssConfig struct {
 }
 
 const (
-	MoneroSharepre            = "moneroMsgMakeSig"
+	MoneroKeyGenSharepre      = "moneroKeyGenSharePre"
 	MoneroKeyGenShareExchange = "moneroKeyGenShareExchange"
 	MoneroExportedSignMsg     = "moneroExportedSignMsg"
 	MoneroInitTransfer        = "moneroInitTrnasfer"

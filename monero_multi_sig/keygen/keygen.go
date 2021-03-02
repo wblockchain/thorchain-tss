@@ -18,6 +18,7 @@ import (
 
 	moneroWallet "gitlab.com/thorchain/tss/monero-wallet-rpc/wallet"
 
+	"gitlab.com/thorchain/tss/go-tss/blame"
 	"gitlab.com/thorchain/tss/go-tss/common"
 	"gitlab.com/thorchain/tss/go-tss/conversion"
 	"gitlab.com/thorchain/tss/go-tss/messages"
@@ -85,8 +86,8 @@ func (tKeyGen *MoneroKeyGen) packAndSend(info string, exchangeRound int, localPa
 		From:        localPartyID,
 		IsBroadcast: true,
 	}
-	roundInfo := "moneroMsgKeyGen" + strconv.FormatInt(int64(exchangeRound), 10)
-	return tKeyGen.moneroCommonStruct.ProcessOutCh(msg, &r, roundInfo, messages.TSSKeyGenMsg)
+	tKeyGen.moneroCommonStruct.GetBlameMgr().SetLastMsg(msgType)
+	return tKeyGen.moneroCommonStruct.ProcessOutCh(msg, &r, msgType, messages.TSSKeyGenMsg)
 }
 
 func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, string, error) {
@@ -100,7 +101,7 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, string, 
 		return "", "", err
 	}
 
-	// since the defination of threshold of monero is different from the original tss, we need to adjust it 1 more node
+	// since the definition of threshold of monero is different from the original tss, we need to adjust it 1 more node
 	threshold += 1
 
 	// now we try to connect to the monero wallet rpc client
@@ -138,12 +139,12 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, string, 
 	}
 
 	partyInfo := &common.PartyInfo{
-		Party:      nil,
+		Party:      localPartyID,
 		PartyIDMap: partyIDMap,
 	}
 
 	tKeyGen.moneroCommonStruct.SetPartyInfo(partyInfo)
-	blameMgr.SetPartyInfo(nil, partyIDMap)
+	blameMgr.SetPartyInfo(localPartyID, partyIDMap)
 	tKeyGen.moneroCommonStruct.P2PPeers = conversion.GetPeersID(tKeyGen.moneroCommonStruct.PartyIDtoP2PID, tKeyGen.moneroCommonStruct.GetLocalPeerID())
 	// start keygen
 	defer tKeyGen.logger.Debug().Msg("generate monero share")
@@ -165,7 +166,7 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, string, 
 
 	var exchangeRound int32
 	exchangeRound = 0
-	err = tKeyGen.packAndSend(share.MultisigInfo, int(exchangeRound), localPartyID, common.MoneroSharepre)
+	err = tKeyGen.packAndSend(share.MultisigInfo, int(exchangeRound), localPartyID, common.MoneroKeyGenSharepre)
 	if err != nil {
 		return "", "", err
 	}
@@ -182,11 +183,12 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, string, 
 			case <-time.After(tKeyGen.GetTssCommonStruct().GetConf().KeyGenTimeout):
 				close(tKeyGen.commStopChan)
 				globalErr = errors.New("keygen timeout")
+
 				return
 
 			case share := <-moneroShareChan:
 				switch share.MsgType {
-				case common.MoneroSharepre:
+				case common.MoneroKeyGenSharepre:
 					currentRound := atomic.LoadInt32(&exchangeRound)
 					shares, ready := shareStore.StoreAndCheck(int(currentRound)-1, share, peerNum)
 					if !ready {
@@ -275,8 +277,25 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, string, 
 
 	keyGenWg.Wait()
 	if globalErr != nil {
-		tKeyGen.logger.Error().Err(globalErr).Msg("fail to create the monero multisig wallet")
-		return "", "", globalErr
+
+		tKeyGen.logger.Error().Msgf("fail to create the monero wallet with %s", tKeyGen.GetTssCommonStruct().GetConf().KeyGenTimeout)
+		lastMsg := blameMgr.GetLastMsg()
+		failReason := blameMgr.GetBlame().FailReason
+		if failReason == "" {
+			failReason = blame.TssTimeout
+		}
+		if lastMsg == "" {
+			tKeyGen.logger.Error().Msg("fail to start the keygen, the last produced message of this node is none")
+			return "", "", errors.New("timeout before shared message is generated")
+		}
+		fmt.Printf(">>>>>>>>>>>last :%v\n", lastMsg)
+		blameNodesBroadcast, err := blameMgr.GetBroadcastBlame(lastMsg)
+		if err != nil {
+			tKeyGen.logger.Error().Err(err).Msg("error in get broadcast blame")
+		}
+		blameMgr.GetBlame().AddBlameNodes(blameNodesBroadcast...)
+
+		return "", "", blame.ErrTssTimeOut
 	}
 	req := moneroWallet.RequestQueryKey{
 		KeyType: "view_key",

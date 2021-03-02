@@ -145,7 +145,7 @@ func GetMsgRound(wireMsg *messages.WireMessage, partyID *btss.PartyID, isMonero 
 		}
 		return blame.RoundInfo{
 			Index:    moneroShare.ExchangeRound,
-			RoundMsg: MoneroSharepre,
+			RoundMsg: MoneroKeyGenSharepre,
 		}, nil
 
 	}

@@ -15,10 +15,11 @@ import (
 func (m *Manager) tssTimeoutBlame(lastMessageType string, partyIDMap map[string]*btss.PartyID) ([]string, error) {
 	peersSet := mapset.NewSet()
 	for _, el := range partyIDMap {
-		if el.Id != m.partyInfo.Party.PartyID().Id {
+		if el.Id != m.partyInfo.Party.Id {
 			peersSet.Add(el.Id)
 		}
 	}
+
 	standbyNodes := m.roundMgr.GetByRound(lastMessageType)
 	if len(standbyNodes) == 0 {
 		return nil, nil
@@ -162,7 +163,7 @@ func (m *Manager) TssMissingShareBlame(rounds int) ([]Node, bool, error) {
 			}
 		}
 		// we add our own id to avoid blame ourselves
-		el = append(el, m.partyInfo.Party.PartyID().Id)
+		el = append(el, m.partyInfo.Party.Id)
 		for _, pid := range el {
 			peers = append(peers, m.PartyIDtoP2PID[pid].String())
 		}

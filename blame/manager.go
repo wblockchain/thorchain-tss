@@ -18,7 +18,7 @@ type Manager struct {
 	partyInfo       *PartyInfo
 	PartyIDtoP2PID  map[string]peer.ID
 	lastMsgLocker   *sync.RWMutex
-	lastMsg         btss.Message
+	lastMsg         string
 	acceptedShares  *sync.Map
 }
 
@@ -52,19 +52,19 @@ func (m *Manager) GetAcceptShares() *sync.Map {
 	return m.acceptedShares
 }
 
-func (m *Manager) SetLastMsg(lastMsg btss.Message) {
+func (m *Manager) SetLastMsg(lastMsg string) {
 	m.lastMsgLocker.Lock()
 	defer m.lastMsgLocker.Unlock()
 	m.lastMsg = lastMsg
 }
 
-func (m *Manager) GetLastMsg() btss.Message {
+func (m *Manager) GetLastMsg() string {
 	m.lastMsgLocker.RLock()
 	defer m.lastMsgLocker.RUnlock()
 	return m.lastMsg
 }
 
-func (m *Manager) SetPartyInfo(party btss.Party, partyIDMap map[string]*btss.PartyID) {
+func (m *Manager) SetPartyInfo(party *btss.PartyID, partyIDMap map[string]*btss.PartyID) {
 	partyInfo := &PartyInfo{
 		Party:      party,
 		PartyIDMap: partyIDMap,

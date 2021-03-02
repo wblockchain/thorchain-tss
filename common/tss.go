@@ -23,7 +23,7 @@ import (
 
 // PartyInfo the information used by tss key gen and key sign
 type PartyInfo struct {
-	Party      btss.Party
+	Party      *btss.PartyID
 	PartyIDMap map[string]*btss.PartyID
 }
 
@@ -211,20 +211,18 @@ func (t *TssCommon) updateLocal(wireMsg *messages.WireMessage, moneroShareChan c
 	}
 
 	if len(t.culprits) != 0 && partyInlist(partyID, t.culprits) {
-		t.logger.Error().Msgf("the malicious party (party ID:%s) try to send incorrect message to me (party ID:%s)", partyID.Id, t.partyInfo.Party.PartyID().Id)
+		t.logger.Error().Msgf("the malicious party (party ID:%s) try to send incorrect message to me (party ID:%s)", partyID.Id, t.partyInfo.Party.Id)
 		return errors.New(blame.TssBrokenMsg)
 
 	}
 
 	if moneroShareChan == nil {
-		_, errUp := partyInfo.Party.UpdateFromBytes(wireMsg.Message, partyID, wireMsg.Routing.IsBroadcast)
-		if errUp != nil {
-			return t.processInvalidMsgBlame(wireMsg, round, errUp)
-		}
+		errUp := btss.NewError(errors.New("invalid message"), "", 0, nil, nil)
+		return t.processInvalidMsgBlame(wireMsg, round, errUp)
 	} else {
 		// it is the monero message
 		var share MoneroShare
-		allMsgTypes := []string{MoneroSharepre, MoneroKeyGenShareExchange, MoneroExportedSignMsg, MoneroInitTransfer, MoneroSignShares}
+		allMsgTypes := []string{MoneroKeyGenSharepre, MoneroKeyGenShareExchange, MoneroExportedSignMsg, MoneroInitTransfer, MoneroSignShares}
 		err := json.Unmarshal(wireMsg.Message, &share)
 		result := strings.Split(share.MsgType, "@")
 		moneroType := false
@@ -466,7 +464,6 @@ func (t *TssCommon) applyShare(localCacheItem *LocalCacheItem, threshold int, ke
 		t.blameMgr.GetBlame().SetBlame(blame.HashCheckFail, []blame.Node{blameNode}, unicast)
 		return blame.ErrHashCheck
 	}
-
 	t.blameMgr.GetRoundMgr().Set(key, localCacheItem.Msg)
 	if err := t.updateLocal(localCacheItem.Msg, moneroShareChan); nil != err {
 		return fmt.Errorf("fail to update the message to local party: %w", err)
