@@ -21,6 +21,7 @@ import (
 	tcrypto "github.com/tendermint/tendermint/crypto"
 	moneroWallet "gitlab.com/thorchain/tss/monero-wallet-rpc/wallet"
 
+	"gitlab.com/thorchain/tss/go-tss/blame"
 	"gitlab.com/thorchain/tss/go-tss/common"
 	"gitlab.com/thorchain/tss/go-tss/conversion"
 	"gitlab.com/thorchain/tss/go-tss/messages"
@@ -135,7 +136,8 @@ func (tKeySign *MoneroKeySign) packAndSend(info string, exchangeRound int, local
 		tKeySign.logger.Error().Err(err).Msg("fail to encode the wallet share")
 		return err
 	}
-	roundInfo := "moneroMsgKeySign" + strconv.FormatInt(int64(exchangeRound), 10)
+	roundInfo := msgType + strconv.FormatInt(int64(exchangeRound), 10)
+	tKeySign.moneroCommonStruct.GetBlameMgr().SetLastMsg(roundInfo)
 	if toParty == nil {
 		r := btss.MessageRouting{
 			From:        localPartyID,
@@ -269,11 +271,11 @@ func (tKeySign *MoneroKeySign) SignMessage(encodedTx string, parties []string) (
 	}
 
 	tKeySign.moneroCommonStruct.SetPartyInfo(&common.PartyInfo{
-		Party:      nil,
+		Party:      localPartyID,
 		PartyIDMap: partyIDMap,
 	})
 
-	blameMgr.SetPartyInfo(nil, partyIDMap)
+	blameMgr.SetPartyInfo(localPartyID, partyIDMap)
 	tKeySign.moneroCommonStruct.P2PPeers = conversion.GetPeersID(tKeySign.moneroCommonStruct.PartyIDtoP2PID, tKeySign.moneroCommonStruct.GetLocalPeerID())
 	var keySignWg sync.WaitGroup
 
@@ -392,6 +394,8 @@ func (tKeySign *MoneroKeySign) SignMessage(encodedTx string, parties []string) (
 		for {
 			select {
 			case <-time.After(tssConf.KeySignTimeout):
+				tKeySign.logger.Error().Msgf("fail to generate the signature with %v", tssConf.KeySignTimeout)
+				globalErr = blame.ErrTssTimeOut
 				return
 
 			case share := <-moneroShareChan:
@@ -565,6 +569,21 @@ func (tKeySign *MoneroKeySign) SignMessage(encodedTx string, parties []string) (
 
 	keySignWg.Wait()
 	if globalErr != nil {
+		tKeySign.logger.Error().Msgf("fail to create the monero signature with %s", tKeySign.GetTssCommonStruct().GetConf().KeyGenTimeout)
+		lastMsg := blameMgr.GetLastMsg()
+		failReason := blameMgr.GetBlame().FailReason
+		if failReason == "" {
+			failReason = blame.TssTimeout
+		}
+		if lastMsg == "" {
+			tKeySign.logger.Error().Msg("fail to start the keygen, the last produced message of this node is none")
+			return nil, errors.New("timeout before shared message is generated")
+		}
+		blameNodesBroadcast, err := blameMgr.GetBroadcastBlame(lastMsg)
+		if err != nil {
+			tKeySign.logger.Error().Err(err).Msg("error in get broadcast blame")
+		}
+		blameMgr.GetBlame().AddBlameNodes(blameNodesBroadcast...)
 		return nil, globalErr
 	}
 

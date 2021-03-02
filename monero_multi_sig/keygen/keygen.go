@@ -277,7 +277,6 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, string, 
 
 	keyGenWg.Wait()
 	if globalErr != nil {
-
 		tKeyGen.logger.Error().Msgf("fail to create the monero wallet with %s", tKeyGen.GetTssCommonStruct().GetConf().KeyGenTimeout)
 		lastMsg := blameMgr.GetLastMsg()
 		failReason := blameMgr.GetBlame().FailReason
@@ -288,13 +287,11 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, string, 
 			tKeyGen.logger.Error().Msg("fail to start the keygen, the last produced message of this node is none")
 			return "", "", errors.New("timeout before shared message is generated")
 		}
-		fmt.Printf(">>>>>>>>>>>last :%v\n", lastMsg)
 		blameNodesBroadcast, err := blameMgr.GetBroadcastBlame(lastMsg)
 		if err != nil {
 			tKeyGen.logger.Error().Err(err).Msg("error in get broadcast blame")
 		}
 		blameMgr.GetBlame().AddBlameNodes(blameNodesBroadcast...)
-
 		return "", "", blame.ErrTssTimeOut
 	}
 	req := moneroWallet.RequestQueryKey{

@@ -82,8 +82,8 @@ func (s *FourNodeTestSuite) SetUpTest(c *C) {
 	s.servers = make([]*TssServer, partyNum)
 	s.rpcAddress = make([]string, partyNum)
 	conf := common.TssConfig{
-		KeyGenTimeout:   60 * time.Second,
-		KeySignTimeout:  60 * time.Second,
+		KeyGenTimeout:   40 * time.Second,
+		KeySignTimeout:  40 * time.Second,
 		PreParamTimeout: 5 * time.Second,
 		EnableMonitor:   false,
 	}
@@ -125,10 +125,11 @@ func hash(payload []byte) []byte {
 
 // we do for both join party schemes
 func (s *FourNodeTestSuite) Test6NodesTss(c *C) {
-	s.doTestKeygen(c, true)
+	// s.doTestKeygen(c, true)
 	// s.doTestKeySign(c, true)
+	s.doTestKeySignBlame(c)
 	// s.doTestBlame(c)
-	s.doTestFailJoinParty(c)
+	// s.doTestFailJoinParty(c)
 }
 
 // generate a new key
@@ -257,7 +258,7 @@ func getPreparams(c *C) []*btsskeygen.LocalPreParams {
 	return preParamArray
 }
 
-func (s *FourNodeTestSuite) doTestBlame(c *C) {
+func (s *FourNodeTestSuite) doTestKeyGenBlame(c *C) {
 	expectedFailNode := "thorpub1addwnpepq2m5ng0e6vm66feecrwxp37cdvmezsysghskz3t5w2du4c48qwupxn96nrr"
 	var req keygen.Request
 
@@ -296,6 +297,68 @@ func (s *FourNodeTestSuite) doTestBlame(c *C) {
 			continue
 		}
 		c.Assert(item.PoolAddress, Equals, "")
+		c.Assert(item.Status, Equals, common.Fail)
+		c.Assert(item.Blame.BlameNodes, HasLen, 1)
+		c.Assert(item.Blame.BlameNodes[0].Pubkey, Equals, expectedFailNode)
+	}
+}
+
+func (s *FourNodeTestSuite) doTestKeySignBlame(c *C) {
+	expectedFailNode := "thorpub1addwnpepq2m5ng0e6vm66feecrwxp37cdvmezsysghskz3t5w2du4c48qwupxn96nrr"
+
+	wg := sync.WaitGroup{}
+	lock := &sync.Mutex{}
+
+	dst := wallet.Destination{
+		Amount:  500,
+		Address: receiverAddress,
+	}
+
+	t := wallet.RequestTransfer{
+		Destinations:  []*wallet.Destination{&dst},
+		GetTxHex:      true,
+		RingSize:      11,
+		GetTxKey:      true,
+		GetTxMetadata: true,
+	}
+
+	tx, err := json.Marshal(t)
+	c.Assert(err, IsNil)
+	encodedTx := base64.StdEncoding.EncodeToString(tx)
+
+	keySignResult := make(map[int]keysign.Response)
+	for i := 0; i < partyNum-2; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			keySignReq := keysign.NewRequest(10, testPubKeys, "0.14.0", s.rpcAddress[idx], encodedTx)
+			defer wg.Done()
+			res, err := s.servers[idx].KeySign(keySignReq)
+			c.Assert(err, NotNil)
+			lock.Lock()
+			defer lock.Unlock()
+			keySignResult[idx] = res
+		}(i)
+	}
+	// if we shutdown one server during keygen , he should be blamed
+	time.Sleep(time.Second * 10)
+	s.servers[0].Stop()
+	defer func() {
+		conf := common.TssConfig{
+			KeyGenTimeout:   60 * time.Second,
+			KeySignTimeout:  60 * time.Second,
+			PreParamTimeout: 5 * time.Second,
+		}
+		s.servers[0] = s.getTssServer(c, 0, conf, "")
+		c.Assert(s.servers[0].Start(), IsNil)
+		c.Log("we start the first server again")
+	}()
+	wg.Wait()
+	c.Logf("result:%+v", keySignResult)
+	for idx, item := range keySignResult {
+		if idx == 0 {
+			continue
+		}
+		c.Assert(item.TxKey, Equals, "")
 		c.Assert(item.Status, Equals, common.Fail)
 		c.Assert(item.Blame.BlameNodes, HasLen, 1)
 		c.Assert(item.Blame.BlameNodes[0].Pubkey, Equals, expectedFailNode)

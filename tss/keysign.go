@@ -162,7 +162,7 @@ func (t *TssServer) generateSignature(msgID string, req keysign.Request, thresho
 		return keysign.Response{
 			Status: common.Fail,
 			Blame:  blameNodes,
-		}, nil
+		}, blame.ErrTssTimeOut
 	}
 
 	// this indicates we are not the last node who submit the transaction
