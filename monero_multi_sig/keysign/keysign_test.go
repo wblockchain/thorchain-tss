@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"sort"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -16,13 +18,13 @@ import (
 	"github.com/rs/zerolog/log"
 	"gitlab.com/thorchain/tss/monero-wallet-rpc/wallet"
 
-	"gitlab.com/thorchain/tss/go-tss/conversion"
-
 	"github.com/libp2p/go-libp2p-core/peer"
 	maddr "github.com/multiformats/go-multiaddr"
 	tcrypto "github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/crypto/secp256k1"
 	. "gopkg.in/check.v1"
+
+	"gitlab.com/thorchain/tss/go-tss/conversion"
 
 	"gitlab.com/thorchain/tss/go-tss/common"
 	"gitlab.com/thorchain/tss/go-tss/messages"
@@ -64,7 +66,7 @@ var (
 		"16Uiu2HAm2FzqoUdS6Y9Esg2EaGcAG5rVe1r6BFNnmmQr2H3bqafa",
 	}
 	// you have to setup the wallet before you run this test, change the IP as needed
-	remoteAddress = []string{"188.166.183.111", "178.128.155.101", "188.166.158.53", "104.236.7.106", "104.248.200.163", "139.59.237.127"}
+	remoteAddress = []string{"134.209.108.57", "167.99.11.83", "46.101.91.4", "134.209.35.249", "174.138.10.57", "134.209.101.44"}
 )
 
 func TestPackage(t *testing.T) {
@@ -265,4 +267,126 @@ func (s *TssKeysignTestSuite) TestSignMessage(c *C) {
 		}(i)
 	}
 	wg.Wait()
+}
+
+func (s *TssKeysignTestSuite) TestSignMessageCheckFailure(c *C) {
+	if testing.Short() {
+		c.Skip("skip the test")
+		return
+	}
+	sort.Strings(testPubKeys)
+
+	dst := wallet.Destination{
+		Amount:  500,
+		Address: "48Qp1DYY95wF2BNbhQZDd5J8dZCucMRz99Y4wAUaDjQhjX8royowfog1sN9WAdVeshQuvU6qKFi9Ji4gj9ZREkjTFYsQbZX",
+	}
+
+	t := wallet.RequestTransfer{
+		Destinations:  []*wallet.Destination{&dst},
+		GetTxHex:      true,
+		RingSize:      11,
+		GetTxKey:      true,
+		GetTxMetadata: true,
+	}
+
+	tx, err := json.Marshal(t)
+	c.Assert(err, IsNil)
+	encodedTx := base64.StdEncoding.EncodeToString(tx)
+
+	dst2 := wallet.Destination{
+		Amount:  510,
+		Address: "48Qp1DYY95wF2BNbhQZDd5J8dZCucMRz99Y4wAUaDjQhjX8royowfog1sN9WAdVeshQuvU6qKFi9Ji4gj9ZREkjTFYsQbZX",
+	}
+
+	t2 := wallet.RequestTransfer{
+		Destinations:  []*wallet.Destination{&dst2},
+		GetTxHex:      true,
+		RingSize:      11,
+		GetTxKey:      true,
+		GetTxMetadata: true,
+	}
+
+	tx2, err := json.Marshal(t2)
+	c.Assert(err, IsNil)
+	encodedTx2 := base64.StdEncoding.EncodeToString(tx2)
+	_ = encodedTx2
+	var reqs []Request
+	for i := 0; i < s.partyNum; i++ {
+		var rpcaddress string
+		rpcaddress = fmt.Sprintf("http://%s:18083/json_rpc", remoteAddress[i])
+		var req Request
+		if i == 1 {
+			req = NewRequest(10, testPubKeys[:4], "0.16.0", rpcaddress, encodedTx2)
+		} else {
+			req = NewRequest(10, testPubKeys[:4], "0.16.0", rpcaddress, encodedTx)
+		}
+		reqs = append(reqs, req)
+	}
+
+	messageID, err := common.MsgToHashString([]byte(reqs[0].EncodedTx))
+	c.Assert(err, IsNil)
+	wg := sync.WaitGroup{}
+	conf := common.TssConfig{
+		KeyGenTimeout:   40 * time.Second,
+		KeySignTimeout:  40 * time.Second,
+		PreParamTimeout: 5 * time.Second,
+	}
+
+	for i := 0; i < s.partyNum; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			comm := s.comms[idx]
+			stopChan := make(chan struct{})
+			keysignIns, walletClient, err := NewMoneroKeySign(comm.GetLocalPeerID(),
+				conf,
+				comm.BroadcastMsgChan,
+				stopChan, messageID,
+				s.nodePrivKeys[idx], s.comms[idx], reqs[idx].RpcAddress)
+			c.Assert(err, IsNil)
+
+			defer func() {
+				err := walletClient.CloseWallet()
+				c.Assert(err, IsNil)
+			}()
+			keysignMsgChannel := keysignIns.GetTssKeySignChannels()
+
+			comm.SetSubscribe(messages.TSSKeySignMsg, messageID, keysignMsgChannel)
+			comm.SetSubscribe(messages.TSSKeySignVerMsg, messageID, keysignMsgChannel)
+			comm.SetSubscribe(messages.TSSControlMsg, messageID, keysignMsgChannel)
+			comm.SetSubscribe(messages.TSSTaskDone, messageID, keysignMsgChannel)
+			defer comm.CancelSubscribe(messages.TSSKeySignMsg, messageID)
+			defer comm.CancelSubscribe(messages.TSSKeySignVerMsg, messageID)
+			defer comm.CancelSubscribe(messages.TSSControlMsg, messageID)
+			defer comm.CancelSubscribe(messages.TSSTaskDone, messageID)
+			_, err = keysignIns.SignMessage(reqs[idx].EncodedTx, reqs[idx].SignerPubKeys)
+			blameMgr := keysignIns.moneroCommonStruct.GetBlameMgr()
+			nodes := blameMgr.GetBlame().BlameNodes
+			if idx != 1 {
+				c.Assert(err, NotNil)
+				c.Assert(nodes[0].Pubkey, Equals, "thorpub1addwnpepq2ryyje5zr09lq7gqptjwnxqsy2vcdngvwd6z7yt5yjcnyj8c8cn559xe69")
+				c.Assert(nodes, HasLen, 1)
+			}
+		}(i)
+	}
+	wg.Wait()
+}
+
+func (s *TssKeysignTestSuite) TearDownSuite(c *C) {
+	for i, _ := range s.comms {
+		tempFilePath := path.Join(os.TempDir(), strconv.Itoa(i))
+		err := os.RemoveAll(tempFilePath)
+		c.Assert(err, IsNil)
+	}
+}
+
+func (s *TssKeysignTestSuite) TearDownTest(c *C) {
+	if testing.Short() {
+		c.Skip("skip the test")
+		return
+	}
+	time.Sleep(time.Second)
+	for _, item := range s.comms {
+		c.Assert(item.Stop(), IsNil)
+	}
 }

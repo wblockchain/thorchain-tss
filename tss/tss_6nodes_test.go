@@ -126,8 +126,8 @@ func hash(payload []byte) []byte {
 // we do for both join party schemes
 func (s *FourNodeTestSuite) Test6NodesTss(c *C) {
 	// s.doTestKeygen(c, true)
-	// s.doTestKeySign(c, true)
-	s.doTestKeySignBlame(c)
+	s.doTestKeySign(c, true)
+	// s.doTestKeySignBlame(c)
 	// s.doTestBlame(c)
 	// s.doTestFailJoinParty(c)
 }

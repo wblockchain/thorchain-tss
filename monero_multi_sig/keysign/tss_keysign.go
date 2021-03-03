@@ -310,7 +310,6 @@ func (tKeySign *MoneroKeySign) SignMessage(encodedTx string, parties []string) (
 	for _, el := range txSend.Destinations {
 		totalAmount += el.Amount
 	}
-
 	counter := 0
 	// because the monero wallet has high possibility to report incorrect balance when it is just opened,
 	// we need to see 3 confirmations of the balance
@@ -477,6 +476,14 @@ func (tKeySign *MoneroKeySign) SignMessage(encodedTx string, parties []string) (
 					pks := tKeySign.calcualtePubkeyForUse(peerSigningPubkeys, exportedPubKeys, orderedNodes)
 
 					leaderShare = share.MultisigInfo
+					checkResult, err := tKeySign.verifyTransaction(leaderShare, txSend.Destinations)
+					if err != nil || !checkResult {
+						tKeySign.logger.Error().Msg("fail to verify the transaction")
+						globalErr = errors.New("transaction cannot been verified")
+						blameLeader := blame.NewNode(leader, nil, nil)
+						blameMgr.GetBlame().AddBlameNodes(blameLeader)
+						return
+					}
 					outData := moneroWallet.RequestSignMultisigParallel{
 						TxDataHex: leaderShare,
 						PubKeys:   pks,
@@ -517,10 +524,25 @@ func (tKeySign *MoneroKeySign) SignMessage(encodedTx string, parties []string) (
 						continue
 					}
 					var accuData []string
+					var blameNodes []blame.Node
 					accuData = append(accuData, leaderShare)
 					for _, el := range shares {
+						checkResult, err := tKeySign.verifyTransaction(el.MultisigInfo, txSend.Destinations)
+						if err != nil || !checkResult {
+							blameNode := blame.NewNode(el.Sender, nil, nil)
+							blameNodes = append(blameNodes, blameNode)
+						}
 						accuData = append(accuData, el.MultisigInfo)
 					}
+
+					if len(blameNodes) != 0 {
+						tKeySign.logger.Error().Msg("fail to verify the transaction")
+						globalErr = errors.New("transaction cannot been verified")
+						blameMgr.GetBlame().AddBlameNodes(blameNodes...)
+						globalErr = errors.New("transaction verification failed")
+						return
+					}
+
 					accuData = append(accuData, myShare)
 					accReq := moneroWallet.RequestAccuMultisig{
 						TxDataHex: accuData,
@@ -562,6 +584,7 @@ func (tKeySign *MoneroKeySign) SignMessage(encodedTx string, parties []string) (
 				}
 
 			case <-tKeySign.moneroCommonStruct.GetTaskDone():
+				globalErr = nil
 				return
 			}
 		}
@@ -600,4 +623,13 @@ func (tKeySign *MoneroKeySign) getTxFromTxKey(sendProof *moneroWallet.RequestGet
 		return nil, err
 	}
 	return proofResp, nil
+}
+
+func (tKeySign *MoneroKeySign) verifyTransaction(receivedShare string, myDest []*moneroWallet.Destination) (bool, error) {
+	transactionCheck := moneroWallet.RequestCheckTransaction{
+		Destinations: myDest,
+		TxDataHex:    receivedShare,
+	}
+	ret, err := tKeySign.walletClient.CheckTransaction(&transactionCheck)
+	return ret.CheckResult, err
 }

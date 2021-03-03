@@ -26,18 +26,18 @@ func (NotifierTestSuite) TestNewNotifier(c *C) {
 	}
 	dummyClient := moneroWallet.New(config)
 
-	n, err := NewNotifier("", testEncodedTransaction, dummyClient)
+	n, err := NewNotifier("", testEncodedTransaction, dummyClient, 0)
 	c.Assert(err, NotNil)
 	c.Assert(n, IsNil)
-	n, err = NewNotifier("aasfdasdf", "", dummyClient)
-	c.Assert(err, NotNil)
-	c.Assert(n, IsNil)
-
-	n, err = NewNotifier("hello", "aaaa", dummyClient)
+	n, err = NewNotifier("aasfdasdf", "", dummyClient, 0)
 	c.Assert(err, NotNil)
 	c.Assert(n, IsNil)
 
-	n, err = NewNotifier("hello", testEncodedTransaction, dummyClient)
+	n, err = NewNotifier("hello", "aaaa", dummyClient, 0)
+	c.Assert(err, NotNil)
+	c.Assert(n, IsNil)
+
+	n, err = NewNotifier("hello", testEncodedTransaction, dummyClient, 0)
 	c.Assert(err, IsNil)
 	c.Assert(n, NotNil)
 	ch := n.GetResponseChannel()
@@ -63,7 +63,7 @@ func (NotifierTestSuite) TestNotifierHappyPath(c *C) {
 	err := wallet.OpenWallet(&walletOpenReq)
 	c.Assert(err, IsNil)
 
-	n, err := NewNotifier("hello", testEncodedTransaction, wallet)
+	n, err := NewNotifier("hello", testEncodedTransaction, wallet, 1)
 	c.Assert(err, IsNil)
 	c.Assert(n, NotNil)
 

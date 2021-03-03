@@ -93,6 +93,10 @@ func (s *SignatureNotifier) handleStream(stream network.Stream) {
 
 	n.threshold -= 1
 	finished, err := n.ProcessSignature(&signedTxHex)
+	if finished {
+		delete(s.notifiers, msg.ID)
+		return
+	}
 	if n.threshold < 1 {
 		logger.Error().Err(err).Msg("we have enough nodes report the failure of signature generation")
 		n.resp <- nil
@@ -103,10 +107,6 @@ func (s *SignatureNotifier) handleStream(stream network.Stream) {
 	if err != nil {
 		logger.Error().Err(err).Msg("fail to verify local signature data")
 		return
-	}
-
-	if finished {
-		delete(s.notifiers, msg.ID)
 	}
 }
 
