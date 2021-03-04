@@ -348,6 +348,7 @@ func (s *TssKeysignTestSuite) TestSignMessageCheckFailure(c *C) {
 			defer func() {
 				err := walletClient.CloseWallet()
 				c.Assert(err, IsNil)
+				time.Sleep(time.Second * 5)
 			}()
 			keysignMsgChannel := keysignIns.GetTssKeySignChannels()
 
@@ -389,4 +390,5 @@ func (s *TssKeysignTestSuite) TearDownTest(c *C) {
 	for _, item := range s.comms {
 		c.Assert(item.Stop(), IsNil)
 	}
+	time.Sleep(time.Second * 5)
 }

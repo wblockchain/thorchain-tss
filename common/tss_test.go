@@ -120,7 +120,8 @@ func (t *TssTestSuite) TestTssProcessOutCh(c *C) {
 	msg := btss.NewMessageWrapper(messageRouting, testContent)
 	tssMsg := btss.NewMessage(messageRouting, testContent, msg)
 	tssCommonStruct := NewTssCommon("", nil, conf, "test", t.privKey)
-	err = tssCommonStruct.ProcessOutCh(tssMsg, messages.TSSKeyGenMsg)
+	data, r, _ := tssMsg.WireBytes()
+	err = tssCommonStruct.ProcessOutCh(data, r, "test", messages.TSSKeyGenMsg)
 	c.Assert(err, IsNil)
 }
 
@@ -174,11 +175,11 @@ func (t *TssTestSuite) testVerMsgDuplication(c *C, privKey tcrypto.PrivKey, tssC
 	tssCommonStruct.msgID = "123"
 	msgKey := fmt.Sprintf("%s-%s", senderID.Id, roundInfo)
 	wrappedMsg := fabricateTssMsg(c, privKey, senderID, roundInfo, testMsg, tssCommonStruct.msgID, messages.TSSKeyGenMsg)
-	err := tssCommonStruct.ProcessOneMessage(wrappedMsg, tssCommonStruct.PartyIDtoP2PID[partiesID[1].Id].String())
+	err := tssCommonStruct.ProcessOneMessage(wrappedMsg, tssCommonStruct.PartyIDtoP2PID[partiesID[1].Id].String(), nil)
 	c.Assert(err, IsNil)
 	localItem := tssCommonStruct.TryGetLocalCacheItem(msgKey)
 	c.Assert(localItem.ConfirmedList, HasLen, 1)
-	err = tssCommonStruct.ProcessOneMessage(wrappedMsg, tssCommonStruct.PartyIDtoP2PID[partiesID[1].Id].String())
+	err = tssCommonStruct.ProcessOneMessage(wrappedMsg, tssCommonStruct.PartyIDtoP2PID[partiesID[1].Id].String(), nil)
 	c.Assert(err, IsNil)
 	c.Assert(localItem.ConfirmedList, HasLen, 1)
 }
@@ -199,7 +200,7 @@ func setupProcessVerMsgEnv(c *C, privKey tcrypto.PrivKey, keyPool []string, part
 	endCh := make(chan btsskeygen.LocalPartySaveData, len(partiesID))
 	keyGenParty := btsskeygen.NewLocalParty(params, outCh, endCh)
 	tssCommonStruct.SetPartyInfo(&PartyInfo{
-		Party:      keyGenParty,
+		Party:      keyGenParty.PartyID(),
 		PartyIDMap: partyIDMap,
 	})
 	err = conversion.SetupIDMaps(partyIDMap, tssCommonStruct.blameMgr.PartyIDtoP2PID)
@@ -207,7 +208,7 @@ func setupProcessVerMsgEnv(c *C, privKey tcrypto.PrivKey, keyPool []string, part
 	tssCommonStruct.SetLocalPeerID("fakeID")
 	err = conversion.SetupIDMaps(partyIDMap, tssCommonStruct.PartyIDtoP2PID)
 	c.Assert(err, IsNil)
-	tssCommonStruct.blameMgr.SetPartyInfo(keyGenParty, partyIDMap)
+	tssCommonStruct.blameMgr.SetPartyInfo(keyGenParty.PartyID(), partyIDMap)
 	peerPartiesID := append(partiesID[:localPartyID.Index], partiesID[localPartyID.Index+1:]...)
 	tssCommonStruct.P2PPeers = conversion.GetPeersID(tssCommonStruct.PartyIDtoP2PID, tssCommonStruct.GetLocalPeerID())
 	return tssCommonStruct, peerPartiesID, partiesID
@@ -224,12 +225,12 @@ func (t *TssTestSuite) testDropMsgOwner(c *C, privKey tcrypto.PrivKey, tssCommon
 	senderPeer, err := conversion.GetPeerIDFromPartyID(senderID)
 	c.Assert(err, IsNil)
 	// you can pass any p2pID in Tss message
-	err = tssCommonStruct.ProcessOneMessage(senderMsg, senderPeer.String())
+	err = tssCommonStruct.ProcessOneMessage(senderMsg, senderPeer.String(), nil)
 	c.Assert(err, IsNil)
 	localItem := tssCommonStruct.TryGetLocalCacheItem(msgKey)
 	c.Assert(localItem.ConfirmedList, HasLen, 1)
 	wrappedVerMsg := fabricateVerMsg(c, msgHash, msgKey)
-	err = tssCommonStruct.ProcessOneMessage(wrappedVerMsg, senderPeer.String())
+	err = tssCommonStruct.ProcessOneMessage(wrappedVerMsg, senderPeer.String(), nil)
 	c.Assert(err, Equals, blame.ErrHashCheck)
 	// since we re-use the tsscommon, so we may have more than one signature
 	var blameSig [][]byte
@@ -266,9 +267,9 @@ func (t *TssTestSuite) testProcessControlMsg(c *C, tssCommonStruct *TssCommon) {
 		Payload:     payload,
 	}
 
-	err = tssCommonStruct.ProcessOneMessage(&wrappedMsg, "1")
+	err = tssCommonStruct.ProcessOneMessage(&wrappedMsg, "1", nil)
 	c.Assert(err, NotNil)
-	err = tssCommonStruct.ProcessOneMessage(&wrappedMsg, "16Uiu2HAmACG5DtqmQsHtXg4G2sLS65ttv84e7MrL4kapkjfmhxAp")
+	err = tssCommonStruct.ProcessOneMessage(&wrappedMsg, "16Uiu2HAmACG5DtqmQsHtXg4G2sLS65ttv84e7MrL4kapkjfmhxAp", nil)
 	c.Assert(err, IsNil)
 	tssCommonStruct.blameMgr.GetShareMgr().Set("testHash")
 
@@ -291,7 +292,7 @@ func (t *TssTestSuite) testProcessControlMsg(c *C, tssCommonStruct *TssCommon) {
 		Payload:     payload,
 	}
 
-	err = tssCommonStruct.ProcessOneMessage(&wrappedMsg, "16Uiu2HAmACG5DtqmQsHtXg4G2sLS65ttv84e7MrL4kapkjfmhxAp")
+	err = tssCommonStruct.ProcessOneMessage(&wrappedMsg, "16Uiu2HAmACG5DtqmQsHtXg4G2sLS65ttv84e7MrL4kapkjfmhxAp", nil)
 	c.Assert(err, ErrorMatches, "invalid wireMsg")
 }
 
@@ -307,11 +308,11 @@ func (t *TssTestSuite) testProcessTaskDone(c *C, tssCommonStruct *TssCommon) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err = tssCommonStruct.ProcessOneMessage(&wrappedMsg, "1")
+		err = tssCommonStruct.ProcessOneMessage(&wrappedMsg, "1", nil)
 		c.Assert(err, IsNil)
-		err = tssCommonStruct.ProcessOneMessage(&wrappedMsg, "2")
+		err = tssCommonStruct.ProcessOneMessage(&wrappedMsg, "2", nil)
 		c.Assert(err, IsNil)
-		err = tssCommonStruct.ProcessOneMessage(&wrappedMsg, "3")
+		err = tssCommonStruct.ProcessOneMessage(&wrappedMsg, "3", nil)
 		c.Assert(err, IsNil)
 	}()
 	select {
@@ -331,11 +332,11 @@ func (t *TssTestSuite) testVerMsgAndUpdateFromPeer(c *C, tssCommonStruct *TssCom
 	msgKey := fmt.Sprintf("%s-%s", senderID.Id, roundInfo)
 	// we send the verify message from the the same sender, Tss should only accept the first verify message
 	wrappedVerMsg := fabricateVerMsg(c, msgHash, msgKey)
-	err = tssCommonStruct.ProcessOneMessage(wrappedVerMsg, tssCommonStruct.PartyIDtoP2PID[partiesID[1].Id].String())
+	err = tssCommonStruct.ProcessOneMessage(wrappedVerMsg, tssCommonStruct.PartyIDtoP2PID[partiesID[1].Id].String(), nil)
 	c.Assert(err, IsNil)
 	localItem := tssCommonStruct.TryGetLocalCacheItem(msgKey)
 	c.Assert(localItem.ConfirmedList, HasLen, 1)
-	err = tssCommonStruct.ProcessOneMessage(wrappedVerMsg, tssCommonStruct.PartyIDtoP2PID[partiesID[1].Id].String())
+	err = tssCommonStruct.ProcessOneMessage(wrappedVerMsg, tssCommonStruct.PartyIDtoP2PID[partiesID[1].Id].String(), nil)
 	c.Assert(err, IsNil)
 	localItem = tssCommonStruct.TryGetLocalCacheItem(msgKey)
 	c.Assert(localItem.ConfirmedList, HasLen, 1)
@@ -349,14 +350,14 @@ func (t *TssTestSuite) testVerMsgAndUpdate(c *C, tssCommonStruct *TssCommon, sen
 	msgKey := fmt.Sprintf("%s-%s", senderID.Id, roundInfo)
 	wrappedMsg := fabricateTssMsg(c, t.privKey, senderID, roundInfo, testMsg, "123", messages.TSSKeyGenMsg)
 	// you can pass any p2pID in Tss message
-	err = tssCommonStruct.ProcessOneMessage(wrappedMsg, tssCommonStruct.PartyIDtoP2PID[senderID.Id].String())
+	err = tssCommonStruct.ProcessOneMessage(wrappedMsg, tssCommonStruct.PartyIDtoP2PID[senderID.Id].String(), nil)
 	c.Assert(err, IsNil)
 	localItem := tssCommonStruct.TryGetLocalCacheItem(msgKey)
 	c.Assert(localItem.ConfirmedList, HasLen, 1)
 
 	// we send the verify message from the the same sender, Tss should only accept the first verify message
 	wrappedVerMsg := fabricateVerMsg(c, msgHash, msgKey)
-	err = tssCommonStruct.ProcessOneMessage(wrappedVerMsg, tssCommonStruct.PartyIDtoP2PID[partiesID[1].Id].String())
+	err = tssCommonStruct.ProcessOneMessage(wrappedVerMsg, tssCommonStruct.PartyIDtoP2PID[partiesID[1].Id].String(), nil)
 	c.Assert(err, NotNil)
 	// workaround: when we hit this error, in this test, it indicates we accept the share.
 	if !strings.Contains(err.Error(), "fail to update the message to local party: proto:") {
@@ -402,7 +403,7 @@ func (t *TssTestSuite) TestTssCommon(c *C) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		tssCommon.ProcessInboundMessages(stopchan, &wg)
+		tssCommon.ProcessInboundMessages(stopchan, &wg, nil)
 	}()
 	bi, err := MsgToHashInt([]byte("whatever"))
 	c.Assert(err, IsNil)

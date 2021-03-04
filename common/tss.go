@@ -391,12 +391,6 @@ func (t *TssCommon) hashCheck(localCacheItem *LocalCacheItem, threshold int) err
 }
 
 func (t *TssCommon) ProcessOutCh(msg []byte, r *btss.MessageRouting, roundInfo string, msgType messages.THORChainTSSMessageType) error {
-	//buf, r, err := msg.WireBytes()
-	//// if we cannot get the wire share, the tss keygen will fail, we just quit.
-	//if err != nil {
-	//	return fmt.Errorf("fail to get wire bytes: %w", err)
-	//}
-
 	sig, err := GenerateSignature(msg, t.msgID, t.privateKey)
 	if err != nil {
 		t.logger.Error().Err(err).Msg("fail to generate the share's signature")

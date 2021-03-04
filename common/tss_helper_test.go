@@ -140,7 +140,7 @@ func (t *tssHelpSuite) TestGetMsgRound(c *C) {
 	mockParty := btss.NewPartyID("12", "22", big.NewInt(2))
 	j := 0
 	for i := 0; i < len(messagesKeygen); i++ {
-		ret, err := GetMsgRound(sharesKeyGen[j], mockParty)
+		ret, err := GetMsgRound(sharesKeyGen[j], mockParty, false)
 		c.Assert(err, IsNil)
 		expectedRound := blame.RoundInfo{
 			Index:    i,
@@ -156,7 +156,7 @@ func (t *tssHelpSuite) TestGetMsgRound(c *C) {
 	}
 	j = 0
 	for i := 0; i < len(messagesKeysign); i++ {
-		ret, err := GetMsgRound(sharesKeySign[j], mockParty)
+		ret, err := GetMsgRound(sharesKeySign[j], mockParty, false)
 		c.Assert(err, IsNil)
 		expectedRound := blame.RoundInfo{
 			Index:    i,
@@ -171,7 +171,7 @@ func (t *tssHelpSuite) TestGetMsgRound(c *C) {
 		}
 	}
 
-	ret, err := GetMsgRound(sharesKeyGen[1], mockParty)
+	ret, err := GetMsgRound(sharesKeyGen[1], mockParty, false)
 	c.Assert(ret, Equals, blame.RoundInfo{Index: 1, RoundMsg: messages.KEYGEN2aUnicast})
 	c.Assert(err, IsNil)
 }

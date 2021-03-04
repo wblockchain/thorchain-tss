@@ -125,11 +125,13 @@ func hash(payload []byte) []byte {
 
 // we do for both join party schemes
 func (s *FourNodeTestSuite) Test6NodesTss(c *C) {
-	// s.doTestKeygen(c, true)
-	s.doTestKeySign(c, true)
-	// s.doTestKeySignBlame(c)
-	// s.doTestBlame(c)
-	// s.doTestFailJoinParty(c)
+	set := os.Getenv("SKIPGEN")
+	if set == "" {
+		s.doTestKeygen(c, true)
+	}
+	s.doTestKeySign(c, 500)
+	s.doTestKeySignBlame(c)
+	s.doTestFailJoinParty(c)
 }
 
 // generate a new key
@@ -166,11 +168,12 @@ func (s *FourNodeTestSuite) doTestKeygen(c *C, newJoinParty bool) {
 }
 
 // you need to ensure that you have enough money to run the keysign
-func (s *FourNodeTestSuite) doTestKeySign(c *C, newJoinParty bool) {
+func (s *FourNodeTestSuite) doTestKeySign(c *C, amount uint64) {
 	wg := sync.WaitGroup{}
 	lock := sync.Mutex{}
+
 	dst := wallet.Destination{
-		Amount:  500,
+		Amount:  amount,
 		Address: receiverAddress,
 	}
 
@@ -185,7 +188,6 @@ func (s *FourNodeTestSuite) doTestKeySign(c *C, newJoinParty bool) {
 	tx, err := json.Marshal(t)
 	c.Assert(err, IsNil)
 	encodedTx := base64.StdEncoding.EncodeToString(tx)
-
 	keysignResult := make(map[int]keysign.Response)
 	for i := 0; i < partyNum; i++ {
 		wg.Add(1)
@@ -339,8 +341,8 @@ func (s *FourNodeTestSuite) doTestKeySignBlame(c *C) {
 			keySignResult[idx] = res
 		}(i)
 	}
-	// if we shutdown one server during keygen , he should be blamed
-	time.Sleep(time.Second * 10)
+	// if we shutdown one server during keysign , he should be blamed
+	time.Sleep(time.Second * 5)
 	s.servers[0].Stop()
 	defer func() {
 		conf := common.TssConfig{

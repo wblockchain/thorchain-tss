@@ -594,10 +594,6 @@ func (tKeySign *MoneroKeySign) SignMessage(encodedTx string, parties []string) (
 	if globalErr != nil {
 		tKeySign.logger.Error().Msgf("fail to create the monero signature with %s", tKeySign.GetTssCommonStruct().GetConf().KeyGenTimeout)
 		lastMsg := blameMgr.GetLastMsg()
-		failReason := blameMgr.GetBlame().FailReason
-		if failReason == "" {
-			failReason = blame.TssTimeout
-		}
 		if lastMsg == "" {
 			tKeySign.logger.Error().Msg("fail to start the keygen, the last produced message of this node is none")
 			return nil, errors.New("timeout before shared message is generated")
@@ -631,5 +627,8 @@ func (tKeySign *MoneroKeySign) verifyTransaction(receivedShare string, myDest []
 		TxDataHex:    receivedShare,
 	}
 	ret, err := tKeySign.walletClient.CheckTransaction(&transactionCheck)
-	return ret.CheckResult, err
+	if err != nil {
+		return false, err
+	}
+	return ret.CheckResult, nil
 }

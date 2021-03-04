@@ -169,6 +169,11 @@ func getPreparams(c *C) []*btsskeygen.LocalPreParams {
 }
 
 func (s *TssKeygenTestSuite) TestGenerateNewKey(c *C) {
+	set := os.Getenv("SKIPGEN")
+	if set != "" {
+		c.Log("we skip the keygen test")
+		c.Skip("not suitable for testing")
+	}
 	sort.Strings(testPubKeys)
 	var reqs []Request
 

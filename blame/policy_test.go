@@ -56,7 +56,7 @@ func (p *policyTestSuite) SetUpTest(c *C) {
 	ctx := btss.NewPeerContext(partiesID)
 	params := btss.NewParameters(ctx, localPartyID, len(partiesID), 3)
 	keyGenParty := bkg.NewLocalParty(params, outCh, endCh)
-	p.blameMgr.SetPartyInfo(keyGenParty, partyIDMap)
+	p.blameMgr.SetPartyInfo(keyGenParty.PartyID(), partyIDMap)
 }
 
 func (p *policyTestSuite) TestGetUnicastBlame(c *C) {
