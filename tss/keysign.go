@@ -195,7 +195,6 @@ func (t *TssServer) updateKeySignResult(result keysign.Response, timeSpent time.
 		return
 	}
 	t.tssMetrics.UpdateKeySign(timeSpent, false)
-	return
 }
 
 func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
@@ -317,13 +316,4 @@ func (t *TssServer) broadcastKeysignFailure(messageID string, peers []peer.ID) {
 	if err := t.signatureNotifier.BroadcastFailed(messageID, peers); err != nil {
 		t.logger.Err(err).Msg("fail to broadcast keysign failure")
 	}
-}
-
-func (t *TssServer) isPartOfKeysignParty(parties []string) bool {
-	for _, item := range parties {
-		if t.localNodePubKey == item {
-			return true
-		}
-	}
-	return false
 }

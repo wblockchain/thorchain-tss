@@ -1,7 +1,6 @@
 package tss
 
 import (
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -111,16 +110,9 @@ func (s *FourNodeTestSuite) SetUpTest(c *C) {
 	remoteAddress := []string{"134.209.108.57", "167.99.11.83", "46.101.91.4", "134.209.35.249", "174.138.10.57", "134.209.101.44"}
 
 	for i := 0; i < partyNum; i++ {
-		var rpcAddress string
-		rpcAddress = fmt.Sprintf("http://%s:18083/json_rpc", remoteAddress[i])
+		rpcAddress := fmt.Sprintf("http://%s:18083/json_rpc", remoteAddress[i])
 		s.rpcAddress[i] = rpcAddress
 	}
-}
-
-func hash(payload []byte) []byte {
-	h := sha256.New()
-	h.Write(payload)
-	return h.Sum(nil)
 }
 
 // we do for both join party schemes
@@ -377,8 +369,7 @@ func (s *FourNodeTestSuite) doTestFailJoinParty(c *C) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			var req keygen.Request
-			req = keygen.NewRequest(testPubKeys, 10, "0.14.0", s.rpcAddress[idx])
+			req := keygen.NewRequest(testPubKeys, 10, "0.14.0", s.rpcAddress[idx])
 			res, err := s.servers[idx].Keygen(req)
 			c.Assert(err, IsNil)
 			lock.Lock()
