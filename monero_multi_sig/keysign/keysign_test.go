@@ -32,7 +32,10 @@ import (
 	"gitlab.com/thorchain/tss/go-tss/storage"
 )
 
-const destWallet = "48Qp1DYY95wF2BNbhQZDd5J8dZCucMRz99Y4wAUaDjQhjX8royowfog1sN9WAdVeshQuvU6qKFi9Ji4gj9ZREkjTFYsQbZX"
+const (
+	destWallet      = "48Qp1DYY95wF2BNbhQZDd5J8dZCucMRz99Y4wAUaDjQhjX8royowfog1sN9WAdVeshQuvU6qKFi9Ji4gj9ZREkjTFYsQbZX"
+	testPoolAddress = "4AeYvCc9ZsvHBy2r52wR4pg2yzgvMCrQ1dAKu6vAb5yCR4e6aGsBtNT3J31eXnqGsGbe8pgRcebm1LiLLx7owWk1R4QVwMg"
+)
 
 var (
 	testPubKeys = []string{
@@ -197,7 +200,7 @@ func (s *TssKeysignTestSuite) TestSignMessage(c *C) {
 	for i := 0; i < s.partyNum; i++ {
 		var rpcaddress string
 		rpcaddress = fmt.Sprintf("http://%s:18083/json_rpc", remoteAddress[i])
-		req := NewRequest(10, testPubKeys[:4], "0.16.0", rpcaddress, encodedTx)
+		req := NewRequest(10, testPubKeys[:4], "0.16.0", rpcaddress, testPoolAddress, encodedTx)
 		reqs = append(reqs, req)
 	}
 
@@ -220,7 +223,7 @@ func (s *TssKeysignTestSuite) TestSignMessage(c *C) {
 				conf,
 				comm.BroadcastMsgChan,
 				stopChan, messageID,
-				s.nodePrivKeys[idx], s.comms[idx], reqs[idx].RpcAddress)
+				s.nodePrivKeys[idx], s.comms[idx], reqs[idx].RpcAddress, reqs[idx].PoolAddress)
 			c.Assert(err, IsNil)
 
 			defer func() {
@@ -316,9 +319,9 @@ func (s *TssKeysignTestSuite) TestSignMessageCheckFailure(c *C) {
 		rpcaddress = fmt.Sprintf("http://%s:18083/json_rpc", remoteAddress[i])
 		var req Request
 		if i == 1 {
-			req = NewRequest(10, testPubKeys[:4], "0.16.0", rpcaddress, encodedTx2)
+			req = NewRequest(10, testPubKeys[:4], "0.16.0", rpcaddress, testPoolAddress, encodedTx2)
 		} else {
-			req = NewRequest(10, testPubKeys[:4], "0.16.0", rpcaddress, encodedTx)
+			req = NewRequest(10, testPubKeys[:4], "0.16.0", rpcaddress, testPoolAddress, encodedTx)
 		}
 		reqs = append(reqs, req)
 	}
@@ -342,7 +345,7 @@ func (s *TssKeysignTestSuite) TestSignMessageCheckFailure(c *C) {
 				conf,
 				comm.BroadcastMsgChan,
 				stopChan, messageID,
-				s.nodePrivKeys[idx], s.comms[idx], reqs[idx].RpcAddress)
+				s.nodePrivKeys[idx], s.comms[idx], reqs[idx].RpcAddress, reqs[idx].PoolAddress)
 			c.Assert(err, IsNil)
 
 			defer func() {

@@ -6,16 +6,18 @@ type Request struct {
 	BlockHeight   int64    `json:"block_height"`
 	Version       string   `json:"tss_version"`
 	// these parameters are for monero
-	RpcAddress string `json:"rpc_address"`
-	EncodedTx  string `json:"encoded_transaction"`
+	RpcAddress  string `json:"rpc_address"`
+	PoolAddress string `json:"pool_address"`
+	EncodedTx   string `json:"encoded_transaction"`
 }
 
-func NewRequest(blockHeight int64, signers []string, version, rpCAddress, encodedTx string) Request {
+func NewRequest(blockHeight int64, signers []string, version, rpCAddress, poolAddress, encodedTx string) Request {
 	return Request{
 		SignerPubKeys: signers,
 		BlockHeight:   blockHeight,
 		Version:       version,
 		RpcAddress:    rpCAddress,
+		PoolAddress:   poolAddress,
 		EncodedTx:     encodedTx,
 	}
 }

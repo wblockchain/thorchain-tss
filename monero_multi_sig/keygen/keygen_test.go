@@ -62,7 +62,7 @@ var (
 		"16Uiu2HAm2FzqoUdS6Y9Esg2EaGcAG5rVe1r6BFNnmmQr2H3bqafa",
 	}
 
-	remoteAddress = []string{"188.166.183.111", "178.128.155.101", "188.166.158.53", "104.236.7.106", "104.248.200.163", "139.59.237.127"}
+	remoteAddress = []string{"134.209.108.57", "167.99.11.83", "46.101.91.4", "134.209.35.249", "174.138.10.57", "134.209.101.44"}
 )
 
 func TestPackage(t *testing.T) { TestingT(t) }

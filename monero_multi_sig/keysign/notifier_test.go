@@ -52,11 +52,10 @@ func (NotifierTestSuite) TestNotifierHappyPath(c *C) {
 
 	wallet := moneroWallet.New(rpcWalletConfig)
 
-	walletName := "thorpub1addwnpepq2m5ng0e6vm66feecrwxp37cdvmezsysghskz3t5w2du4c48qwupxn96nrr.mo"
 	passcode := "f754b5c0b920f5ec3e364b1bf30947dd8a84eccc5cf14bd07a6fd227d0d36f25"
 	// now open the wallet
 	walletOpenReq := moneroWallet.RequestOpenWallet{
-		Filename: walletName,
+		Filename: testPoolAddress + ".mo",
 		Password: passcode,
 	}
 

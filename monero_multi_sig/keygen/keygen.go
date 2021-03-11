@@ -109,6 +109,7 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, string, 
 		Address: keygenReq.RpcAddress,
 	})
 
+	var address string
 	walletName := tKeyGen.localNodePubKey + ".mo"
 	passcode := tKeyGen.GetTssCommonStruct().GetNodePrivKey()
 	walletDat := moneroWallet.RequestCreateWallet{
@@ -116,15 +117,24 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, string, 
 		Password: passcode,
 		Language: "English",
 	}
+
 	err = client.CreateWallet(&walletDat)
 	if err != nil {
 		return "", "", err
 	}
 
 	defer func() {
-		err := client.CloseWallet()
-		if err != nil {
-			tKeyGen.logger.Error().Err(err).Msg("fail to close the created wallet")
+		poolAddress := address + ".mo"
+		req := moneroWallet.RequestSavedPoolWallet{
+			PoolAddress: poolAddress,
+			OldAddress:  tKeyGen.localNodePubKey,
+			Password:    passcode,
+		}
+		resp, err := client.SavePoolWallet(&req)
+		if err == nil && resp.SavePoolWalletResponse {
+			tKeyGen.logger.Info().Msgf("successfully saved the wallet file")
+		} else {
+			tKeyGen.logger.Error().Err(err).Msgf("fail to save the wallet file")
 		}
 	}()
 
@@ -150,8 +160,6 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, string, 
 	defer tKeyGen.logger.Debug().Msg("generate monero share")
 
 	moneroShareChan := make(chan *common.MoneroShare, len(partiesID))
-
-	var address string
 
 	var keyGenWg sync.WaitGroup
 	keyGenWg.Add(1)

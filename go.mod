@@ -32,7 +32,7 @@ require (
 	github.com/stretchr/testify v1.7.0
 	github.com/tendermint/tendermint v0.34.3
 	gitlab.com/thorchain/binance-sdk v1.2.3-0.20210102180356-7b2f8924ed23
-	gitlab.com/thorchain/tss/monero-wallet-rpc v0.0.0-20210218003947-4f915449c4e4
+	gitlab.com/thorchain/tss/monero-wallet-rpc v0.0.0-20210305024535-7cd83549093c
 	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad
 	golang.org/x/text v0.3.3
 	google.golang.org/protobuf v1.25.0
