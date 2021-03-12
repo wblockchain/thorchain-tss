@@ -31,6 +31,7 @@ const (
 	testFileLocation = "../test_data"
 	preParamTestFile = "preParam_test.data"
 	receiverAddress  = "48Qp1DYY95wF2BNbhQZDd5J8dZCucMRz99Y4wAUaDjQhjX8royowfog1sN9WAdVeshQuvU6qKFi9Ji4gj9ZREkjTFYsQbZX"
+	testPoolAddress  = "4AeYvCc9ZsvHBy2r52wR4pg2yzgvMCrQ1dAKu6vAb5yCR4e6aGsBtNT3J31eXnqGsGbe8pgRcebm1LiLLx7owWk1R4QVwMg"
 )
 
 var (
@@ -122,6 +123,7 @@ func (s *FourNodeTestSuite) Test6NodesTss(c *C) {
 		s.doTestKeygen(c, true)
 	}
 	s.doTestKeySign(c, 500)
+	// s.doTestKeySign(c, 9988000000)
 	s.doTestKeySignBlame(c)
 	s.doTestFailJoinParty(c)
 }
@@ -184,7 +186,7 @@ func (s *FourNodeTestSuite) doTestKeySign(c *C, amount uint64) {
 	for i := 0; i < partyNum; i++ {
 		wg.Add(1)
 		go func(idx int) {
-			keysignReq := keysign.NewRequest(10, testPubKeys, "0.14.0", s.rpcAddress[idx], encodedTx)
+			keysignReq := keysign.NewRequest(10, testPubKeys, "0.14.0", s.rpcAddress[idx], testPoolAddress, encodedTx)
 			defer wg.Done()
 			res, err := s.servers[idx].KeySign(keysignReq)
 			c.Assert(err, IsNil)
@@ -324,7 +326,7 @@ func (s *FourNodeTestSuite) doTestKeySignBlame(c *C) {
 	for i := 0; i < partyNum-2; i++ {
 		wg.Add(1)
 		go func(idx int) {
-			keySignReq := keysign.NewRequest(10, testPubKeys, "0.14.0", s.rpcAddress[idx], encodedTx)
+			keySignReq := keysign.NewRequest(10, testPubKeys, "0.14.0", s.rpcAddress[idx], testPoolAddress, encodedTx)
 			defer wg.Done()
 			res, err := s.servers[idx].KeySign(keySignReq)
 			c.Assert(err, NotNil)

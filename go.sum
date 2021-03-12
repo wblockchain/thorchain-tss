@@ -1113,10 +1113,8 @@ github.com/zondax/hid v0.9.0/go.mod h1:l5wttcP0jwtdLjqjMMWFVEE7d1zO0jvSPA9OPZxWp
 github.com/zondax/ledger-go v0.12.1/go.mod h1:KatxXrVDzgWwbssUWsF5+cOJHXPvzQ09YSlzGNuhOEo=
 gitlab.com/thorchain/binance-sdk v1.2.3-0.20210102180356-7b2f8924ed23 h1:lecwYSMyqIDVDZtbuxSYGpE3wqmbEc7/YSVD+S1ZcaQ=
 gitlab.com/thorchain/binance-sdk v1.2.3-0.20210102180356-7b2f8924ed23/go.mod h1:SW01IZMpqlPNPdhHnn99qnJNvg8ll/agyyW7p85npwY=
-gitlab.com/thorchain/tss/monero-wallet-rpc v0.0.0-20210218003947-4f915449c4e4 h1:4Byz3/LOfJDtJyjf94h4D3PSz07cAWpbJnMnhH5Zr2E=
-gitlab.com/thorchain/tss/monero-wallet-rpc v0.0.0-20210218003947-4f915449c4e4/go.mod h1:J+XZjMbgNzg0JwB0EYQVW3Vu9xOIeKGVLipRdMu5ptE=
-gitlab.com/thorchain/tss/monero-wallet-rpc v0.0.0-20210305024535-7cd83549093c h1:2k3NrTFbKDJVSJt3x+onX/pSVY3v1MMhbescBoF5faw=
-gitlab.com/thorchain/tss/monero-wallet-rpc v0.0.0-20210305024535-7cd83549093c/go.mod h1:J+XZjMbgNzg0JwB0EYQVW3Vu9xOIeKGVLipRdMu5ptE=
+gitlab.com/thorchain/tss/monero-wallet-rpc v0.0.0-20210312005333-96a58ecad552 h1:phrKKvzT/jKieLxvnN/sJ+7Q/O5Edi6EJ53lDR9VVQM=
+gitlab.com/thorchain/tss/monero-wallet-rpc v0.0.0-20210312005333-96a58ecad552/go.mod h1:J+XZjMbgNzg0JwB0EYQVW3Vu9xOIeKGVLipRdMu5ptE=
 gitlab.com/thorchain/tss/tss-lib v0.0.0-20201118045712-70b2cb4bf916 h1:rM3TjCVZzn3cYQV1L8KuvwXOZ5yvMdB2C5YyExI/m9Y=
 gitlab.com/thorchain/tss/tss-lib v0.0.0-20201118045712-70b2cb4bf916/go.mod h1:i7bv+PuILDZmCiU3mtZXgOfgQkWLdLngByT2KDfyzpE=
 go.etcd.io/bbolt v1.3.2/go.mod h1:IbVyRI1SCnLcuJnV2u8VeU0CEYM7e686BmAb1XKL+uU=

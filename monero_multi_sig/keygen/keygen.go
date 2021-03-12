@@ -12,6 +12,7 @@ import (
 
 	bkg "github.com/binance-chain/tss-lib/ecdsa/keygen"
 	btss "github.com/binance-chain/tss-lib/tss"
+	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	tcrypto "github.com/tendermint/tendermint/crypto"
@@ -90,6 +91,15 @@ func (tKeyGen *MoneroKeyGen) packAndSend(info string, exchangeRound int, localPa
 	return tKeyGen.moneroCommonStruct.ProcessOutCh(msg, &r, msgType, messages.TSSKeyGenMsg)
 }
 
+func genRandomString() (string, error) {
+	sample, _, err := crypto.GenerateEKeyPair("P-521")
+	if err != nil {
+		return "", err
+	}
+	str, err := conversion.BytesToHashString(sample)
+	return str[:10], nil
+}
+
 func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, string, error) {
 	partiesID, localPartyID, err := conversion.GetParties(keygenReq.Keys, tKeyGen.localNodePubKey)
 	if err != nil {
@@ -100,17 +110,21 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, string, 
 	if err != nil {
 		return "", "", err
 	}
-
 	// since the definition of threshold of monero is different from the original tss, we need to adjust it 1 more node
 	threshold += 1
 
+	// the generated pool address
+	var address string
 	// now we try to connect to the monero wallet rpc client
 	client := moneroWallet.New(moneroWallet.Config{
 		Address: keygenReq.RpcAddress,
 	})
 
-	var address string
-	walletName := tKeyGen.localNodePubKey + ".mo"
+	walletName, err := genRandomString()
+	if err != nil {
+		return "", "", fmt.Errorf("fail to generate the random string %w", err)
+	}
+	walletName += ".mo"
 	passcode := tKeyGen.GetTssCommonStruct().GetNodePrivKey()
 	walletDat := moneroWallet.RequestCreateWallet{
 		Filename: walletName,
@@ -127,7 +141,7 @@ func (tKeyGen *MoneroKeyGen) GenerateNewKey(keygenReq Request) (string, string, 
 		poolAddress := address + ".mo"
 		req := moneroWallet.RequestSavedPoolWallet{
 			PoolAddress: poolAddress,
-			OldAddress:  tKeyGen.localNodePubKey,
+			OldAddress:  walletName,
 			Password:    passcode,
 		}
 		resp, err := client.SavePoolWallet(&req)
