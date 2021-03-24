@@ -107,7 +107,7 @@ func SetupIDMaps(parties map[string]*btss.PartyID, partyIDtoP2PID map[string]pee
 	return nil
 }
 
-func GetParties(keys []string, localPartyKey string) ([]*btss.PartyID, *btss.PartyID, error) {
+func GetParties(keys []string, localPartyKey string, retLocalParty bool) ([]*btss.PartyID, *btss.PartyID, error) {
 	var localPartyID *btss.PartyID
 	var unSortedPartiesID []*btss.PartyID
 	sort.Strings(keys)
@@ -127,7 +127,8 @@ func GetParties(keys []string, localPartyKey string) ([]*btss.PartyID, *btss.Par
 		}
 		unSortedPartiesID = append(unSortedPartiesID, partyID)
 	}
-	if localPartyID == nil {
+
+	if localPartyID == nil && !retLocalParty {
 		return nil, nil, errors.New("local party is not in the list")
 	}
 
