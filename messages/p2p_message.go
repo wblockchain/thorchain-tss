@@ -23,6 +23,10 @@ const (
 	TSSControlMsg
 	// TSSTaskDone is the message of Tss process notification
 	TSSTaskDone
+	// TSSPartyReGroup is the message of regroup the tss parties
+	TSSPartyReGroup
+	// TSSPartyReGroupVerMsg is the message we create to make sure every party receive the same broadcast message
+	TSSPartReGroupVerMSg
 	// Unknown is the message indicates the undefined message type
 	Unknown
 )
@@ -73,7 +77,20 @@ type WireMessage struct {
 
 // GetCacheKey return the key we used to cache it locally
 func (m *WireMessage) GetCacheKey() string {
-	return fmt.Sprintf("%s-%s", m.Routing.From.Id, m.RoundInfo)
+	switch m.Routing.From.Moniker {
+	case "new_party", "old_party":
+		tag := ""
+		for _, el := range m.Routing.To {
+			if el.Moniker != "" {
+				tag = el.Moniker
+				break
+			}
+		}
+		return fmt.Sprintf("%s-%s-%s", m.Routing.From.Id, m.RoundInfo, tag)
+	default:
+		return fmt.Sprintf("%s-%s", m.Routing.From.Id, m.RoundInfo)
+
+	}
 }
 
 type TssControl struct {

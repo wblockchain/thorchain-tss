@@ -16,3 +16,8 @@ type TssConfig struct {
 	// enable the tss monitor
 	EnableMonitor bool
 }
+
+const (
+	NewParty = "new_party"
+	OldParty = "old_party"
+)

@@ -1,4 +1,4 @@
-package keygen
+package keyRegroup
 
 // Request request to do keygen
 type Request struct {

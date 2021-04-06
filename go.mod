@@ -9,7 +9,6 @@ require (
 	github.com/cosmos/cosmos-sdk v0.41.0
 	github.com/davidlazar/go-crypto v0.0.0-20200604182044-b73af7476f6c // indirect
 	github.com/deckarep/golang-set v1.7.1
-	github.com/decred/dcrd/dcrec/secp256k1 v1.0.3
 	github.com/golang/protobuf v1.4.3
 	github.com/gorilla/mux v1.8.0
 	github.com/ipfs/go-log v1.0.4
@@ -32,7 +31,7 @@ require (
 	github.com/stretchr/testify v1.7.0
 	github.com/tendermint/btcd v0.1.1
 	github.com/tendermint/tendermint v0.34.3
-	gitlab.com/thorchain/binance-sdk v1.2.3-0.20210102180356-7b2f8924ed23
+	gitlab.com/thorchain/binance-sdk v1.2.3-0.20210117202539-d569b6b9ba5d
 	go.uber.org/atomic v1.6.0
 	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad
 	golang.org/x/text v0.3.3
@@ -41,6 +40,7 @@ require (
 )
 
 replace (
-	github.com/binance-chain/tss-lib => gitlab.com/thorchain/tss/tss-lib v0.0.0-20201118045712-70b2cb4bf916
+	github.com/agl/ed25519 => github.com/binance-chain/edwards25519 v0.0.0-20200305024217-f36fc4b53d43
+	github.com/binance-chain/tss-lib => gitlab.com/thorchain/tss/tss-lib v0.0.0-20210405022227-698662c0c22b
 	github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.2-alpha.regen.4
 )

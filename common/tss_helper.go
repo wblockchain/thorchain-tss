@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/binance-chain/tss-lib/ecdsa/keygen"
+	"github.com/binance-chain/tss-lib/ecdsa/resharing"
 	"github.com/binance-chain/tss-lib/ecdsa/signing"
 	btss "github.com/binance-chain/tss-lib/tss"
 	"github.com/btcsuite/btcd/btcec"
@@ -213,6 +214,38 @@ func GetMsgRound(msg []byte, partyID *btss.PartyID, isBroadcast bool) (blame.Rou
 			RoundMsg: messages.KEYSIGN7,
 		}, nil
 
+	case *resharing.DGRound1Message:
+		return blame.RoundInfo{
+			Index:    1,
+			RoundMsg: messages.KEYREGROUP1,
+		}, nil
+
+	case *resharing.DGRound2Message1:
+		return blame.RoundInfo{
+			Index:    2,
+			RoundMsg: messages.KEYREGROUP2a,
+		}, nil
+	case *resharing.DGRound2Message2:
+		return blame.RoundInfo{
+			Index:    2,
+			RoundMsg: messages.KEYREGROUP2b,
+		}, nil
+	case *resharing.DGRound3Message1:
+		return blame.RoundInfo{
+			Index:    3,
+			RoundMsg: messages.KEYREGROUP3a,
+		}, nil
+
+	case *resharing.DGRound3Message2:
+		return blame.RoundInfo{
+			Index:    3,
+			RoundMsg: messages.KEYREGROUP3b,
+		}, nil
+	case *resharing.DGRound4Message:
+		return blame.RoundInfo{
+			Index:    4,
+			RoundMsg: messages.KEYREGROUP4,
+		}, nil
 	default:
 		return blame.RoundInfo{}, errors.New("unknown round")
 	}

@@ -8,7 +8,6 @@ import (
 	"math"
 	"math/big"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/binance-chain/tss-lib/crypto"
@@ -111,7 +110,7 @@ func GetParties(keys []string, localPartyKey string, retLocalParty bool) ([]*bts
 	var localPartyID *btss.PartyID
 	var unSortedPartiesID []*btss.PartyID
 	sort.Strings(keys)
-	for idx, item := range keys {
+	for _, item := range keys {
 		pk, err := sdk.GetPubKeyFromBech32(sdk.Bech32PubKeyTypeAccPub, item)
 		if err != nil {
 			return nil, nil, fmt.Errorf("fail to get account pub key address(%s): %w", item, err)
@@ -121,14 +120,14 @@ func GetParties(keys []string, localPartyKey string, retLocalParty bool) ([]*bts
 		// Note: The `id` and `moniker` fields are for convenience to allow you to easily track participants.
 		// The `id` should be a unique string representing this party in the network and `moniker` can be anything (even left blank).
 		// The `uniqueKey` is a unique identifying key for this peer (such as its p2p public key) as a big.Int.
-		partyID := btss.NewPartyID(strconv.Itoa(idx), "", key)
+		partyID := btss.NewPartyID(item, "", key)
 		if item == localPartyKey {
 			localPartyID = partyID
 		}
 		unSortedPartiesID = append(unSortedPartiesID, partyID)
 	}
 
-	if localPartyID == nil && !retLocalParty {
+	if localPartyID == nil && retLocalParty {
 		return nil, nil, errors.New("local party is not in the list")
 	}
 

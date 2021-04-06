@@ -13,6 +13,12 @@ const (
 	KEYSIGN5         = "SignRound5Message"
 	KEYSIGN6         = "SignRound6Message"
 	KEYSIGN7         = "SignRound7Message"
+	KEYREGROUP1      = "RegroupRound1Message"
+	KEYREGROUP2a     = "RegroupRound2Message1"
+	KEYREGROUP2b     = "RegroupRound2Message2"
+	KEYREGROUP3a     = "DGRound3Message1"
+	KEYREGROUP3b     = "DGRound3Message2"
+	KEYREGROUP4      = "DGRound4Message"
 	TSSKEYGENROUNDS  = 4
 	TSSKEYSIGNROUNDS = 8
 )

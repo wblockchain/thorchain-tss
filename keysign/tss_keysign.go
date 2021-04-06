@@ -82,7 +82,7 @@ func (tKeySign *TssKeySign) startBatchSigning(keySignPartyMap *sync.Map, msgNum 
 
 // signMessage
 func (tKeySign *TssKeySign) SignMessage(msgsToSign [][]byte, localStateItem storage.KeygenLocalState, parties []string) ([]*tsslibcommon.ECSignature, error) {
-	partiesID, localPartyID, err := conversion.GetParties(parties, localStateItem.LocalPartyKey)
+	partiesID, localPartyID, err := conversion.GetParties(parties, localStateItem.LocalPartyKey, true)
 	if err != nil {
 		return nil, fmt.Errorf("fail to form key sign party: %w", err)
 	}
@@ -107,7 +107,7 @@ func (tKeySign *TssKeySign) SignMessage(msgsToSign [][]byte, localStateItem stor
 			return nil, fmt.Errorf("fail to convert msg to hash int: %w", err)
 		}
 		moniker := m.String() + ":" + strconv.Itoa(i)
-		partiesID, eachLocalPartyID, err := conversion.GetParties(parties, localStateItem.LocalPartyKey)
+		partiesID, eachLocalPartyID, err := conversion.GetParties(parties, localStateItem.LocalPartyKey, false)
 		ctx := btss.NewPeerContext(partiesID)
 		if err != nil {
 			return nil, fmt.Errorf("error to create parties in batch signging %w\n", err)

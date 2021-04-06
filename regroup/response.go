@@ -1,4 +1,4 @@
-package keygen
+package keyRegroup
 
 import (
 	"gitlab.com/thorchain/tss/go-tss/blame"
