@@ -265,7 +265,7 @@ func (tKeyReGroup *TssKeyReGroup) processKeyReGroup(errChan chan struct{},
 				tKeyReGroup.logger.Error().Msg("fail to start the party regroup, the last produced message of this node is none")
 				return nil, errors.New("timeout before shared message is generated")
 			}
-			blameNodesUnicast, err := blameMgr.GetUnicastBlame(messages.KEYGEN2aUnicast)
+			blameNodesUnicast, err := blameMgr.GetUnicastBlame(messages.KEYREGROUP3a)
 			if err != nil {
 				tKeyReGroup.logger.Error().Err(err).Msg("error in get unicast blame")
 			}
@@ -279,6 +279,7 @@ func (tKeyReGroup *TssKeyReGroup) processKeyReGroup(errChan chan struct{},
 			if len(blameNodesUnicast) > 0 && len(blameNodesUnicast) <= threshold {
 				blameMgr.GetBlame().SetBlame(failReason, blameNodesUnicast, true)
 			}
+			fmt.Printf("we get broadcast blame........%v\n", lastMsg.Type())
 			blameNodesBroadcast, err := blameMgr.GetBroadcastBlame(lastMsg.Type())
 			if err != nil {
 				tKeyReGroup.logger.Error().Err(err).Msg("error in get broadcast blame")
@@ -366,7 +367,6 @@ func (tKeyReGroup *TssKeyReGroup) processKeyReGroup(errChan chan struct{},
 			}
 
 		case msg := <-endCh:
-
 			if msg.Xi != nil {
 				_, err := msg.OriginalIndex()
 				if err != nil {

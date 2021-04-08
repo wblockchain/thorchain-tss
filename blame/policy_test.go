@@ -15,7 +15,12 @@ import (
 )
 
 var (
-	testPubKeys = [...]string{"thorpub1addwnpepqtdklw8tf3anjz7nn5fly3uvq2e67w2apn560s4smmrt9e3x52nt2svmmu3", "thorpub1addwnpepqtspqyy6gk22u37ztra4hq3hdakc0w0k60sfy849mlml2vrpfr0wvm6uz09", "thorpub1addwnpepq2ryyje5zr09lq7gqptjwnxqsy2vcdngvwd6z7yt5yjcnyj8c8cn559xe69", "thorpub1addwnpepqfjcw5l4ay5t00c32mmlky7qrppepxzdlkcwfs2fd5u73qrwna0vzag3y4j"}
+	testPubKeys = [...]string{
+		"thorpub1addwnpepqtdklw8tf3anjz7nn5fly3uvq2e67w2apn560s4smmrt9e3x52nt2svmmu3",
+		"thorpub1addwnpepqtspqyy6gk22u37ztra4hq3hdakc0w0k60sfy849mlml2vrpfr0wvm6uz09",
+		"thorpub1addwnpepq2ryyje5zr09lq7gqptjwnxqsy2vcdngvwd6z7yt5yjcnyj8c8cn559xe69",
+		"thorpub1addwnpepqfjcw5l4ay5t00c32mmlky7qrppepxzdlkcwfs2fd5u73qrwna0vzag3y4j",
+	}
 
 	testPeers = []string{
 		"16Uiu2HAm4TmEzUqy3q3Dv7HvdoSboHk5sFj2FH3npiN5vDbJC6gh",
@@ -47,7 +52,7 @@ func (p *policyTestSuite) SetUpTest(c *C) {
 	p.blameMgr.SetLastUnicastPeer(p3, "testType")
 	localTestPubKeys := testPubKeys[:]
 	sort.Strings(localTestPubKeys)
-	partiesID, localPartyID, err := conversion.GetParties(localTestPubKeys, testPubKeys[0])
+	partiesID, localPartyID, err := conversion.GetParties(localTestPubKeys, testPubKeys[0], true)
 	c.Assert(err, IsNil)
 	partyIDMap := conversion.SetupPartyIDMap(partiesID)
 	err = conversion.SetupIDMaps(partyIDMap, p.blameMgr.PartyIDtoP2PID)
@@ -74,7 +79,7 @@ func (p *policyTestSuite) TestGetBroadcastBlame(c *C) {
 	pi := p.blameMgr.partyInfo
 
 	r1 := btss.MessageRouting{
-		From:                    pi.PartyIDMap["1"],
+		From:                    pi.PartyIDMap[testPubKeys[1]],
 		To:                      nil,
 		IsBroadcast:             false,
 		IsToOldCommittee:        false,
@@ -103,7 +108,7 @@ func (p *policyTestSuite) TestTssWrongShareBlame(c *C) {
 	pi := p.blameMgr.partyInfo
 
 	r1 := btss.MessageRouting{
-		From:                    pi.PartyIDMap["1"],
+		From:                    pi.PartyIDMap[testPubKeys[1]],
 		To:                      nil,
 		IsBroadcast:             false,
 		IsToOldCommittee:        false,
@@ -126,15 +131,15 @@ func (p *policyTestSuite) TestTssMissingShareBlame(c *C) {
 	acceptedShares := blameMgr.acceptedShares
 	// we only allow a message be updated only once.
 	blameMgr.acceptShareLocker.Lock()
-	acceptedShares[RoundInfo{0, "testRound", "123:0"}] = []string{"1", "2"}
-	acceptedShares[RoundInfo{1, "testRound", "123:0"}] = []string{"1"}
+	acceptedShares[RoundInfo{0, "testRound", "123:0"}] = []string{localTestPubKeys[1], localTestPubKeys[2]}
+	acceptedShares[RoundInfo{1, "testRound", "123:0"}] = []string{localTestPubKeys[1]}
 	blameMgr.acceptShareLocker.Unlock()
 	nodes, _, err := blameMgr.TssMissingShareBlame(2)
 	c.Assert(err, IsNil)
 	c.Assert(nodes[0].Pubkey, Equals, localTestPubKeys[3])
 	// we test if the missing share happens in round2
 	blameMgr.acceptShareLocker.Lock()
-	acceptedShares[RoundInfo{0, "testRound", "123:0"}] = []string{"1", "2", "3"}
+	acceptedShares[RoundInfo{0, "testRound", "123:0"}] = []string{localTestPubKeys[1], localTestPubKeys[2], localTestPubKeys[3]}
 	blameMgr.acceptShareLocker.Unlock()
 	nodes, _, err = blameMgr.TssMissingShareBlame(2)
 	c.Assert(err, IsNil)

@@ -42,7 +42,7 @@ func (p *ConversionTestSuite) SetUpTest(c *C) {
 func TestPackage(t *testing.T) { TestingT(t) }
 
 func (p *ConversionTestSuite) TestAccPubKeysFromPartyIDs(c *C) {
-	partiesID, _, err := GetParties(p.testPubKeys, p.testPubKeys[0])
+	partiesID, _, err := GetParties(p.testPubKeys, p.testPubKeys[0], false)
 	c.Assert(err, IsNil)
 	partyIDMap := SetupPartyIDMap(partiesID)
 	var keys []string
@@ -60,7 +60,7 @@ func (p *ConversionTestSuite) TestAccPubKeysFromPartyIDs(c *C) {
 }
 
 func (p *ConversionTestSuite) TestGetParties(c *C) {
-	partiesID, localParty, err := GetParties(p.testPubKeys, p.testPubKeys[0])
+	partiesID, localParty, err := GetParties(p.testPubKeys, p.testPubKeys[0], true)
 	c.Assert(err, IsNil)
 	pk := coskey.PubKey{
 		Key: localParty.Key[:],
@@ -81,17 +81,17 @@ func (p *ConversionTestSuite) TestGetParties(c *C) {
 	sort.Strings(gotKeys)
 	c.Assert(gotKeys, DeepEquals, p.testPubKeys)
 
-	_, _, err = GetParties(p.testPubKeys, "")
+	_, _, err = GetParties(p.testPubKeys, "", true)
 	c.Assert(err, NotNil)
-	_, _, err = GetParties(p.testPubKeys, "12")
+	_, _, err = GetParties(p.testPubKeys, "12", true)
 	c.Assert(err, NotNil)
-	_, _, err = GetParties(nil, "12")
+	_, _, err = GetParties(nil, "12", true)
 	c.Assert(err, NotNil)
 }
 
 //
 func (p *ConversionTestSuite) TestGetPeerIDFromPartyID(c *C) {
-	_, localParty, err := GetParties(p.testPubKeys, p.testPubKeys[0])
+	_, localParty, err := GetParties(p.testPubKeys, p.testPubKeys[0], true)
 	c.Assert(err, IsNil)
 	peerID, err := GetPeerIDFromPartyID(localParty)
 	c.Assert(err, IsNil)
@@ -104,7 +104,7 @@ func (p *ConversionTestSuite) TestGetPeerIDFromPartyID(c *C) {
 }
 
 func (p *ConversionTestSuite) TestGetPeerIDFromSecp256PubKey(c *C) {
-	_, localParty, err := GetParties(p.testPubKeys, p.testPubKeys[0])
+	_, localParty, err := GetParties(p.testPubKeys, p.testPubKeys[0], true)
 	c.Assert(err, IsNil)
 	got, err := GetPeerIDFromSecp256PubKey(localParty.Key[:])
 	c.Assert(err, IsNil)
@@ -116,7 +116,7 @@ func (p *ConversionTestSuite) TestGetPeerIDFromSecp256PubKey(c *C) {
 func (p *ConversionTestSuite) TestGetPeersID(c *C) {
 	localTestPubKeys := testPubKeys[:]
 	sort.Strings(localTestPubKeys)
-	partiesID, _, err := GetParties(p.testPubKeys, p.testPubKeys[0])
+	partiesID, _, err := GetParties(p.testPubKeys, p.testPubKeys[0], true)
 	c.Assert(err, IsNil)
 	partyIDMap := SetupPartyIDMap(partiesID)
 	partyIDtoP2PID := make(map[string]peer.ID)
@@ -145,7 +145,7 @@ func (p *ConversionTestSuite) TestGetPeersID(c *C) {
 }
 
 func (p *ConversionTestSuite) TestPartyIDtoPubKey(c *C) {
-	_, localParty, err := GetParties(p.testPubKeys, p.testPubKeys[0])
+	_, localParty, err := GetParties(p.testPubKeys, p.testPubKeys[0], true)
 	c.Assert(err, IsNil)
 	got, err := PartyIDtoPubKey(localParty)
 	c.Assert(err, IsNil)
@@ -160,7 +160,7 @@ func (p *ConversionTestSuite) TestPartyIDtoPubKey(c *C) {
 func (p *ConversionTestSuite) TestSetupIDMaps(c *C) {
 	localTestPubKeys := testPubKeys[:]
 	sort.Strings(localTestPubKeys)
-	partiesID, _, err := GetParties(p.testPubKeys, p.testPubKeys[0])
+	partiesID, _, err := GetParties(p.testPubKeys, p.testPubKeys[0], true)
 	c.Assert(err, IsNil)
 	partyIDMap := SetupPartyIDMap(partiesID)
 	partyIDtoP2PID := make(map[string]peer.ID)
@@ -182,7 +182,7 @@ func (p *ConversionTestSuite) TestSetupIDMaps(c *C) {
 func (p *ConversionTestSuite) TestSetupPartyIDMap(c *C) {
 	localTestPubKeys := testPubKeys[:]
 	sort.Strings(localTestPubKeys)
-	partiesID, _, err := GetParties(p.testPubKeys, p.testPubKeys[0])
+	partiesID, _, err := GetParties(p.testPubKeys, p.testPubKeys[0], true)
 	c.Assert(err, IsNil)
 	partyIDMap := SetupPartyIDMap(partiesID)
 	var pubKeys []string
