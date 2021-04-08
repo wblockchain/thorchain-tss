@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	btss "github.com/binance-chain/tss-lib/tss"
 	"github.com/ipfs/go-log"
 
 	"github.com/binance-chain/tss-lib/crypto"
@@ -22,7 +23,6 @@ import (
 	"github.com/tendermint/tendermint/crypto/secp256k1"
 
 	btsskeygen "github.com/binance-chain/tss-lib/ecdsa/keygen"
-	btss "github.com/binance-chain/tss-lib/tss"
 	maddr "github.com/multiformats/go-multiaddr"
 	. "gopkg.in/check.v1"
 

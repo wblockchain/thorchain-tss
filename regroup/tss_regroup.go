@@ -135,10 +135,7 @@ func (tKeyReGroup *TssKeyReGroup) GenerateNewKey(keyRegroup Request, localData b
 		tKeyReGroup.logger.Error().Err(err).Msgf("fail to init the party")
 		return nil, err
 	}
-
 	keyGenPartyMap := new(sync.Map)
-	// ctx := btss.NewPeerContext(partiesID)
-	// params := btss.NewParameters(ctx, localPartyID, len(partiesID), threshold)
 	outCh := make(chan btss.Message, partyNum*2)
 	endCh := make(chan bkg.LocalPartySaveData, partyNum*2)
 	errChan := make(chan struct{})
@@ -156,8 +153,6 @@ func (tKeyReGroup *TssKeyReGroup) GenerateNewKey(keyRegroup Request, localData b
 		oldKeyGenParty.PartyID().Moniker = common.OldParty
 	}
 
-	// partyIDMapOld := conversion.SetupPartyIDMap(oldPartiesID)
-	// partyIDMapNew := conversion.SetupPartyIDMap(newPartiesID)
 	allPartiesID := append(newPartiesID, oldPartiesID...)
 	partyIDMap := conversion.SetupPartyIDMap(allPartiesID)
 	oldPartyIDMap := conversion.SetupPartyIDMap(oldPartiesID)
@@ -215,15 +210,15 @@ func (tKeyReGroup *TssKeyReGroup) GenerateNewKey(keyRegroup Request, localData b
 		}()
 	}
 
-	//keyGenLocalStateItem := storage.KeygenLocalState{
-	//	ParticipantKeys: keyRegroup.NewPartyKeys,
-	//	LocalPartyKey:   tKeyReGroup.localNodePubKey,
-	//}
+	keyGenLocalStateItem := storage.KeygenLocalState{
+		ParticipantKeys: keyRegroup.NewPartyKeys,
+		LocalPartyKey:   tKeyReGroup.localNodePubKey,
+	}
 
 	keyGenWg.Add(1)
 	go tKeyReGroup.tssCommonStruct.ProcessInboundMessages(tKeyReGroup.commStopChan, &keyGenWg)
 
-	r, err := tKeyReGroup.processKeyReGroup(errChan, outCh, endCh, oldKeyGenParty != nil && newKeyGenParty != nil)
+	r, err := tKeyReGroup.processKeyReGroup(errChan, outCh, endCh, oldKeyGenParty != nil && newKeyGenParty != nil, keyGenLocalStateItem)
 	if err != nil {
 		close(tKeyReGroup.commStopChan)
 		return nil, fmt.Errorf("fail to process key sign: %w", err)
@@ -242,7 +237,7 @@ func (tKeyReGroup *TssKeyReGroup) GenerateNewKey(keyRegroup Request, localData b
 
 func (tKeyReGroup *TssKeyReGroup) processKeyReGroup(errChan chan struct{},
 	outCh <-chan btss.Message,
-	endCh <-chan bkg.LocalPartySaveData, bothOldNewParty bool,
+	endCh <-chan bkg.LocalPartySaveData, bothOldNewParty bool, keyGenLocalStateItem storage.KeygenLocalState,
 ) (*bcrypto.ECPoint, error) {
 	// keyGenLocalStateItem storage.KeygenLocalState) (*bcrypto.ECPoint, error) {
 	defer tKeyReGroup.logger.Debug().Msg("finished keygen process")
@@ -310,15 +305,22 @@ func (tKeyReGroup *TssKeyReGroup) processKeyReGroup(errChan chan struct{},
 			if dest == nil {
 				return nil, errors.New("did not expect a msg to have a nil destination during resharing")
 			}
-			var err error
 			// to old members
 			if msg.IsToOldCommittee() {
-				err = tKeyReGroup.tssCommonStruct.ProcessRegroupOutCh(msg, messages.TSSPartyReGroup, common.OldParty)
+				err := tKeyReGroup.tssCommonStruct.ProcessRegroupOutCh(msg, messages.TSSPartyReGroup, common.OldParty)
+				if err != nil {
+					tKeyReGroup.logger.Error().Err(err).Msg("fail to process the message")
+					return nil, err
+				}
 				continue
 			}
 			// to new members
 			if !msg.IsToOldCommittee() && !msg.IsToOldAndNewCommittees() {
-				err = tKeyReGroup.tssCommonStruct.ProcessRegroupOutCh(msg, messages.TSSPartyReGroup, common.NewParty)
+				err := tKeyReGroup.tssCommonStruct.ProcessRegroupOutCh(msg, messages.TSSPartyReGroup, common.NewParty)
+				if err != nil {
+					tKeyReGroup.logger.Error().Err(err).Msg("fail to process the message")
+					return nil, err
+				}
 				continue
 			}
 
@@ -352,13 +354,17 @@ func (tKeyReGroup *TssKeyReGroup) processKeyReGroup(errChan chan struct{},
 				newTssMsg := btss.NewMessage(messageRoutingNew, data.Content(), msg.WireMsg())
 
 				err = tKeyReGroup.tssCommonStruct.ProcessRegroupOutCh(oldTssMsg, messages.TSSPartyReGroup, common.OldParty)
+				if err != nil {
+					tKeyReGroup.logger.Error().Err(err).Msg("fail to process the message")
+					return nil, err
+				}
 				err = tKeyReGroup.tssCommonStruct.ProcessRegroupOutCh(newTssMsg, messages.TSSPartyReGroup, common.NewParty)
+				if err != nil {
+					tKeyReGroup.logger.Error().Err(err).Msg("fail to process the message")
+					return nil, err
+				}
+			}
 
-			}
-			if err != nil {
-				tKeyReGroup.logger.Error().Err(err).Msg("fail to process the message")
-				return nil, err
-			}
 		case msg := <-endCh:
 
 			if msg.Xi != nil {
@@ -370,28 +376,27 @@ func (tKeyReGroup *TssKeyReGroup) processKeyReGroup(errChan chan struct{},
 				if err != nil {
 					return nil, fmt.Errorf("fail to get thorchain pubkey: %w", err)
 				}
-				fmt.Printf(">>>>%v########>pubkey>>>%v\n", tKeyReGroup.localNodePubKey, pubKey)
+
+				keyGenLocalStateItem.LocalData = msg
+				keyGenLocalStateItem.PubKey = pubKey
+				if err := tKeyReGroup.stateManager.SaveLocalState(keyGenLocalStateItem); err != nil {
+					return nil, fmt.Errorf("fail to save keygen result to storage: %w", err)
+				}
+				address := tKeyReGroup.p2pComm.ExportPeerAddress()
+				if err := tKeyReGroup.stateManager.SaveAddressBook(address); err != nil {
+					tKeyReGroup.logger.Error().Err(err).Msg("fail to save the peer addresses")
+				}
+
 			} else {
 				if bothOldNewParty {
-					// we need to waith for the new party instance to return
+					// we need to wait for the new party instance to return
 					continue
 				}
 			}
-
 			err := tKeyReGroup.tssCommonStruct.NotifyTaskDone()
 			if err != nil {
 				tKeyReGroup.logger.Error().Err(err).Msg("fail to broadcast the keysign done")
 			}
-
-			//keyGenLocalStateItem.LocalData = msg
-			//keyGenLocalStateItem.PubKey = pubKey
-			//if err := tKeyReGroup.stateManager.SaveLocalState(keyGenLocalStateItem); err != nil {
-			//	return nil, fmt.Errorf("fail to save keygen result to storage: %w", err)
-			//}
-			//address := tKeyReGroup.p2pComm.ExportPeerAddress()
-			//if err := tKeyReGroup.stateManager.SaveAddressBook(address); err != nil {
-			//	tKeyReGroup.logger.Error().Err(err).Msg("fail to save the peer addresses")
-			//}
 			return msg.ECDSAPub, nil
 		}
 	}
