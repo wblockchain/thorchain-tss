@@ -337,7 +337,7 @@ func (c *Communication) connectToBootstrapPeers() error {
 			ctx, cancel := context.WithTimeout(context.Background(), TimeoutConnecting)
 			defer cancel()
 			if err := c.host.Connect(ctx, *pi); err != nil {
-				c.logger.Error().Err(err).Msgf("fail to connect to %s", pi.String())
+				c.logger.Error().Err(err).Msgf("we (%s)fail to connect to %s", c.GetHost().ID(), pi.String())
 				connRet <- false
 				return
 			}

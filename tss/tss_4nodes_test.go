@@ -16,6 +16,7 @@ import (
 	"time"
 
 	btsskeygen "github.com/binance-chain/tss-lib/ecdsa/keygen"
+	"github.com/ipfs/go-log"
 	maddr "github.com/multiformats/go-multiaddr"
 	. "gopkg.in/check.v1"
 
@@ -23,27 +24,46 @@ import (
 	"gitlab.com/thorchain/tss/go-tss/conversion"
 	"gitlab.com/thorchain/tss/go-tss/keygen"
 	"gitlab.com/thorchain/tss/go-tss/keysign"
+	keyRegroup "gitlab.com/thorchain/tss/go-tss/regroup"
 )
 
 const (
-	partyNum         = 4
-	testFileLocation = "../test_data"
-	preParamTestFile = "preParam_test.data"
+	partyNum            = 4
+	newPartyNum         = 1
+	oldPartyStartOffset = 1
+	testFileLocation    = "../test_data"
+	preParamTestFile    = "preParam_test.data"
 )
 
 var (
 	testPubKeys = []string{
+		"thorpub1addwnpepq2m5ng0e6vm66feecrwxp37cdvmezsysghskz3t5w2du4c48qwupxn96nrr",
+		"thorpub1addwnpepqfjcw5l4ay5t00c32mmlky7qrppepxzdlkcwfs2fd5u73qrwna0vzag3y4j",
+		"thorpub1addwnpepq2ryyje5zr09lq7gqptjwnxqsy2vcdngvwd6z7yt5yjcnyj8c8cn559xe69",
 		"thorpub1addwnpepqtdklw8tf3anjz7nn5fly3uvq2e67w2apn560s4smmrt9e3x52nt2svmmu3",
 		"thorpub1addwnpepqtspqyy6gk22u37ztra4hq3hdakc0w0k60sfy849mlml2vrpfr0wvm6uz09",
-		"thorpub1addwnpepq2ryyje5zr09lq7gqptjwnxqsy2vcdngvwd6z7yt5yjcnyj8c8cn559xe69",
-		"thorpub1addwnpepqfjcw5l4ay5t00c32mmlky7qrppepxzdlkcwfs2fd5u73qrwna0vzag3y4j",
 	}
+
 	testPriKeyArr = []string{
-		"MjQ1MDc2MmM4MjU5YjRhZjhhNmFjMmI0ZDBkNzBkOGE1ZTBmNDQ5NGI4NzM4OTYyM2E3MmI0OWMzNmE1ODZhNw==",
-		"YmNiMzA2ODU1NWNjMzk3NDE1OWMwMTM3MDU0NTNjN2YwMzYzZmVhZDE5NmU3NzRhOTMwOWIxN2QyZTQ0MzdkNg==",
+		"Zjc1NGI1YzBiOTIwZjVlYzNlMzY0YjFiZjMwOTQ3ZGQ4YTg0ZWNjYzVjZjE0YmQwN2E2ZmQyMjdkMGQzNmYyNQ==",
 		"ZThiMDAxOTk2MDc4ODk3YWE0YThlMjdkMWY0NjA1MTAwZDgyNDkyYzdhNmMwZWQ3MDBhMWIyMjNmNGMzYjVhYg==",
 		"ZTc2ZjI5OTIwOGVlMDk2N2M3Yzc1MjYyODQ0OGUyMjE3NGJiOGRmNGQyZmVmODg0NzQwNmUzYTk1YmQyODlmNA==",
+		"MjQ1MDc2MmM4MjU5YjRhZjhhNmFjMmI0ZDBkNzBkOGE1ZTBmNDQ5NGI4NzM4OTYyM2E3MmI0OWMzNmE1ODZhNw==",
+		"YmNiMzA2ODU1NWNjMzk3NDE1OWMwMTM3MDU0NTNjN2YwMzYzZmVhZDE5NmU3NzRhOTMwOWIxN2QyZTQ0MzdkNg==",
 	}
+
+	//testPubKeys = []string{
+	//	"thorpub1addwnpepqtdklw8tf3anjz7nn5fly3uvq2e67w2apn560s4smmrt9e3x52nt2svmmu3",
+	//	"thorpub1addwnpepqtspqyy6gk22u37ztra4hq3hdakc0w0k60sfy849mlml2vrpfr0wvm6uz09",
+	//	"thorpub1addwnpepq2ryyje5zr09lq7gqptjwnxqsy2vcdngvwd6z7yt5yjcnyj8c8cn559xe69",
+	//	"thorpub1addwnpepqfjcw5l4ay5t00c32mmlky7qrppepxzdlkcwfs2fd5u73qrwna0vzag3y4j",
+	//}
+	//testPriKeyArr = []string{
+	//	"MjQ1MDc2MmM4MjU5YjRhZjhhNmFjMmI0ZDBkNzBkOGE1ZTBmNDQ5NGI4NzM4OTYyM2E3MmI0OWMzNmE1ODZhNw==",
+	//	"YmNiMzA2ODU1NWNjMzk3NDE1OWMwMTM3MDU0NTNjN2YwMzYzZmVhZDE5NmU3NzRhOTMwOWIxN2QyZTQ0MzdkNg==",
+	//	"ZThiMDAxOTk2MDc4ODk3YWE0YThlMjdkMWY0NjA1MTAwZDgyNDkyYzdhNmMwZWQ3MDBhMWIyMjNmNGMzYjVhYg==",
+	//	"ZTc2ZjI5OTIwOGVlMDk2N2M3Yzc1MjYyODQ0OGUyMjE3NGJiOGRmNGQyZmVmODg0NzQwNmUzYTk1YmQyODlmNA==",
+	//}
 )
 
 func TestPackage(t *testing.T) {
@@ -51,10 +71,11 @@ func TestPackage(t *testing.T) {
 }
 
 type FourNodeTestSuite struct {
-	servers       []*TssServer
-	ports         []int
-	preParams     []*btsskeygen.LocalPreParams
-	bootstrapPeer string
+	servers           []*TssServer
+	ports             []int
+	preParams         []*btsskeygen.LocalPreParams
+	bootstrapPeer     string
+	keyGenSignPubkeys []string
 }
 
 var _ = Suite(&FourNodeTestSuite{})
@@ -62,23 +83,24 @@ var _ = Suite(&FourNodeTestSuite{})
 // setup four nodes for test
 func (s *FourNodeTestSuite) SetUpTest(c *C) {
 	common.InitLog("info", true, "four_nodes_test")
+	log.SetLogLevel("tss-lib", "info")
 	conversion.SetupBech32Prefix()
 	s.ports = []int{
-		16666, 16667, 16668, 16669,
+		16666, 16667, 16668, 16669, 16670,
 	}
-	s.bootstrapPeer = "/ip4/127.0.0.1/tcp/16666/p2p/16Uiu2HAmACG5DtqmQsHtXg4G2sLS65ttv84e7MrL4kapkjfmhxAp"
+	s.bootstrapPeer = "/ip4/127.0.0.1/tcp/16666/p2p/16Uiu2HAm7m9i8A7cPENuL97sa5b6Xq7TSDNF6gGrSBhN41jWCmop"
 	s.preParams = getPreparams(c)
-	s.servers = make([]*TssServer, partyNum)
-
+	s.servers = make([]*TssServer, partyNum+newPartyNum)
+	s.keyGenSignPubkeys = testPubKeys[oldPartyStartOffset:]
 	conf := common.TssConfig{
-		KeyGenTimeout:   90 * time.Second,
-		KeySignTimeout:  90 * time.Second,
+		KeyGenTimeout:   30 * time.Second,
+		KeySignTimeout:  30 * time.Second,
 		PreParamTimeout: 5 * time.Second,
 		EnableMonitor:   false,
 	}
 
 	var wg sync.WaitGroup
-	for i := 0; i < partyNum; i++ {
+	for i := 0; i < partyNum+newPartyNum; i++ {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
@@ -92,7 +114,7 @@ func (s *FourNodeTestSuite) SetUpTest(c *C) {
 		time.Sleep(time.Second)
 	}
 	wg.Wait()
-	for i := 0; i < partyNum; i++ {
+	for i := 0; i < partyNum+newPartyNum; i++ {
 		c.Assert(s.servers[i].Start(), IsNil)
 	}
 }
@@ -105,6 +127,7 @@ func hash(payload []byte) []byte {
 
 // we do for both join party schemes
 func (s *FourNodeTestSuite) Test4NodesTss(c *C) {
+	// c.Skip("skip it now")
 	s.doTestKeygenAndKeySign(c, false)
 	time.Sleep(time.Second * 2)
 	s.doTestKeygenAndKeySign(c, true)
@@ -114,10 +137,14 @@ func (s *FourNodeTestSuite) Test4NodesTss(c *C) {
 	time.Sleep(time.Second * 2)
 	s.doTestFailJoinParty(c, true)
 
+	// time.Sleep(time.Second * 2)
+	//s.doTestBlame(c, false)
+	//time.Sleep(time.Second * 2)
+	//s.doTestBlame(c, true)
+	//
+	//add regroup test
 	time.Sleep(time.Second * 2)
-	s.doTestBlame(c, false)
-	time.Sleep(time.Second * 2)
-	s.doTestBlame(c, true)
+	s.doTestKeygenAndReGroup(c, true)
 }
 
 func checkSignResult(c *C, keysignResult map[int]keysign.Response) {
@@ -146,13 +173,13 @@ func (s *FourNodeTestSuite) doTestKeygenAndKeySign(c *C, newJoinParty bool) {
 		go func(idx int) {
 			defer wg.Done()
 			var req keygen.Request
-			localPubKeys := append([]string{}, testPubKeys...)
+			localPubKeys := append([]string{}, s.keyGenSignPubkeys...)
 			if newJoinParty {
 				req = keygen.NewRequest(localPubKeys, 10, "0.14.0")
 			} else {
 				req = keygen.NewRequest(localPubKeys, 10, "0.13.0")
 			}
-			res, err := s.servers[idx].Keygen(req)
+			res, err := s.servers[idx+oldPartyStartOffset].Keygen(req)
 			c.Assert(err, IsNil)
 			lock.Lock()
 			defer lock.Unlock()
@@ -169,9 +196,9 @@ func (s *FourNodeTestSuite) doTestKeygenAndKeySign(c *C, newJoinParty bool) {
 		}
 	}
 
-	keysignReqWithErr := keysign.NewRequest(poolPubKey, []string{"helloworld", "helloworld2"}, 10, testPubKeys, "0.13.0")
+	keysignReqWithErr := keysign.NewRequest(poolPubKey, []string{"helloworld", "helloworld2"}, 10, s.keyGenSignPubkeys, "0.13.0")
 	if newJoinParty {
-		keysignReqWithErr = keysign.NewRequest(poolPubKey, []string{"helloworld", "helloworld2"}, 10, testPubKeys, "0.14.0")
+		keysignReqWithErr = keysign.NewRequest(poolPubKey, []string{"helloworld", "helloworld2"}, 10, s.keyGenSignPubkeys, "0.14.0")
 	}
 
 	resp, err := s.servers[0].KeySign(keysignReqWithErr)
@@ -196,14 +223,14 @@ func (s *FourNodeTestSuite) doTestKeygenAndKeySign(c *C, newJoinParty bool) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			localPubKeys := append([]string{}, testPubKeys...)
+			localPubKeys := append([]string{}, s.keyGenSignPubkeys...)
 			var keysignReq keysign.Request
 			if newJoinParty {
 				keysignReq = keysign.NewRequest(poolPubKey, []string{base64.StdEncoding.EncodeToString(hash([]byte("helloworld"))), base64.StdEncoding.EncodeToString(hash([]byte("helloworld2")))}, 10, localPubKeys, "0.14.0")
 			} else {
 				keysignReq = keysign.NewRequest(poolPubKey, []string{base64.StdEncoding.EncodeToString(hash([]byte("helloworld"))), base64.StdEncoding.EncodeToString(hash([]byte("helloworld2")))}, 10, localPubKeys, "0.13.0")
 			}
-			res, err := s.servers[idx].KeySign(keysignReq)
+			res, err := s.servers[idx+oldPartyStartOffset].KeySign(keysignReq)
 			c.Assert(err, IsNil)
 			lock.Lock()
 			defer lock.Unlock()
@@ -212,7 +239,6 @@ func (s *FourNodeTestSuite) doTestKeygenAndKeySign(c *C, newJoinParty bool) {
 	}
 	wg.Wait()
 	checkSignResult(c, keysignResult)
-
 	keysignResult1 := make(map[int]keysign.Response)
 	for i := 0; i < partyNum; i++ {
 		wg.Add(1)
@@ -222,9 +248,9 @@ func (s *FourNodeTestSuite) doTestKeygenAndKeySign(c *C, newJoinParty bool) {
 			if newJoinParty {
 				keysignReq = keysign.NewRequest(poolPubKey, []string{base64.StdEncoding.EncodeToString(hash([]byte("helloworld"))), base64.StdEncoding.EncodeToString(hash([]byte("helloworld2")))}, 10, nil, "0.14.0")
 			} else {
-				keysignReq = keysign.NewRequest(poolPubKey, []string{base64.StdEncoding.EncodeToString(hash([]byte("helloworld"))), base64.StdEncoding.EncodeToString(hash([]byte("helloworld2")))}, 10, testPubKeys[:3], "0.13.0")
+				keysignReq = keysign.NewRequest(poolPubKey, []string{base64.StdEncoding.EncodeToString(hash([]byte("helloworld"))), base64.StdEncoding.EncodeToString(hash([]byte("helloworld2")))}, 10, testPubKeys[1:4], "0.13.0")
 			}
-			res, err := s.servers[idx].KeySign(keysignReq)
+			res, err := s.servers[idx+oldPartyStartOffset].KeySign(keysignReq)
 			c.Assert(err, IsNil)
 			lock.Lock()
 			defer lock.Unlock()
@@ -233,6 +259,68 @@ func (s *FourNodeTestSuite) doTestKeygenAndKeySign(c *C, newJoinParty bool) {
 	}
 	wg.Wait()
 	checkSignResult(c, keysignResult1)
+}
+
+// generate a new key
+func (s *FourNodeTestSuite) doTestKeygenAndReGroup(c *C, newJoinParty bool) {
+	log.SetLogLevel("tss-lib", "info")
+	wg := sync.WaitGroup{}
+	lock := &sync.Mutex{}
+	keygenResult := make(map[int]keygen.Response)
+	for i := 0; i < partyNum; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			var req keygen.Request
+			localPubKeys := append([]string{}, s.keyGenSignPubkeys...)
+			if newJoinParty {
+				req = keygen.NewRequest(localPubKeys, 10, "0.14.0")
+			} else {
+				req = keygen.NewRequest(localPubKeys, 10, "0.13.0")
+			}
+			res, err := s.servers[idx+oldPartyStartOffset].Keygen(req)
+			c.Assert(err, IsNil)
+			lock.Lock()
+			defer lock.Unlock()
+			keygenResult[idx] = res
+		}(i)
+	}
+	wg.Wait()
+	var poolPubKey string
+	for _, item := range keygenResult {
+		if len(poolPubKey) == 0 {
+			poolPubKey = item.PubKey
+		} else {
+			c.Assert(poolPubKey, Equals, item.PubKey)
+		}
+	}
+
+	keyRegroupResult := make(map[int]keyRegroup.Response)
+	for i := 0; i < partyNum+newPartyNum; i++ {
+		req := keyRegroup.NewRequest(poolPubKey, testPubKeys[oldPartyStartOffset:], testPubKeys[:partyNum], 10, "0.14.0")
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			if idx == 0 {
+				req.PoolPubKey = ""
+			}
+			res, err := s.servers[idx].KeyRegroup(req)
+			c.Assert(err, IsNil)
+			lock.Lock()
+			defer lock.Unlock()
+			keyRegroupResult[idx] = res
+		}(i)
+	}
+	wg.Wait()
+
+	for i, el := range keyRegroupResult {
+		if i == 4 {
+			// the 4th node is the retired node, so we skip it
+			c.Assert(el.PoolAddress, Equals, "")
+		} else {
+			c.Assert(el.PubKey, Equals, poolPubKey)
+		}
+	}
 }
 
 func (s *FourNodeTestSuite) doTestFailJoinParty(c *C, newJoinParty bool) {
@@ -244,14 +332,15 @@ func (s *FourNodeTestSuite) doTestFailJoinParty(c *C, newJoinParty bool) {
 	for i := 1; i < partyNum; i++ {
 		wg.Add(1)
 		go func(idx int) {
+			localPubKeys := append([]string{}, s.keyGenSignPubkeys...)
 			defer wg.Done()
 			var req keygen.Request
 			if newJoinParty {
-				req = keygen.NewRequest(testPubKeys, 10, "0.14.0")
+				req = keygen.NewRequest(localPubKeys, 10, "0.14.0")
 			} else {
-				req = keygen.NewRequest(testPubKeys, 10, "0.13.0")
+				req = keygen.NewRequest(localPubKeys, 10, "0.13.0")
 			}
-			res, err := s.servers[idx].Keygen(req)
+			res, err := s.servers[idx+oldPartyStartOffset].Keygen(req)
 			c.Assert(err, IsNil)
 			lock.Lock()
 			defer lock.Unlock()
@@ -266,24 +355,24 @@ func (s *FourNodeTestSuite) doTestFailJoinParty(c *C, newJoinParty bool) {
 		c.Assert(item.Status, Equals, common.Fail)
 		var expectedFailNode string
 		if newJoinParty {
-			c.Assert(item.Blame.BlameNodes, HasLen, 2)
-			expectedFailNode := []string{"thorpub1addwnpepqtdklw8tf3anjz7nn5fly3uvq2e67w2apn560s4smmrt9e3x52nt2svmmu3", "thorpub1addwnpepq2ryyje5zr09lq7gqptjwnxqsy2vcdngvwd6z7yt5yjcnyj8c8cn559xe69"}
+			c.Assert(item.Blame.BlameNodes, HasLen, 1)
+			expectedFailNode := []string{"thorpub1addwnpepq2ryyje5zr09lq7gqptjwnxqsy2vcdngvwd6z7yt5yjcnyj8c8cn559xe69"}
 			c.Assert(item.Blame.BlameNodes[0].Pubkey, Equals, expectedFailNode[0])
-			c.Assert(item.Blame.BlameNodes[1].Pubkey, Equals, expectedFailNode[1])
 		} else {
-			expectedFailNode = "thorpub1addwnpepqtdklw8tf3anjz7nn5fly3uvq2e67w2apn560s4smmrt9e3x52nt2svmmu3"
+			expectedFailNode = "thorpub1addwnpepq2ryyje5zr09lq7gqptjwnxqsy2vcdngvwd6z7yt5yjcnyj8c8cn559xe69"
 			c.Assert(item.Blame.BlameNodes[0].Pubkey, Equals, expectedFailNode)
 		}
 	}
 }
 
 func (s *FourNodeTestSuite) doTestBlame(c *C, newJoinParty bool) {
-	expectedFailNode := "thorpub1addwnpepqtdklw8tf3anjz7nn5fly3uvq2e67w2apn560s4smmrt9e3x52nt2svmmu3"
+	expectedFailNode := "thorpub1addwnpepq2ryyje5zr09lq7gqptjwnxqsy2vcdngvwd6z7yt5yjcnyj8c8cn559xe69"
 	var req keygen.Request
+	localPubKeys := append([]string{}, s.keyGenSignPubkeys...)
 	if newJoinParty {
-		req = keygen.NewRequest(testPubKeys, 10, "0.14.0")
+		req = keygen.NewRequest(localPubKeys, 10, "0.14.0")
 	} else {
-		req = keygen.NewRequest(testPubKeys, 10, "0.13.0")
+		req = keygen.NewRequest(localPubKeys, 10, "0.13.0")
 	}
 	wg := sync.WaitGroup{}
 	lock := &sync.Mutex{}
@@ -292,7 +381,7 @@ func (s *FourNodeTestSuite) doTestBlame(c *C, newJoinParty bool) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			res, err := s.servers[idx].Keygen(req)
+			res, err := s.servers[idx+oldPartyStartOffset].Keygen(req)
 			c.Assert(err, NotNil)
 			lock.Lock()
 			defer lock.Unlock()
@@ -302,15 +391,16 @@ func (s *FourNodeTestSuite) doTestBlame(c *C, newJoinParty bool) {
 	// if we shutdown one server during keygen , he should be blamed
 
 	time.Sleep(time.Millisecond * 100)
-	s.servers[0].Stop()
+	// we skip the node "0" as it is the new node in regroup
+	s.servers[0+oldPartyStartOffset].Stop()
 	defer func() {
 		conf := common.TssConfig{
-			KeyGenTimeout:   60 * time.Second,
-			KeySignTimeout:  60 * time.Second,
+			KeyGenTimeout:   30 * time.Second,
+			KeySignTimeout:  30 * time.Second,
 			PreParamTimeout: 5 * time.Second,
 		}
-		s.servers[0] = s.getTssServer(c, 0, conf, s.bootstrapPeer)
-		c.Assert(s.servers[0].Start(), IsNil)
+		s.servers[0+oldPartyStartOffset] = s.getTssServer(c, 0+oldPartyStartOffset, conf, s.bootstrapPeer)
+		c.Assert(s.servers[0+oldPartyStartOffset].Start(), IsNil)
 		c.Log("we start the first server again")
 	}()
 	wg.Wait()
@@ -329,13 +419,12 @@ func (s *FourNodeTestSuite) doTestBlame(c *C, newJoinParty bool) {
 func (s *FourNodeTestSuite) TearDownTest(c *C) {
 	// give a second before we shutdown the network
 	time.Sleep(time.Second)
-	for i := 0; i < partyNum; i++ {
+	for i := 0; i < partyNum+newPartyNum; i++ {
 		s.servers[i].Stop()
 	}
-	for i := 0; i < partyNum; i++ {
+	for i := 0; i < partyNum+newPartyNum; i++ {
 		tempFilePath := path.Join(os.TempDir(), "4nodes_test", strconv.Itoa(i))
 		os.RemoveAll(tempFilePath)
-
 	}
 }
 

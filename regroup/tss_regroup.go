@@ -93,9 +93,8 @@ func (tKeyReGroup *TssKeyReGroup) NewPartyInit(req Request) (*btss.ReSharingPara
 	} else {
 		newPartiesID, _, _ = conversion.GetParties(req.NewPartyKeys, tKeyReGroup.localNodePubKey, false)
 		oldPartiesID, oldLocalPartyID, err = conversion.GetParties(req.OldPartyKeys, tKeyReGroup.localNodePubKey, true)
-
 		if err != nil {
-			return nil, nil, nil, nil, fmt.Errorf("fail to initlize the new parties: %w", err)
+			return nil, nil, nil, nil, fmt.Errorf("old committee fails to initlize the new parties: %w", err)
 		}
 	}
 
@@ -113,7 +112,7 @@ func (tKeyReGroup *TssKeyReGroup) NewPartyInit(req Request) (*btss.ReSharingPara
 	return newParams, oldParams, oldPartiesID, newPartiesID, nil
 }
 
-func (tKeyReGroup *TssKeyReGroup) GenerateNewKey(keyRegroup Request, localData bkg.LocalPartySaveData) (*bcrypto.ECPoint, error) {
+func (tKeyReGroup *TssKeyReGroup) GenerateNewKey(req Request, localData bkg.LocalPartySaveData) (*bcrypto.ECPoint, error) {
 	var newParams, oldParams *btss.ReSharingParameters
 	var newPartiesID, oldPartiesID []*btss.PartyID
 	var newKeyGenParty, oldKeyGenParty btss.Party
@@ -121,16 +120,16 @@ func (tKeyReGroup *TssKeyReGroup) GenerateNewKey(keyRegroup Request, localData b
 
 	allParties := make(map[string]bool)
 
-	for _, el := range keyRegroup.OldPartyKeys {
+	for _, el := range req.OldPartyKeys {
 		allParties[el] = true
 	}
 
-	for _, el := range keyRegroup.NewPartyKeys {
+	for _, el := range req.NewPartyKeys {
 		allParties[el] = true
 	}
 	partyNum := len(allParties)
 
-	newParams, oldParams, oldPartiesID, newPartiesID, err = tKeyReGroup.NewPartyInit(keyRegroup)
+	newParams, oldParams, oldPartiesID, newPartiesID, err = tKeyReGroup.NewPartyInit(req)
 	if err != nil {
 		tKeyReGroup.logger.Error().Err(err).Msgf("fail to init the party")
 		return nil, err
@@ -211,14 +210,14 @@ func (tKeyReGroup *TssKeyReGroup) GenerateNewKey(keyRegroup Request, localData b
 	}
 
 	keyGenLocalStateItem := storage.KeygenLocalState{
-		ParticipantKeys: keyRegroup.NewPartyKeys,
+		ParticipantKeys: req.NewPartyKeys,
 		LocalPartyKey:   tKeyReGroup.localNodePubKey,
 	}
 
 	keyGenWg.Add(1)
 	go tKeyReGroup.tssCommonStruct.ProcessInboundMessages(tKeyReGroup.commStopChan, &keyGenWg)
 
-	r, err := tKeyReGroup.processKeyReGroup(errChan, outCh, endCh, oldKeyGenParty != nil && newKeyGenParty != nil, keyGenLocalStateItem)
+	r, err := tKeyReGroup.processKeyReGroup(errChan, outCh, endCh, oldKeyGenParty != nil && newKeyGenParty != nil, keyGenLocalStateItem, len(req.OldPartyKeys))
 	if err != nil {
 		close(tKeyReGroup.commStopChan)
 		return nil, fmt.Errorf("fail to process key sign: %w", err)
@@ -237,7 +236,7 @@ func (tKeyReGroup *TssKeyReGroup) GenerateNewKey(keyRegroup Request, localData b
 
 func (tKeyReGroup *TssKeyReGroup) processKeyReGroup(errChan chan struct{},
 	outCh <-chan btss.Message,
-	endCh <-chan bkg.LocalPartySaveData, bothOldNewParty bool, keyGenLocalStateItem storage.KeygenLocalState,
+	endCh <-chan bkg.LocalPartySaveData, bothOldNewParty bool, keyGenLocalStateItem storage.KeygenLocalState, oldPartyNum int,
 ) (*bcrypto.ECPoint, error) {
 	// keyGenLocalStateItem storage.KeygenLocalState) (*bcrypto.ECPoint, error) {
 	defer tKeyReGroup.logger.Debug().Msg("finished keygen process")
@@ -279,7 +278,6 @@ func (tKeyReGroup *TssKeyReGroup) processKeyReGroup(errChan chan struct{},
 			if len(blameNodesUnicast) > 0 && len(blameNodesUnicast) <= threshold {
 				blameMgr.GetBlame().SetBlame(failReason, blameNodesUnicast, true)
 			}
-			fmt.Printf("we get broadcast blame........%v\n", lastMsg.Type())
 			blameNodesBroadcast, err := blameMgr.GetBroadcastBlame(lastMsg.Type())
 			if err != nil {
 				tKeyReGroup.logger.Error().Err(err).Msg("error in get broadcast blame")
@@ -328,7 +326,7 @@ func (tKeyReGroup *TssKeyReGroup) processKeyReGroup(errChan chan struct{},
 			if msg.IsToOldAndNewCommittees() {
 				messageRoutingOld := btss.MessageRouting{
 					From:                    msg.GetFrom(),
-					To:                      msg.GetTo()[:4],
+					To:                      msg.GetTo()[:oldPartyNum],
 					IsBroadcast:             msg.IsBroadcast(),
 					IsToOldCommittee:        msg.IsToOldCommittee(),
 					IsToOldAndNewCommittees: msg.IsToOldAndNewCommittees(),
@@ -336,7 +334,7 @@ func (tKeyReGroup *TssKeyReGroup) processKeyReGroup(errChan chan struct{},
 
 				messageRoutingNew := btss.MessageRouting{
 					From:                    msg.GetFrom(),
-					To:                      msg.GetTo()[4:],
+					To:                      msg.GetTo()[oldPartyNum:],
 					IsBroadcast:             msg.IsBroadcast(),
 					IsToOldCommittee:        msg.IsToOldCommittee(),
 					IsToOldAndNewCommittees: msg.IsToOldAndNewCommittees(),

@@ -296,7 +296,6 @@ func (t *TssCommon) updateLocal(wireMsg *messages.WireMessage) error {
 			}
 		}
 
-		//	fmt.Printf(">>>>>>>>>>>localLL %v(%v) received from %v(%v:actual pass %v)\n", localMsgParty.PartyID().Id, localMsgParty.PartyID().Moniker, msg.Routing.From.Id, msg.Routing.From.Index, partyID.Index)
 		round, err := GetMsgRound(msg.WiredBulkMsgs, partyID, msg.Routing.IsBroadcast)
 		if err != nil {
 			t.logger.Error().Err(err).Msg("broken tss share")

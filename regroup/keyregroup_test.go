@@ -69,7 +69,7 @@ const testPoolPubKey = "thorpub1addwnpepqv6xp3fmm47dfuzglywqvpv8fdjv55zxte4a26ts
 
 func TestPackage(t *testing.T) { TestingT(t) }
 
-type TssKeygenTestSuite struct {
+type TssKeyRegroupTestSuite struct {
 	comms        []*p2p.Communication
 	preParams    []*btsskeygen.LocalPreParams
 	oldPartyNum  int
@@ -79,9 +79,9 @@ type TssKeygenTestSuite struct {
 	targePeers   []peer.ID
 }
 
-var _ = Suite(&TssKeygenTestSuite{})
+var _ = Suite(&TssKeyRegroupTestSuite{})
 
-func (s *TssKeygenTestSuite) SetUpSuite(c *C) {
+func (s *TssKeyRegroupTestSuite) SetUpSuite(c *C) {
 	common.InitLog("info", true, "keygen_test")
 	conversion.SetupBech32Prefix()
 	for _, el := range testNodePrivkey {
@@ -101,7 +101,7 @@ func (s *TssKeygenTestSuite) SetUpSuite(c *C) {
 	}
 }
 
-func (s *TssKeygenTestSuite) TearDownSuite(c *C) {
+func (s *TssKeyRegroupTestSuite) TearDownSuite(c *C) {
 	for i, _ := range s.comms {
 		tempFilePath := path.Join(os.TempDir(), strconv.Itoa(i))
 		err := os.RemoveAll(tempFilePath)
@@ -138,10 +138,11 @@ func (s *MockLocalStateManager) RetrieveP2PAddresses() (addr.AddrList, error) {
 }
 
 // SetUpTest set up environment for test key gen
-func (s *TssKeygenTestSuite) SetUpTest(c *C) {
+func (s *TssKeyRegroupTestSuite) SetUpTest(c *C) {
 	ports := []int{
 		18666, 18667, 18668, 18669, 18670,
 	}
+	time.Sleep(time.Second * 10)
 	s.oldPartyNum = 4
 	s.newPartyNum = 1
 	partyNum := s.oldPartyNum + s.newPartyNum
@@ -180,7 +181,7 @@ func (s *TssKeygenTestSuite) SetUpTest(c *C) {
 	}
 }
 
-func (s *TssKeygenTestSuite) TearDownTest(c *C) {
+func (s *TssKeyRegroupTestSuite) TearDownTest(c *C) {
 	time.Sleep(time.Second)
 	for _, item := range s.comms {
 		c.Assert(item.Stop(), IsNil)
@@ -206,10 +207,10 @@ func getPreparams(c *C) []*btsskeygen.LocalPreParams {
 	return preParamArray
 }
 
-func (s *TssKeygenTestSuite) TestGenerateNewKey(c *C) {
+func (s *TssKeyRegroupTestSuite) TestKeyRegroup(c *C) {
 	log.SetLogLevel("tss-lib", "info")
 	sort.Strings(testPubKeys)
-	req := NewRequest(testPubKeys[1:5], testPubKeys[0:4], 10, "")
+	req := NewRequest(testPoolPubKey, testPubKeys[1:5], testPubKeys[0:4], 10, "")
 
 	messageID, err := common.MsgToHashString([]byte(strings.Join(req.NewPartyKeys, "")))
 	c.Assert(err, IsNil)
@@ -220,7 +221,7 @@ func (s *TssKeygenTestSuite) TestGenerateNewKey(c *C) {
 	}
 	wg := sync.WaitGroup{}
 	lock := &sync.Mutex{}
-	keygenResult := make(map[int]*crypto.ECPoint)
+	keyRegroupResult := make(map[int]*crypto.ECPoint)
 	for i := 0; i < (s.oldPartyNum + s.newPartyNum); i++ {
 		wg.Add(1)
 		go func(idx int) {
@@ -249,38 +250,40 @@ func (s *TssKeygenTestSuite) TestGenerateNewKey(c *C) {
 			defer comm.CancelSubscribe(messages.TSSTaskDone, messageID)
 
 			if idx == 0 {
-				saveData := btsskeygen.NewLocalPartySaveData(4)
+				// saveData := btsskeygen.NewLocalPartySaveData(4)
+				var saveData btsskeygen.LocalPartySaveData
+				saveData.LocalPreParams = *s.preParams[5]
 				resp, err := keygenInstance.GenerateNewKey(req, saveData)
 				c.Assert(err, IsNil)
 				if resp != nil {
 					lock.Lock()
 					defer lock.Unlock()
-					keygenResult[idx] = resp
+					keyRegroupResult[idx] = resp
 				}
 			} else {
-				localState, err := s.stateMgrs[idx].GetLocalState(testPoolPubKey)
+				localState, err := s.stateMgrs[idx].GetLocalState(req.PoolPubKey)
 				c.Assert(err, IsNil)
 				resp, err := keygenInstance.GenerateNewKey(req, localState.LocalData)
 				c.Assert(err, IsNil)
 				if resp != nil {
 					lock.Lock()
 					defer lock.Unlock()
-					keygenResult[idx] = resp
+					keyRegroupResult[idx] = resp
 				}
 			}
 		}(i)
 	}
 	wg.Wait()
-	c.Assert(keygenResult, HasLen, 4)
+	c.Assert(keyRegroupResult, HasLen, 4)
 	// we check whether the public key is the same before resharing
 	data, err := s.stateMgrs[1].GetLocalState(testPoolPubKey)
 	c.Assert(err, IsNil)
-	for _, el := range keygenResult {
+	for _, el := range keyRegroupResult {
 		data.LocalData.ECDSAPub.Equals(el)
 	}
 }
 
-func (s *TssKeygenTestSuite) TestGenerateNewKeyWithStop(c *C) {
+func (s *TssKeyRegroupTestSuite) TestGenerateNewKeyWithStop(c *C) {
 	c.Skip("we do not support blame right now")
 	log.SetLogLevel("tss-lib", "debug")
 	conf := common.TssConfig{
@@ -291,7 +294,7 @@ func (s *TssKeygenTestSuite) TestGenerateNewKeyWithStop(c *C) {
 	wg := sync.WaitGroup{}
 
 	sort.Strings(testPubKeys)
-	req := NewRequest(testPubKeys[1:5], testPubKeys[0:4], 10, "")
+	req := NewRequest(testPoolPubKey, testPubKeys[1:5], testPubKeys[0:4], 10, "")
 	messageID, err := common.MsgToHashString([]byte(strings.Join(req.NewPartyKeys, "")))
 	c.Assert(err, IsNil)
 	for i := 0; i < (s.oldPartyNum + s.newPartyNum); i++ {
@@ -338,7 +341,7 @@ func (s *TssKeygenTestSuite) TestGenerateNewKeyWithStop(c *C) {
 				c.Assert(err, NotNil)
 
 			} else {
-				localState, err := s.stateMgrs[idx].GetLocalState(testPoolPubKey)
+				localState, err := s.stateMgrs[idx].GetLocalState(req.PoolPubKey)
 				c.Assert(err, IsNil)
 				_, err = keygenInstance.GenerateNewKey(req, localState.LocalData)
 				c.Assert(err, NotNil)
@@ -357,8 +360,8 @@ func (s *TssKeygenTestSuite) TestGenerateNewKeyWithStop(c *C) {
 	wg.Wait()
 }
 
-func (s *TssKeygenTestSuite) TestKeyGenWithError(c *C) {
-	req := NewRequest(testPubKeys[1:5], testPubKeys[0:4], 10, "")
+func (s *TssKeyRegroupTestSuite) TestKeyRegroupWithError(c *C) {
+	req := NewRequest(testPoolPubKey, testPubKeys[1:5], testPubKeys[0:4], 10, "")
 	conf := common.TssConfig{}
 	stateManager := &storage.MockLocalStateManager{}
 	keyGenInstance := NewTssKeyReGroup("", conf, "", nil, nil, nil, "test", stateManager, s.nodePrivKeys[0], nil)
@@ -368,7 +371,7 @@ func (s *TssKeygenTestSuite) TestKeyGenWithError(c *C) {
 	c.Assert(generatedKey, IsNil)
 }
 
-func (s *TssKeygenTestSuite) TestCloseKeyGenNotifyChannel(c *C) {
+func (s *TssKeyRegroupTestSuite) TestCloseKeyGenNotifyChannel(c *C) {
 	conf := common.TssConfig{}
 	stateManager := &storage.MockLocalStateManager{}
 

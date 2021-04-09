@@ -8,12 +8,14 @@ import (
 	"gitlab.com/thorchain/tss/go-tss/conversion"
 	"gitlab.com/thorchain/tss/go-tss/keygen"
 	"gitlab.com/thorchain/tss/go-tss/keysign"
+	keyRegroup "gitlab.com/thorchain/tss/go-tss/regroup"
 )
 
 type MockTssServer struct {
-	failToStart   bool
-	failToKeyGen  bool
-	failToKeySign bool
+	failToStart      bool
+	failToKeyGen     bool
+	failToKeySign    bool
+	failToKeyRegroup bool
 }
 
 func (mts *MockTssServer) Start() error {
@@ -43,4 +45,11 @@ func (mts *MockTssServer) KeySign(req keysign.Request) (keysign.Response, error)
 	}
 	newSig := keysign.NewSignature("", "", "", "")
 	return keysign.NewResponse([]keysign.Signature{newSig}, common.Success, blame.Blame{}), nil
+}
+
+func (mts *MockTssServer) KeyRegroup(req keyRegroup.Request) (keyRegroup.Response, error) {
+	if mts.failToKeyRegroup {
+		return keyRegroup.Response{}, errors.New("you ask for it")
+	}
+	return keyRegroup.NewResponse("test", "testAddr", common.Success, blame.Blame{}), nil
 }

@@ -23,6 +23,7 @@ import (
 	"gitlab.com/thorchain/tss/go-tss/messages"
 	"gitlab.com/thorchain/tss/go-tss/monitor"
 	"gitlab.com/thorchain/tss/go-tss/p2p"
+	keyRegroup "gitlab.com/thorchain/tss/go-tss/regroup"
 	"gitlab.com/thorchain/tss/go-tss/storage"
 )
 
@@ -153,6 +154,8 @@ func (t *TssServer) requestToMsgId(request interface{}) (string, error) {
 		sort.Strings(value.Messages)
 		dat = []byte(strings.Join(value.Messages, ","))
 		keys = value.SignerPubKeys
+	case keyRegroup.Request:
+		keys = value.NewPartyKeys
 	default:
 		t.logger.Error().Msg("unknown request type")
 		return "", errors.New("unknown request type")

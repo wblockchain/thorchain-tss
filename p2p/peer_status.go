@@ -90,7 +90,6 @@ func (ps *PeerStatus) updatePeer(peerNode peer.ID) (bool, error) {
 		}
 		return false, nil
 	}
-
 	// we already have enough participants
 	if ps.reqCount >= ps.threshold {
 		return false, nil
