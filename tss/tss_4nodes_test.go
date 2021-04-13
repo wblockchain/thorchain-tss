@@ -127,15 +127,14 @@ func hash(payload []byte) []byte {
 
 // we do for both join party schemes
 func (s *FourNodeTestSuite) Test4NodesTss(c *C) {
-	c.Skip("skip it now")
-	//s.doTestKeygenAndKeySign(c, false)
-	//time.Sleep(time.Second * 2)
-	//s.doTestKeygenAndKeySign(c, true)
+	s.doTestKeygenAndKeySign(c, false)
+	time.Sleep(time.Second * 2)
+	s.doTestKeygenAndKeySign(c, true)
 	//
-	//time.Sleep(time.Second * 2)
-	//s.doTestFailJoinParty(c, false)
-	//time.Sleep(time.Second * 2)
-	//s.doTestFailJoinParty(c, true)
+	time.Sleep(time.Second * 2)
+	s.doTestFailJoinParty(c, false)
+	time.Sleep(time.Second * 2)
+	s.doTestFailJoinParty(c, true)
 
 	// time.Sleep(time.Second * 2)
 	//s.doTestBlame(c, false)

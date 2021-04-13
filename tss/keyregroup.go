@@ -30,7 +30,6 @@ func (t *TssServer) KeyRegroup(req keyRegroup.Request) (keyRegroup.Response, err
 		}
 		localPartyData = localSaveData.LocalData
 	} else {
-		var localPartyData btsskeygen.LocalPartySaveData
 		localPartyData.LocalPreParams = *t.preParams
 	}
 

@@ -17,7 +17,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"gitlab.com/thorchain/tss/go-tss/common"
-	"gitlab.com/thorchain/tss/go-tss/p2p"
 )
 
 func TestSignatureNotifierHappyPath(t *testing.T) {
@@ -27,7 +26,6 @@ func TestSignatureNotifierHappyPath(t *testing.T) {
 	assert.Nil(t, err)
 	messageID, err := common.MsgToHashString(buf)
 	assert.Nil(t, err)
-	p2p.ApplyDeadline = false
 	id1 := tnet.RandIdentityOrFatal(t)
 	id2 := tnet.RandIdentityOrFatal(t)
 	id3 := tnet.RandIdentityOrFatal(t)
