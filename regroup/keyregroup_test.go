@@ -1,6 +1,7 @@
 package keyRegroup
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -18,9 +19,12 @@ import (
 	"github.com/binance-chain/tss-lib/crypto"
 	btss "github.com/binance-chain/tss-lib/tss"
 	"github.com/ipfs/go-log"
-	"github.com/libp2p/go-libp2p-peerstore/addr"
-
+	p2pcrypto "github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-peerstore/addr"
+	tnet "github.com/libp2p/go-libp2p-testing/net"
+	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	tcrypto "github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/crypto/secp256k1"
 
@@ -77,6 +81,7 @@ type TssKeyRegroupTestSuite struct {
 	stateMgrs    []storage.LocalStateManager
 	nodePrivKeys []tcrypto.PrivKey
 	targePeers   []peer.ID
+	hosts        []host.Host
 }
 
 var _ = Suite(&TssKeyRegroupTestSuite{})
@@ -84,6 +89,9 @@ var _ = Suite(&TssKeyRegroupTestSuite{})
 func (s *TssKeyRegroupTestSuite) SetUpSuite(c *C) {
 	common.InitLog("info", true, "keygen_test")
 	conversion.SetupBech32Prefix()
+	p2p.ApplyDeadline = false
+	s.oldPartyNum = 4
+	s.newPartyNum = 1
 	for _, el := range testNodePrivkey {
 		priHexBytes, err := base64.StdEncoding.DecodeString(el)
 		c.Assert(err, IsNil)
@@ -99,6 +107,8 @@ func (s *TssKeyRegroupTestSuite) SetUpSuite(c *C) {
 		c.Assert(err, IsNil)
 		s.targePeers = append(s.targePeers, p)
 	}
+
+	s.hosts = s.setupTestNetwork(c, testPriKeyArr)
 }
 
 func (s *TssKeyRegroupTestSuite) TearDownSuite(c *C) {
@@ -137,35 +147,44 @@ func (s *MockLocalStateManager) RetrieveP2PAddresses() (addr.AddrList, error) {
 	return nil, os.ErrNotExist
 }
 
+func (s *TssKeyRegroupTestSuite) setupTestNetwork(c *C, privkeys []string) []host.Host {
+	mn := mocknet.New(context.Background())
+	var hosts []host.Host
+	for _, el := range privkeys {
+		buf, err := base64.StdEncoding.DecodeString(el)
+		c.Assert(err, IsNil)
+
+		p2pPriKey, err := p2pcrypto.UnmarshalSecp256k1PrivateKey(buf)
+		c.Assert(err, IsNil)
+		a := tnet.RandLocalTCPAddress()
+		h, err := mn.AddPeer(p2pPriKey, a)
+		c.Assert(err, IsNil)
+		hosts = append(hosts, h)
+	}
+
+	err := mn.LinkAll()
+	c.Assert(err, IsNil)
+	err = mn.ConnectAllButSelf()
+	c.Assert(err, IsNil)
+	return hosts
+}
+
 // SetUpTest set up environment for test key gen
 func (s *TssKeyRegroupTestSuite) SetUpTest(c *C) {
-	ports := []int{
-		18666, 18667, 18668, 18669, 18670,
-	}
-	time.Sleep(time.Second * 10)
-	s.oldPartyNum = 4
-	s.newPartyNum = 1
+	// since regroup p2p members are different from the reset of the tests, we need
+	// to wait a little bit of time to allow other p2p networks tear down firstly.
 	partyNum := s.oldPartyNum + s.newPartyNum
 	s.comms = make([]*p2p.Communication, partyNum)
 	s.stateMgrs = make([]storage.LocalStateManager, partyNum)
-	bootstrapPeer := "/ip4/127.0.0.1/tcp/18666/p2p/16Uiu2HAm7m9i8A7cPENuL97sa5b6Xq7TSDNF6gGrSBhN41jWCmop"
-	multiAddr, err := maddr.NewMultiaddr(bootstrapPeer)
-	c.Assert(err, IsNil)
 	s.preParams = getPreparams(c)
-	for i := 0; i < partyNum; i++ {
-		buf, err := base64.StdEncoding.DecodeString(testPriKeyArr[i])
+	for i := 0; i < len(s.hosts); i++ {
+		comm, err := p2p.NewCommunication("asgard", []maddr.Multiaddr{}, 123, "")
 		c.Assert(err, IsNil)
-		if i == 0 {
-			comm, err := p2p.NewCommunication("asgard", nil, ports[i], "")
-			c.Assert(err, IsNil)
-			c.Assert(comm.Start(buf[:]), IsNil)
-			s.comms[i] = comm
-			continue
-		}
-		comm, err := p2p.NewCommunication("asgard", []maddr.Multiaddr{multiAddr}, ports[i], "")
-		c.Assert(err, IsNil)
-		c.Assert(comm.Start(buf[:]), IsNil)
+		h := s.hosts[i]
+		h.SetStreamHandler(p2p.TSSProtocolID, comm.HandleStream)
+		comm.SetHost(h)
 		s.comms[i] = comm
+		comm.StartProcessing()
 	}
 
 	baseHome := path.Join(os.TempDir(), strconv.Itoa(0))

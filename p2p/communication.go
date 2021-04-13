@@ -95,6 +95,10 @@ func (c *Communication) GetHost() host.Host {
 	return c.host
 }
 
+func (c *Communication) SetHost(h host.Host) {
+	c.host = h
+}
+
 // GetLocalPeerID from p2p host
 func (c *Communication) GetLocalPeerID() string {
 	return c.host.ID().String()
@@ -185,7 +189,7 @@ func (c *Communication) readFromStream(stream network.Stream) {
 	}
 }
 
-func (c *Communication) handleStream(stream network.Stream) {
+func (c *Communication) HandleStream(stream network.Stream) {
 	peerID := stream.Conn().RemotePeer().String()
 	c.logger.Debug().Msgf("handle stream from peer: %s", peerID)
 	// we will read from that stream
@@ -261,7 +265,7 @@ func (c *Communication) startChannel(privKeyBytes []byte) error {
 	}
 	c.host = h
 	c.logger.Info().Msgf("Host created, we are: %s, at: %s", h.ID(), h.Addrs())
-	h.SetStreamHandler(TSSProtocolID, c.handleStream)
+	h.SetStreamHandler(TSSProtocolID, c.HandleStream)
 	// Start a DHT, for use in peer discovery. We can't just make a new DHT
 	// client because we want each peer to maintain its own local copy of the
 	// DHT, so that the bootstrapping node of the DHT can go down without
@@ -354,12 +358,16 @@ func (c *Communication) connectToBootstrapPeers() error {
 	return errors.New("fail to connect to any peer")
 }
 
+func (c *Communication) StartProcessing() {
+	c.wg.Add(1)
+	go c.ProcessBroadcast()
+}
+
 // Start will start the communication
 func (c *Communication) Start(priKeyBytes []byte) error {
 	err := c.startChannel(priKeyBytes)
 	if err == nil {
-		c.wg.Add(1)
-		go c.ProcessBroadcast()
+		c.StartProcessing()
 	}
 	return err
 }

@@ -127,15 +127,15 @@ func hash(payload []byte) []byte {
 
 // we do for both join party schemes
 func (s *FourNodeTestSuite) Test4NodesTss(c *C) {
-	// c.Skip("skip it now")
-	s.doTestKeygenAndKeySign(c, false)
-	time.Sleep(time.Second * 2)
-	s.doTestKeygenAndKeySign(c, true)
-
-	time.Sleep(time.Second * 2)
-	s.doTestFailJoinParty(c, false)
-	time.Sleep(time.Second * 2)
-	s.doTestFailJoinParty(c, true)
+	c.Skip("skip it now")
+	//s.doTestKeygenAndKeySign(c, false)
+	//time.Sleep(time.Second * 2)
+	//s.doTestKeygenAndKeySign(c, true)
+	//
+	//time.Sleep(time.Second * 2)
+	//s.doTestFailJoinParty(c, false)
+	//time.Sleep(time.Second * 2)
+	//s.doTestFailJoinParty(c, true)
 
 	// time.Sleep(time.Second * 2)
 	//s.doTestBlame(c, false)
@@ -143,7 +143,7 @@ func (s *FourNodeTestSuite) Test4NodesTss(c *C) {
 	//s.doTestBlame(c, true)
 	//
 	//add regroup test
-	time.Sleep(time.Second * 2)
+	//time.Sleep(time.Second * 2)
 	s.doTestKeygenAndReGroup(c, true)
 }
 
@@ -294,6 +294,8 @@ func (s *FourNodeTestSuite) doTestKeygenAndReGroup(c *C, newJoinParty bool) {
 			c.Assert(poolPubKey, Equals, item.PubKey)
 		}
 	}
+	c.Logf("we suspend 5 seconds for keys to be stored.")
+	time.Sleep(time.Second * 5)
 
 	keyRegroupResult := make(map[int]keyRegroup.Response)
 	for i := 0; i < partyNum+newPartyNum; i++ {
