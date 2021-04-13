@@ -139,6 +139,9 @@ func (s *MockLocalStateManager) RetrieveP2PAddresses() (addr.AddrList, error) {
 
 // SetUpTest set up environment for test key gen
 func (s *TssKeyRegroupTestSuite) SetUpTest(c *C) {
+	// sice regroup p2p members are different from the reset of the tests, we need
+	// to wait a little bit of time to allow other p2p networks tear down firstly.
+	time.Sleep(time.Second * 30)
 	ports := []int{
 		18666, 18667, 18668, 18669, 18670,
 	}
@@ -148,14 +151,14 @@ func (s *TssKeyRegroupTestSuite) SetUpTest(c *C) {
 	partyNum := s.oldPartyNum + s.newPartyNum
 	s.comms = make([]*p2p.Communication, partyNum)
 	s.stateMgrs = make([]storage.LocalStateManager, partyNum)
-	bootstrapPeer := "/ip4/127.0.0.1/tcp/18666/p2p/16Uiu2HAm7m9i8A7cPENuL97sa5b6Xq7TSDNF6gGrSBhN41jWCmop"
+	bootstrapPeer := "/ip4/127.0.0.1/tcp/18667/p2p/16Uiu2HAm4TmEzUqy3q3Dv7HvdoSboHk5sFj2FH3npiN5vDbJC6gh"
 	multiAddr, err := maddr.NewMultiaddr(bootstrapPeer)
 	c.Assert(err, IsNil)
 	s.preParams = getPreparams(c)
-	for i := 0; i < partyNum; i++ {
+	for i := 1; i < partyNum; i++ {
 		buf, err := base64.StdEncoding.DecodeString(testPriKeyArr[i])
 		c.Assert(err, IsNil)
-		if i == 0 {
+		if i == 1 {
 			comm, err := p2p.NewCommunication("asgard", nil, ports[i], "")
 			c.Assert(err, IsNil)
 			c.Assert(comm.Start(buf[:]), IsNil)
@@ -167,6 +170,13 @@ func (s *TssKeyRegroupTestSuite) SetUpTest(c *C) {
 		c.Assert(comm.Start(buf[:]), IsNil)
 		s.comms[i] = comm
 	}
+
+	comm, err := p2p.NewCommunication("asgard", []maddr.Multiaddr{multiAddr}, ports[0], "")
+	c.Assert(err, IsNil)
+	buf, err := base64.StdEncoding.DecodeString(testPriKeyArr[0])
+	c.Assert(err, IsNil)
+	c.Assert(comm.Start(buf[:]), IsNil)
+	s.comms[0] = comm
 
 	baseHome := path.Join(os.TempDir(), strconv.Itoa(0))
 	fMgr, err := storage.NewFileStateMgr(baseHome)
