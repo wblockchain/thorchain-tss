@@ -73,8 +73,8 @@ func (t *TssServer) KeyRegroup(req keyRegroup.Request) (keyRegroup.Response, err
 	onlinePeers, leader, errJoinParty := t.joinParty(msgID, req.Version, req.BlockHeight, allKeys, len(allKeys)-1, sigChan)
 	joinPartyTime := time.Since(joinPartyStartTime)
 	if errJoinParty != nil {
-		t.tssMetrics.KeygenJoinParty(joinPartyTime, false)
-		t.tssMetrics.UpdateKeyGen(0, false)
+		t.tssMetrics.KeyRegroupJoinParty(joinPartyTime, false)
+		t.tssMetrics.UpdateKeyRegroup(0, false)
 		// this indicate we are processing the leaderless join party
 		if leader == "NONE" {
 			if onlinePeers == nil {
@@ -124,7 +124,7 @@ func (t *TssServer) KeyRegroup(req keyRegroup.Request) (keyRegroup.Response, err
 
 	}
 
-	t.tssMetrics.KeygenJoinParty(joinPartyTime, true)
+	t.tssMetrics.KeyRegroupJoinParty(joinPartyTime, true)
 	t.logger.Debug().Msg("keygen party formed")
 
 	// the statistic of keygen only care about Tss it self, even if the
@@ -134,12 +134,12 @@ func (t *TssServer) KeyRegroup(req keyRegroup.Request) (keyRegroup.Response, err
 	k, err := keyRegroupInstance.GenerateNewKey(req, localPartyData)
 	keygenTime := time.Since(beforeKeygen)
 	if err != nil {
-		t.tssMetrics.UpdateKeyGen(keygenTime, false)
+		t.tssMetrics.UpdateKeyRegroup(keygenTime, false)
 		t.logger.Error().Err(err).Msg("err in keygen")
 		blameNodes := *blameMgr.GetBlame()
 		return keyRegroup.NewResponse("", "", common.Fail, blameNodes), err
 	} else {
-		t.tssMetrics.UpdateKeyGen(keygenTime, true)
+		t.tssMetrics.UpdateKeyRegroup(keygenTime, true)
 	}
 
 	amNewMember := false

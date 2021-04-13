@@ -9,13 +9,15 @@ import (
 )
 
 type Metric struct {
-	keygenCounter    *prometheus.CounterVec
-	keysignCounter   *prometheus.CounterVec
-	joinPartyCounter *prometheus.CounterVec
-	keySignTime      prometheus.Gauge
-	keyGenTime       prometheus.Gauge
-	joinPartyTime    *prometheus.GaugeVec
-	logger           zerolog.Logger
+	keygenCounter     *prometheus.CounterVec
+	keysignCounter    *prometheus.CounterVec
+	keyRegroupCounter *prometheus.CounterVec
+	joinPartyCounter  *prometheus.CounterVec
+	keySignTime       prometheus.Gauge
+	keyGenTime        prometheus.Gauge
+	keyReGroupTime    prometheus.Gauge
+	joinPartyTime     *prometheus.GaugeVec
+	logger            zerolog.Logger
 }
 
 func (m *Metric) UpdateKeyGen(keygenTime time.Duration, success bool) {
@@ -36,6 +38,15 @@ func (m *Metric) UpdateKeySign(keysignTime time.Duration, success bool) {
 	}
 }
 
+func (m *Metric) UpdateKeyRegroup(keygenTime time.Duration, success bool) {
+	if success {
+		m.keyReGroupTime.Set(float64(keygenTime))
+		m.keyRegroupCounter.WithLabelValues("success").Inc()
+	} else {
+		m.keyRegroupCounter.WithLabelValues("failure").Inc()
+	}
+}
+
 func (m Metric) KeygenJoinParty(joinpartyTime time.Duration, success bool) {
 	if success {
 		m.joinPartyTime.WithLabelValues("keygen").Set(float64(joinpartyTime))
@@ -51,6 +62,15 @@ func (m *Metric) KeysignJoinParty(joinpartyTime time.Duration, success bool) {
 		m.joinPartyCounter.WithLabelValues("keysign", "success").Inc()
 	} else {
 		m.joinPartyCounter.WithLabelValues("keysign", "failure").Inc()
+	}
+}
+
+func (m *Metric) KeyRegroupJoinParty(joinpartyTime time.Duration, success bool) {
+	if success {
+		m.joinPartyTime.WithLabelValues("keyregroup").Set(float64(joinpartyTime))
+		m.joinPartyCounter.WithLabelValues("keyregroup", "success").Inc()
+	} else {
+		m.joinPartyCounter.WithLabelValues("keyregroup", "failure").Inc()
 	}
 }
 
@@ -87,6 +107,16 @@ func NewMetric() *Metric {
 			[]string{"status"},
 		),
 
+		keyRegroupCounter: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: "Tss",
+				Subsystem: "Tss",
+				Name:      "keyregroup",
+				Help:      "Tss keyregroup success and failure counter",
+			},
+			[]string{"status"},
+		),
+
 		joinPartyCounter: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: "Tss",
 			Subsystem: "Tss",
@@ -111,6 +141,15 @@ func NewMetric() *Metric {
 				Subsystem: "Tss",
 				Name:      "keysign_time",
 				Help:      "the time spend for the latest keysign",
+			},
+		),
+
+		keyReGroupTime: prometheus.NewGauge(
+			prometheus.GaugeOpts{
+				Namespace: "Tss",
+				Subsystem: "Tss",
+				Name:      "keyregroup_time",
+				Help:      "the time spend for the latest keysign/keygen join party",
 			},
 		),
 
