@@ -252,9 +252,9 @@ func (tKeyReGroup *TssKeyReGroup) processKeyReGroup(errChan chan struct{},
 		case <-tKeyReGroup.stopChan: // when TSS processor receive signal to quit
 			return nil, errors.New("received exit signal")
 
-		case <-time.After(tssConf.KeyGenTimeout):
-			// we bail out after KeyGenTimeoutSeconds
-			tKeyReGroup.logger.Error().Msgf("fail to generate message with %s", tssConf.KeyGenTimeout.String())
+		case <-time.After(tssConf.KeyRegroupTimeout):
+			// we bail out after KeyRegroupTimeoutSeconds
+			tKeyReGroup.logger.Error().Msgf("fail to generate message with %s", tssConf.KeyRegroupTimeout.String())
 			lastMsg := blameMgr.GetLastMsg()
 			failReason := blameMgr.GetBlame().FailReason
 			if failReason == "" {

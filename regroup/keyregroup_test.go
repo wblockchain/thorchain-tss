@@ -234,9 +234,10 @@ func (s *TssKeyRegroupTestSuite) TestKeyRegroup(c *C) {
 	messageID, err := common.MsgToHashString([]byte(strings.Join(req.NewPartyKeys, "")))
 	c.Assert(err, IsNil)
 	conf := common.TssConfig{
-		KeyGenTimeout:   120 * time.Second,
-		KeySignTimeout:  120 * time.Second,
-		PreParamTimeout: 5 * time.Second,
+		KeyGenTimeout:     120 * time.Second,
+		KeySignTimeout:    120 * time.Second,
+		KeyRegroupTimeout: 120 * time.Second,
+		PreParamTimeout:   5 * time.Second,
 	}
 	wg := sync.WaitGroup{}
 	lock := &sync.Mutex{}
@@ -306,9 +307,10 @@ func (s *TssKeyRegroupTestSuite) TestGenerateNewKeyWithStop(c *C) {
 	c.Skip("we do not support blame right now")
 	log.SetLogLevel("tss-lib", "debug")
 	conf := common.TssConfig{
-		KeyGenTimeout:   20 * time.Second,
-		KeySignTimeout:  20 * time.Second,
-		PreParamTimeout: 5 * time.Second,
+		KeyGenTimeout:     20 * time.Second,
+		KeySignTimeout:    20 * time.Second,
+		KeyRegroupTimeout: 20 * time.Second,
+		PreParamTimeout:   5 * time.Second,
 	}
 	wg := sync.WaitGroup{}
 

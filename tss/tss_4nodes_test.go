@@ -80,10 +80,11 @@ func (s *FourNodeTestSuite) SetUpTest(c *C) {
 	s.servers = make([]*TssServer, partyNum+newPartyNum)
 	s.keyGenSignPubkeys = testPubKeys[oldPartyStartOffset:]
 	conf := common.TssConfig{
-		KeyGenTimeout:   90 * time.Second,
-		KeySignTimeout:  90 * time.Second,
-		PreParamTimeout: 5 * time.Second,
-		EnableMonitor:   false,
+		KeyGenTimeout:     90 * time.Second,
+		KeySignTimeout:    90 * time.Second,
+		KeyRegroupTimeout: 90 * time.Second,
+		PreParamTimeout:   5 * time.Second,
+		EnableMonitor:     false,
 	}
 
 	var wg sync.WaitGroup
