@@ -233,11 +233,6 @@ func (t *TssCommon) updateLocal(wireMsg *messages.WireMessage) error {
 	if partyInfo == nil {
 		return nil
 	}
-	// in regroup we need to get the message from
-	//partyID, ok := partyInfo.PartyIDMap[wireMsg.Routing.From.Id]
-	//if !ok {
-	//	return fmt.Errorf("get message from unknown party %s", partyID.Id)
-	//}
 
 	dataOwnerPeerID, ok := t.PartyIDtoP2PID[wireMsg.Routing.From.Id]
 	if !ok {
