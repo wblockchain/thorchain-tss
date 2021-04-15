@@ -225,7 +225,7 @@ func (tKeySign *TssKeySign) processKeySign(reqNum int, errChan chan struct{}, ou
 				}
 			}
 
-			blameNodesBroadcast, err := blameMgr.GetBroadcastBlame(lastMsg.Type())
+			blameNodesBroadcast, err := blameMgr.GetBroadcastBlame(lastMsg.Type(), false)
 			if err != nil {
 				tKeySign.logger.Error().Err(err).Msg("error in get broadcast blame")
 			}

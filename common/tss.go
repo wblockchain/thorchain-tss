@@ -630,7 +630,6 @@ func (t *TssCommon) applyShare(localCacheItem *LocalCacheItem, threshold int, ke
 		t.blameMgr.GetBlame().SetBlame(blame.HashCheckFail, []blame.Node{blameNode}, unicast)
 		return blame.ErrHashCheck
 	}
-
 	t.blameMgr.GetRoundMgr().Set(key, localCacheItem.Msg)
 	if err := t.updateLocal(localCacheItem.Msg); nil != err {
 		return fmt.Errorf("fail to update the message to local party: %w", err)

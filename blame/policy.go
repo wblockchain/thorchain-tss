@@ -12,11 +12,31 @@ import (
 	"gitlab.com/thorchain/tss/go-tss/messages"
 )
 
-func (m *Manager) tssTimeoutBlame(lastMessageType string, partyIDMap map[string]*btss.PartyID) ([]string, error) {
+func (m *Manager) tssTimeoutBlame(lastMessageType string, partyIDMap map[string]*btss.PartyID, keyRegroup bool) ([]string, error) {
 	peersSet := mapset.NewSet()
-	for _, el := range partyIDMap {
-		if el.Id != m.localPartyID {
-			peersSet.Add(el.Id)
+
+	if keyRegroup {
+		var parties map[string]peer.ID
+		if lastMessageType == messages.KEYREGROUP1 {
+			parties = m.OldPartyIDtoP2PID
+		} else {
+			parties = m.PartyIDtoP2PID
+		}
+		for el := range parties {
+			if el != m.localPartyID {
+				p, ok := m.partyInfo.PartyIDMap[el]
+				if !ok {
+					m.logger.Error().Msgf("fail to find the party thus matches the given id")
+					continue
+				}
+				peersSet.Add(p.Id)
+			}
+		}
+	} else {
+		for _, el := range partyIDMap {
+			if el.Id != m.localPartyID {
+				peersSet.Add(el.Id)
+			}
 		}
 	}
 	standbyNodes := m.roundMgr.GetByRound(lastMessageType)
@@ -101,8 +121,8 @@ func (m *Manager) GetUnicastBlame(lastMsgType string) ([]Node, error) {
 }
 
 // this blame blames the node who cause the timeout in broadcast message
-func (m *Manager) GetBroadcastBlame(lastMessageType string) ([]Node, error) {
-	blamePeers, err := m.tssTimeoutBlame(lastMessageType, m.partyInfo.PartyIDMap)
+func (m *Manager) GetBroadcastBlame(lastMessageType string, keyRegroup bool) ([]Node, error) {
+	blamePeers, err := m.tssTimeoutBlame(lastMessageType, m.partyInfo.PartyIDMap, keyRegroup)
 	if err != nil {
 		m.logger.Error().Err(err).Msg("fail to get the blamed peers")
 		return nil, fmt.Errorf("fail to get the blamed peers %w", ErrTssTimeOut)
@@ -129,6 +149,46 @@ func (m *Manager) TssWrongShareBlame(wiredMsg *messages.WireMessage) (string, er
 	return pk, nil
 }
 
+func (m *Manager) findoutPeers(cachedShares [][]string, rounds int, partyP2pMap map[string]peer.ID) ([]string, bool) {
+	var peers []string
+	var isUnicast bool
+	for index, el := range cachedShares {
+		if len(el)+1 == len(m.PartyIDtoP2PID) {
+			continue
+		}
+		// we find whether the missing share is in unicast
+		if rounds == messages.TSSKEYGENROUNDS {
+			// we are processing the keygen and if the missing shares is in second round(index=1)
+			// we mark it as the unicast.
+			if index == 1 {
+				isUnicast = true
+			}
+		}
+		if rounds == messages.TSSKEYSIGNROUNDS {
+			// we are processing the keysign and if the missing shares is in the 5 round(index<1)
+			// we all mark it as the unicast, because in some cases, the error will be detected
+			// in the following round, so we cannot "trust" the node stops at the current round.
+			if index < 5 {
+				isUnicast = true
+			}
+		}
+		if rounds == messages.TSSKEYREGROUPROUNDS {
+			if index == 4 {
+				isUnicast = true
+			}
+		}
+		// we add our own id to avoid blame ourselves
+		// since all the local parties have the same id, so we just need to take one of them to get the peer
+
+		el = append(el, m.localPartyID)
+		for _, pid := range el {
+			peers = append(peers, partyP2pMap[pid].String())
+		}
+		break
+	}
+	return peers, isUnicast
+}
+
 // this blame blames the node fail to send the shares to the node
 // with batch signing, we need to put the accepted shares into different message group
 // then search the missing share for each keysign message
@@ -149,49 +209,45 @@ func (m *Manager) TssMissingShareBlame(rounds int) ([]Node, bool, error) {
 		cachedShares[roundInfo.Index] = value
 	}
 	m.acceptShareLocker.Unlock()
+	newCachedShares, ok1 := acceptedShareForMsg["new_party"]
+	oldCachedShares, ok2 := acceptedShareForMsg["old_party"]
+	fmt.Printf(">>>>>>>>>>>>>>>>>>>>>%v######-------#########%v\n", newCachedShares, oldCachedShares)
+	if ok1 || ok2 {
+		peersNew, _ := m.findoutPeers(newCachedShares, rounds, m.NewPartyIDtoP2PID)
+		peersOld, _ := m.findoutPeers(oldCachedShares, rounds, m.OldPartyIDtoP2PID)
 
-	for _, cachedShares := range acceptedShareForMsg {
-		// we search from the first round to find the missing
-		for index, el := range cachedShares {
-			if len(el)+1 == len(m.PartyIDtoP2PID) {
-				continue
-			}
-			// we find whether the missing share is in unicast
-			if rounds == messages.TSSKEYGENROUNDS {
-				// we are processing the keygen and if the missing shares is in second round(index=1)
-				// we mark it as the unicast.
-				if index == 1 {
-					isUnicast = true
-				}
-			}
-			if rounds == messages.TSSKEYSIGNROUNDS {
-				// we are processing the keysign and if the missing shares is in the 5 round(index<1)
-				// we all mark it as the unicast, because in some cases, the error will be detected
-				// in the following round, so we cannot "trust" the node stops at the current round.
-				if index < 5 {
-					isUnicast = true
-				}
-			}
-			// we add our own id to avoid blame ourselves
-			// since all the local parties have the same id, so we just need to take one of them to get the peer
-
-			el = append(el, m.localPartyID)
-			for _, pid := range el {
-				peers = append(peers, m.PartyIDtoP2PID[pid].String())
-			}
-			break
-		}
-		blamePubKeys, err := m.getBlamePubKeysNotInList(peers)
+		newPartyBlamePubKeys, err := m.getBlamePubKeysNotInList(peersNew)
 		if err != nil {
 			return nil, isUnicast, err
 		}
-		for _, el := range blamePubKeys {
+		oldPartyBlamePubKeys, err := m.getBlamePubKeysNotInList(peersOld)
+		if err != nil {
+			return nil, isUnicast, err
+		}
+		for _, el := range append(newPartyBlamePubKeys, oldPartyBlamePubKeys...) {
 			node := Node{
 				el,
 				nil,
 				nil,
 			}
 			blameNodes = append(blameNodes, node)
+		}
+	} else {
+		for _, cachedShares := range acceptedShareForMsg {
+			// we search from the first round to find the missing
+			peers, isUnicast = m.findoutPeers(cachedShares, rounds, m.PartyIDtoP2PID)
+			blamePubKeys, err := m.getBlamePubKeysNotInList(peers)
+			if err != nil {
+				return nil, isUnicast, err
+			}
+			for _, el := range blamePubKeys {
+				node := Node{
+					el,
+					nil,
+					nil,
+				}
+				blameNodes = append(blameNodes, node)
+			}
 		}
 	}
 	return blameNodes, isUnicast, nil

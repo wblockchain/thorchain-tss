@@ -17,6 +17,8 @@ type Manager struct {
 	roundMgr          *RoundMgr
 	partyInfo         *PartyInfo
 	PartyIDtoP2PID    map[string]peer.ID
+	OldPartyIDtoP2PID map[string]peer.ID
+	NewPartyIDtoP2PID map[string]peer.ID
 	lastMsgLocker     *sync.RWMutex
 	lastMsg           btss.Message
 	acceptedShares    map[RoundInfo][]string
@@ -30,6 +32,8 @@ func NewBlameManager() *Manager {
 		logger:            log.With().Str("module", "blame_manager").Logger(),
 		partyInfo:         nil,
 		PartyIDtoP2PID:    make(map[string]peer.ID),
+		NewPartyIDtoP2PID: make(map[string]peer.ID),
+		OldPartyIDtoP2PID: make(map[string]peer.ID),
 		lastUnicastPeer:   make(map[string][]peer.ID),
 		shareMgr:          NewTssShareMgr(),
 		roundMgr:          NewTssRoundMgr(),

@@ -158,8 +158,9 @@ func (tKeyReGroup *TssKeyReGroup) GenerateNewKey(req Request, localData bkg.Loca
 	newPartyIDMap := conversion.SetupPartyIDMap(newPartiesID)
 
 	err1 := conversion.SetupIDMaps(partyIDMap, tKeyReGroup.tssCommonStruct.PartyIDtoP2PID)
-	err2 := conversion.SetupIDMaps(partyIDMap, blameMgr.PartyIDtoP2PID)
-	if err1 != nil || err2 != nil {
+	err2 := conversion.SetupIDMaps(oldPartyIDMap, blameMgr.OldPartyIDtoP2PID)
+	err3 := conversion.SetupIDMaps(newPartyIDMap, blameMgr.NewPartyIDtoP2PID)
+	if err1 != nil || err2 != nil || err3 != nil {
 		tKeyReGroup.logger.Error().Msgf("error in creating mapping between partyID and P2P ID")
 		return nil, err
 	}
@@ -261,7 +262,9 @@ func (tKeyReGroup *TssKeyReGroup) processKeyReGroup(errChan chan struct{},
 				failReason = blame.TssTimeout
 			}
 			if lastMsg == nil {
-				tKeyReGroup.logger.Error().Msg("fail to start the party regroup, the last produced message of this node is none")
+				// it may indicate that the new node has not received the message, it is fine for blame, as the old nodes
+				// will blame the malicious nodes
+				tKeyReGroup.logger.Error().Msgf("fail to start the party regroup, the last produced message of this node is none")
 				return nil, errors.New("timeout before shared message is generated")
 			}
 			blameNodesUnicast, err := blameMgr.GetUnicastBlame(messages.KEYREGROUP3a)
@@ -278,15 +281,14 @@ func (tKeyReGroup *TssKeyReGroup) processKeyReGroup(errChan chan struct{},
 			if len(blameNodesUnicast) > 0 && len(blameNodesUnicast) <= threshold {
 				blameMgr.GetBlame().SetBlame(failReason, blameNodesUnicast, true)
 			}
-			blameNodesBroadcast, err := blameMgr.GetBroadcastBlame(lastMsg.Type())
+			blameNodesBroadcast, err := blameMgr.GetBroadcastBlame(lastMsg.Type(), true)
 			if err != nil {
 				tKeyReGroup.logger.Error().Err(err).Msg("error in get broadcast blame")
 			}
 			blameMgr.GetBlame().AddBlameNodes(blameNodesBroadcast...)
-
 			// if we cannot find the blame node, we check whether everyone send me the share
 			if len(blameMgr.GetBlame().BlameNodes) == 0 {
-				blameNodesMisingShare, isUnicast, err := blameMgr.TssMissingShareBlame(messages.TSSKEYGENROUNDS)
+				blameNodesMisingShare, isUnicast, err := blameMgr.TssMissingShareBlame(messages.TSSKEYREGROUPROUNDS)
 				if err != nil {
 					tKeyReGroup.logger.Error().Err(err).Msg("fail to get the node of missing share ")
 				}
