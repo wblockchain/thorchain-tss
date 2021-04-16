@@ -15,6 +15,7 @@ import (
 
 	"gitlab.com/thorchain/tss/go-tss/keygen"
 	"gitlab.com/thorchain/tss/go-tss/keysign"
+	keyRegroup "gitlab.com/thorchain/tss/go-tss/regroup"
 	"gitlab.com/thorchain/tss/go-tss/tss"
 )
 
@@ -44,6 +45,7 @@ func (t *TssHttpServer) tssNewHandler() http.Handler {
 	router := mux.NewRouter()
 	router.Handle("/keygen", http.HandlerFunc(t.keygenHandler)).Methods(http.MethodPost)
 	router.Handle("/keysign", http.HandlerFunc(t.keySignHandler)).Methods(http.MethodPost)
+	router.Handle("/keyregroup", http.HandlerFunc(t.keyregroupHandler)).Methods(http.MethodPost)
 	router.Handle("/ping", http.HandlerFunc(t.pingHandler)).Methods(http.MethodGet)
 	router.Handle("/p2pid", http.HandlerFunc(t.getP2pIDHandler)).Methods(http.MethodGet)
 	router.Handle("/metrics", promhttp.Handler())
@@ -123,6 +125,42 @@ func (t *TssHttpServer) keySignHandler(w http.ResponseWriter, r *http.Request) {
 	_, err = w.Write(jsonResult)
 	if err != nil {
 		t.logger.Error().Err(err).Msg("fail to write response")
+	}
+}
+
+func (t *TssHttpServer) keyregroupHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	defer func() {
+		if err := r.Body.Close(); nil != err {
+			t.logger.Error().Err(err).Msg("fail to close request body")
+		}
+	}()
+	t.logger.Info().Msg("receive key gen request")
+	decoder := json.NewDecoder(r.Body)
+	var keyregroupReq keyRegroup.Request
+	if err := decoder.Decode(&keyregroupReq); nil != err {
+		t.logger.Error().Err(err).Msg("fail to decode keyregroup request")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	resp, err := t.tssServer.KeyRegroup(keyregroupReq)
+	if err != nil {
+		t.logger.Error().Err(err).Msg("fail to key gen")
+	}
+	t.logger.Debug().Msgf("resp:%+v", resp)
+	buf, err := json.Marshal(resp)
+	if err != nil {
+		t.logger.Error().Err(err).Msg("fail to marshal response to json")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	_, err = w.Write(buf)
+	if err != nil {
+		t.logger.Error().Err(err).Msg("fail to write to response")
 	}
 }
 
