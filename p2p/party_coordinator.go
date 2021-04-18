@@ -101,7 +101,7 @@ func (pc *PartyCoordinator) processReqMsg(requestMsg *messages.JoinPartyLeaderCo
 	remotePeer := stream.Conn().RemotePeer()
 	partyFormed, err := peerGroup.updatePeer(remotePeer)
 	if err != nil {
-		pc.logger.Error().Err(err).Msg("receive msg from unknown peer")
+		pc.logger.Error().Err(err).Msgf("receive msg from unknown peer,message id(%s)", requestMsg.ID)
 		return
 	}
 	if partyFormed {
