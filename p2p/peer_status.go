@@ -1,7 +1,7 @@
 package p2p
 
 import (
-	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -80,7 +80,11 @@ func (ps *PeerStatus) updatePeer(peerNode peer.ID) (bool, error) {
 	defer ps.peerStatusLock.Unlock()
 	val, ok := ps.peersResponse[peerNode]
 	if !ok {
-		return false, errors.New("key not found")
+		var legitPeers []string
+		for k := range ps.peersResponse {
+			legitPeers = append(legitPeers, k.String())
+		}
+		return false, fmt.Errorf("peer: %s is not part of the keysign group(%+v)", peerNode, legitPeers)
 	}
 
 	if ps.leader == "NONE" {
