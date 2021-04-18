@@ -135,7 +135,7 @@ func (pc *PartyCoordinator) HandleStream(stream network.Stream) {
 	}
 	newFound, err := peerGroup.updatePeer(remotePeer)
 	if err != nil {
-		pc.logger.Error().Err(err).Msg("receive msg from unknown peer")
+		pc.logger.Error().Err(err).Msgf("receive msg from unknown peer,message id(%s)", msg.ID)
 		return
 	}
 	if newFound {
