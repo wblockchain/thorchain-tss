@@ -4,6 +4,9 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
+	"github.com/decred/dcrd/dcrec/edwards/v2"
+	"github.com/tendermint/tendermint/crypto/ed25519"
+	"github.com/tendermint/tendermint/crypto/secp256k1"
 	"math/big"
 
 	"github.com/binance-chain/tss-lib/common"
@@ -48,11 +51,30 @@ func (n *Notifier) verifySignature(data *common.ECSignature, msg []byte) (bool, 
 	if err != nil {
 		return false, fmt.Errorf("fail to get pubkey from bech32 pubkey string(%s):%w", n.poolPubKey, err)
 	}
-	pub, err := btcec.ParsePubKey(pubKey.Bytes(), btcec.S256())
-	if err != nil {
-		return false, err
+
+	switch pubKey.Type() {
+
+	case secp256k1.KeyType:
+		pub, err := btcec.ParsePubKey(pubKey.Bytes(), btcec.S256())
+		if err != nil {
+			return false, err
+		}
+		return ecdsa.Verify(pub.ToECDSA(), msg, new(big.Int).SetBytes(data.R), new(big.Int).SetBytes(data.S)), nil
+
+	case ed25519.KeyType:
+		bPk, err := edwards.ParsePubKey(pubKey.Bytes())
+		if err != nil {
+			return false, fmt.Errorf("inval ed25519 key with error %w", err)
+		}
+		newSig, err := edwards.ParseSignature(data.Signature)
+		if err != nil {
+			return false, err
+		}
+		return edwards.Verify(bPk, msg, newSig.R, newSig.S), nil
+	default:
+		return false, errors.New("invalid pubkey type")
 	}
-	return ecdsa.Verify(pub.ToECDSA(), msg, new(big.Int).SetBytes(data.R), new(big.Int).SetBytes(data.S)), nil
+
 }
 
 // ProcessSignature is to verify whether the signature is valid
@@ -63,7 +85,6 @@ func (n *Notifier) ProcessSignature(data []*common.ECSignature) (bool, error) {
 	// when data is nil , which means keysign  failed, there is no signature to be verified in that case
 	// for gg20, it wrap the signature R,S into ECSignature structure
 	if len(data) != 0 {
-
 		for i := 0; i < len(data); i++ {
 			eachSig := data[i]
 			msg := n.messages[i]

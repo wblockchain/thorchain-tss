@@ -1,8 +1,10 @@
-package keysign
+package eddsa
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"go.uber.org/atomic"
 	"math/big"
 	"sort"
 	"strconv"
@@ -10,12 +12,12 @@ import (
 	"time"
 
 	tsslibcommon "github.com/binance-chain/tss-lib/common"
-	"github.com/binance-chain/tss-lib/ecdsa/signing"
+	eddsakeygen "github.com/binance-chain/tss-lib/eddsa/keygen"
+	"github.com/binance-chain/tss-lib/eddsa/signing"
 	btss "github.com/binance-chain/tss-lib/tss"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	tcrypto "github.com/tendermint/tendermint/crypto"
-	"go.uber.org/atomic"
 
 	"gitlab.com/thorchain/tss/go-tss/blame"
 	"gitlab.com/thorchain/tss/go-tss/common"
@@ -25,11 +27,11 @@ import (
 	"gitlab.com/thorchain/tss/go-tss/storage"
 )
 
-type TssKeySign struct {
+type EDDSAKeySign struct {
 	logger          zerolog.Logger
 	tssCommonStruct *common.TssCommon
 	stopChan        chan struct{} // channel to indicate whether we should stop
-	localParties    []*btss.PartyID
+	localParty      *btss.PartyID
 	commStopChan    chan struct{}
 	p2pComm         *p2p.Communication
 	stateManager    storage.LocalStateManager
@@ -38,28 +40,28 @@ type TssKeySign struct {
 func NewTssKeySign(localP2PID string,
 	conf common.TssConfig,
 	broadcastChan chan *messages.BroadcastMsgChan,
-	stopChan chan struct{}, msgID string, privKey tcrypto.PrivKey, p2pComm *p2p.Communication, stateManager storage.LocalStateManager, msgNum int) *TssKeySign {
+	stopChan chan struct{}, msgID string, privKey tcrypto.PrivKey, p2pComm *p2p.Communication, stateManager storage.LocalStateManager, msgNum int) *EDDSAKeySign {
 	logItems := []string{"keySign", msgID}
-	return &TssKeySign{
+	return &EDDSAKeySign{
 		logger:          log.With().Strs("module", logItems).Logger(),
 		tssCommonStruct: common.NewTssCommon(localP2PID, broadcastChan, conf, msgID, privKey, msgNum),
 		stopChan:        stopChan,
-		localParties:    make([]*btss.PartyID, 0),
+		localParty:      nil,
 		commStopChan:    make(chan struct{}),
 		p2pComm:         p2pComm,
 		stateManager:    stateManager,
 	}
 }
 
-func (tKeySign *TssKeySign) GetTssKeySignChannels() chan *p2p.Message {
+func (tKeySign *EDDSAKeySign) GetTssKeySignChannels() chan *p2p.Message {
 	return tKeySign.tssCommonStruct.TssMsg
 }
 
-func (tKeySign *TssKeySign) GetTssCommonStruct() *common.TssCommon {
+func (tKeySign *EDDSAKeySign) GetTssCommonStruct() *common.TssCommon {
 	return tKeySign.tssCommonStruct
 }
 
-func (tKeySign *TssKeySign) startBatchSigning(keySignPartyMap *sync.Map, msgNum int) bool {
+func (tKeySign *EDDSAKeySign) startBatchSigning(keySignPartyMap *sync.Map, msgNum int) bool {
 	// start the batch sign
 	var keySignWg sync.WaitGroup
 	ret := atomic.NewBool(true)
@@ -81,8 +83,9 @@ func (tKeySign *TssKeySign) startBatchSigning(keySignPartyMap *sync.Map, msgNum 
 }
 
 // signMessage
-func (tKeySign *TssKeySign) SignMessage(msgsToSign [][]byte, localStateItem storage.KeygenLocalState, parties []string) ([]*tsslibcommon.ECSignature, error) {
+func (tKeySign *EDDSAKeySign) SignMessage(msgsToSign [][]byte, localStateItem storage.KeygenLocalState, parties []string) ([]*tsslibcommon.ECSignature, error) {
 	partiesID, localPartyID, err := conversion.GetParties(parties, localStateItem.LocalPartyKey)
+	tKeySign.localParty = localPartyID
 	if err != nil {
 		return nil, fmt.Errorf("fail to form key sign party: %w", err)
 	}
@@ -95,12 +98,12 @@ func (tKeySign *TssKeySign) SignMessage(msgsToSign [][]byte, localStateItem stor
 		return nil, errors.New("fail to get threshold")
 	}
 
-	// tKeySign.logger.Debug().Msgf("local party: %+v", localPartyID)
 	outCh := make(chan btss.Message, 2*len(partiesID)*len(msgsToSign))
 	endCh := make(chan *signing.SignatureData, len(partiesID)*len(msgsToSign))
 	errCh := make(chan struct{})
 
 	keySignPartyMap := new(sync.Map)
+
 	for i, val := range msgsToSign {
 		m, err := common.MsgToHashInt(val)
 		if err != nil {
@@ -113,11 +116,17 @@ func (tKeySign *TssKeySign) SignMessage(msgsToSign [][]byte, localStateItem stor
 			return nil, fmt.Errorf("error to create parties in batch signging %w\n", err)
 		}
 		eachLocalPartyID.Moniker = moniker
-		tKeySign.localParties = nil
 		params := btss.NewParameters(ctx, eachLocalPartyID, len(partiesID), threshold)
-		keySignParty := signing.NewLocalParty(m, params, localStateItem.LocalData, outCh, endCh)
+		var localData eddsakeygen.LocalPartySaveData
+		err = json.Unmarshal(localStateItem.LocalData, &localData)
+		if err != nil {
+			return nil, fmt.Errorf("fail to unmarshal the local saved data")
+		}
+		keySignParty := signing.NewLocalParty(m, params, localData, outCh, endCh)
 		keySignPartyMap.Store(moniker, keySignParty)
 	}
+
+	tKeySign.logger.Debug().Msgf("local party: %+v", localPartyID)
 
 	blameMgr := tKeySign.tssCommonStruct.GetBlameMgr()
 	partyIDMap := conversion.SetupPartyIDMap(partiesID)
@@ -134,7 +143,6 @@ func (tKeySign *TssKeySign) SignMessage(msgsToSign [][]byte, localStateItem stor
 	})
 
 	blameMgr.SetPartyInfo(keySignPartyMap, partyIDMap)
-
 	tKeySign.tssCommonStruct.P2PPeersLock.Lock()
 	tKeySign.tssCommonStruct.P2PPeers = conversion.GetPeersID(tKeySign.tssCommonStruct.PartyIDtoP2PID, tKeySign.tssCommonStruct.GetLocalPeerID())
 	tKeySign.tssCommonStruct.P2PPeersLock.Unlock()
@@ -145,8 +153,10 @@ func (tKeySign *TssKeySign) SignMessage(msgsToSign [][]byte, localStateItem stor
 		defer keySignWg.Done()
 		ret := tKeySign.startBatchSigning(keySignPartyMap, len(msgsToSign))
 		if !ret {
+			tKeySign.logger.Error().Err(err).Msg("fail to start key sign party")
 			close(errCh)
 		}
+		tKeySign.logger.Debug().Msg("local party is ready")
 	}()
 	go tKeySign.tssCommonStruct.ProcessInboundMessages(tKeySign.commStopChan, &keySignWg)
 	results, err := tKeySign.processKeySign(len(msgsToSign), errCh, outCh, endCh)
@@ -177,14 +187,12 @@ func (tKeySign *TssKeySign) SignMessage(msgsToSign [][]byte, localStateItem stor
 	return results, nil
 }
 
-func (tKeySign *TssKeySign) processKeySign(reqNum int, errChan chan struct{}, outCh <-chan btss.Message, endCh <-chan *signing.SignatureData) ([]*tsslibcommon.ECSignature, error) {
+func (tKeySign *EDDSAKeySign) processKeySign(reqNum int, errChan chan struct{}, outCh <-chan btss.Message, endCh <-chan *signing.SignatureData) ([]*tsslibcommon.ECSignature, error) {
 	defer tKeySign.logger.Debug().Msg("key sign finished")
 	tKeySign.logger.Debug().Msg("start to read messages from local party")
 	var signatures []*tsslibcommon.ECSignature
-
 	tssConf := tKeySign.tssCommonStruct.GetConf()
 	blameMgr := tKeySign.tssCommonStruct.GetBlameMgr()
-
 	for {
 		select {
 		case <-errChan: // when key sign return
@@ -213,7 +221,7 @@ func (tKeySign *TssKeySign) processKeySign(reqNum int, errChan chan struct{}, ou
 					tKeySign.logger.Error().Err(err).Msg("error in get unicast blame")
 				}
 				if len(blameNodesUnicast) > 0 && len(blameNodesUnicast) <= threshold {
-					blameMgr.GetBlame().SetBlame(failReason, blameNodesUnicast, true)
+					blameMgr.GetBlame().SetBlame(failReason, blameNodesUnicast, lastMsg.IsBroadcast())
 				}
 			} else {
 				blameNodesUnicast, err := blameMgr.GetUnicastBlame(conversion.GetPreviousKeySignUicast(lastMsg.Type()))
@@ -221,7 +229,7 @@ func (tKeySign *TssKeySign) processKeySign(reqNum int, errChan chan struct{}, ou
 					tKeySign.logger.Error().Err(err).Msg("error in get unicast blame")
 				}
 				if len(blameNodesUnicast) > 0 && len(blameNodesUnicast) <= threshold {
-					blameMgr.GetBlame().SetBlame(failReason, blameNodesUnicast, true)
+					blameMgr.GetBlame().SetBlame(failReason, blameNodesUnicast, lastMsg.IsBroadcast())
 				}
 			}
 
@@ -233,7 +241,8 @@ func (tKeySign *TssKeySign) processKeySign(reqNum int, errChan chan struct{}, ou
 
 			// if we cannot find the blame node, we check whether everyone send me the share
 			if len(blameMgr.GetBlame().BlameNodes) == 0 {
-				blameNodesMisingShare, isUnicast, err := blameMgr.TssMissingShareBlame(messages.TSSKEYSIGNROUNDS)
+				//blameNodesMisingShare, isUnicast, err := blameMgr.TssMissingShareBlame(messages.ECDSATSSKEYSIGNROUNDS, messages.EDDSAKEYSIGN)
+				blameNodesMisingShare, isUnicast, err := blameMgr.TssMissingShareBlame(messages.EDDSATSSKEYSIGNROUNDS, messages.EDDSAKEYSIGN)
 				if err != nil {
 					tKeySign.logger.Error().Err(err).Msg("fail to get the node of missing share ")
 				}
@@ -271,3 +280,22 @@ func (tKeySign *TssKeySign) processKeySign(reqNum int, errChan chan struct{}, ou
 		}
 	}
 }
+
+//func (tKeySign *EDDSAKeySign) WriteKeySignResult(w http.ResponseWriter, R, S string, status common.Status) {
+//	signResp := keysign.Response{
+//		R:      R,
+//		S:      S,
+//		Status: status,
+//		Blame:  *tKeySign.tssCommonStruct.GetBlameMgr().GetBlame(),
+//	}
+//	jsonResult, err := json.MarshalIndent(signResp, "", "	")
+//	if err != nil {
+//		tKeySign.logger.Error().Err(err).Msg("fail to marshal response to json message")
+//		w.WriteHeader(http.StatusInternalServerError)
+//		return
+//	}
+//	_, err = w.Write(jsonResult)
+//	if err != nil {
+//		tKeySign.logger.Error().Err(err).Msg("fail to write response")
+//	}
+//}

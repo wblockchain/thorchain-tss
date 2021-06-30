@@ -6,7 +6,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/binance-chain/tss-lib/ecdsa/keygen"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-peerstore/addr"
 	tnet "github.com/libp2p/go-libp2p-testing/net"
@@ -43,12 +42,17 @@ func (s *FileStateMgrTestSuite) TestNewFileStateMgr(c *C) {
 	fileName, err = fsm.getFilePathName("thorpub1addwnpepqf90u7n3nr2jwsw4t2gzhzqfdlply8dlzv3mdj4dr22uvhe04azq5gac3gq")
 	c.Assert(err, IsNil)
 	c.Assert(fileName, Equals, filepath.Join(f, "localstate-thorpub1addwnpepqf90u7n3nr2jwsw4t2gzhzqfdlply8dlzv3mdj4dr22uvhe04azq5gac3gq.json"))
+
+	// eddsa filename
+	fileName, err = fsm.getFilePathName("thorpub1zcjduepq3qlzunvusqufxnmpulu6zt50ssn26kagrsfpwc8flm3d0848extqrzrejx")
+	c.Assert(err, IsNil)
+	c.Assert(fileName, Equals, filepath.Join(f, "localstate-thorpub1zcjduepq3qlzunvusqufxnmpulu6zt50ssn26kagrsfpwc8flm3d0848extqrzrejx.json"))
 }
 
 func (s *FileStateMgrTestSuite) TestSaveLocalState(c *C) {
 	stateItem := KeygenLocalState{
 		PubKey:    "wasdfasdfasdfasdfasdfasdf",
-		LocalData: keygen.NewLocalPartySaveData(5),
+		LocalData: []byte("a"),
 		ParticipantKeys: []string{
 			"A", "B", "C",
 		},

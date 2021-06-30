@@ -1,6 +1,7 @@
 package conversion
 
 import (
+	"crypto/elliptic"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -11,15 +12,18 @@ import (
 	"strconv"
 	"strings"
 
+	s256k1 "github.com/btcsuite/btcd/btcec"
+
 	"github.com/binance-chain/tss-lib/crypto"
 	btss "github.com/binance-chain/tss-lib/tss"
 	"github.com/btcsuite/btcd/btcec"
+	coseddkey "github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
 	coskey "github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/decred/dcrd/dcrec/edwards/v2"
 	crypto2 "github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"gitlab.com/thorchain/binance-sdk/common/types"
-
 	"gitlab.com/thorchain/tss/go-tss/messages"
 )
 
@@ -142,14 +146,31 @@ func GetPreviousKeySignUicast(current string) string {
 	return messages.KEYSIGN2Unicast
 }
 
-func isOnCurve(x, y *big.Int) bool {
-	curve := btcec.S256()
+func isOnCurve(x, y *big.Int, curve elliptic.Curve) bool {
 	return curve.IsOnCurve(x, y)
 }
 
-func GetTssPubKey(pubKeyPoint *crypto.ECPoint) (string, types.AccAddress, error) {
+func GetTssPubKeyEDDSA(pubKeyPoint *crypto.ECPoint) (string, types.AccAddress, error) {
 	// we check whether the point is on curve according to Kudelski report
-	if pubKeyPoint == nil || !isOnCurve(pubKeyPoint.X(), pubKeyPoint.Y()) {
+	if pubKeyPoint == nil || !isOnCurve(pubKeyPoint.X(), pubKeyPoint.Y(), edwards.Edwards()) {
+		return "", types.AccAddress{}, errors.New("invalid points")
+	}
+	tssPubKey := edwards.PublicKey{
+		Curve: edwards.Edwards(),
+		X:     pubKeyPoint.X(),
+		Y:     pubKeyPoint.Y(),
+	}
+	compressedPubkey := coseddkey.PubKey{
+		Key: tssPubKey.SerializeCompressed(),
+	}
+	pubKey, err := sdk.Bech32ifyPubKey(sdk.Bech32PubKeyTypeAccPub, &compressedPubkey)
+	addr := types.AccAddress(compressedPubkey.Address().Bytes())
+	return pubKey, addr, err
+}
+
+func GetTssPubKeyECDSA(pubKeyPoint *crypto.ECPoint) (string, types.AccAddress, error) {
+	// we check whether the point is on curve according to Kudelski report
+	if pubKeyPoint == nil || !isOnCurve(pubKeyPoint.X(), pubKeyPoint.Y(), s256k1.S256()) {
 		return "", types.AccAddress{}, errors.New("invalid points")
 	}
 	tssPubKey := btcec.PublicKey{
