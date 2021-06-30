@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"gitlab.com/thorchain/tss/go-tss/keysign"
 	"net/http"
 	"time"
 
@@ -14,7 +15,6 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"gitlab.com/thorchain/tss/go-tss/keygen"
-	"gitlab.com/thorchain/tss/go-tss/keysign"
 	"gitlab.com/thorchain/tss/go-tss/tss"
 )
 

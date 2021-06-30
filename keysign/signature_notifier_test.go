@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"gitlab.com/thorchain/tss/go-tss/conversion"
 	"io/ioutil"
 	"sync"
 	"testing"
@@ -21,6 +22,7 @@ import (
 )
 
 func TestSignatureNotifierHappyPath(t *testing.T) {
+	conversion.SetupBech32Prefix()
 	poolPubKey := `thorpub1addwnpepq0ul3xt882a6nm6m7uhxj4tk2n82zyu647dyevcs5yumuadn4uamqx7neak`
 	messageToSign := "yhEwrxWuNBGnPT/L7PNnVWg7gFWNzCYTV+GuX3tKRH8="
 	buf, err := base64.StdEncoding.DecodeString(messageToSign)

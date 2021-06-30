@@ -1,6 +1,7 @@
 package tss
 
 import (
+	"gitlab.com/thorchain/tss/go-tss/keygen/ecdsa"
 	"time"
 
 	"gitlab.com/thorchain/tss/go-tss/blame"
@@ -19,7 +20,7 @@ func (t *TssServer) Keygen(req keygen.Request) (keygen.Response, error) {
 		return keygen.Response{}, err
 	}
 
-	keygenInstance := keygen.NewTssKeyGen(
+	keygenInstance := ecdsa.NewTssKeyGen(
 		t.p2pCommunication.GetLocalPeerID(),
 		t.conf,
 		t.localNodePubKey,
@@ -120,7 +121,7 @@ func (t *TssServer) Keygen(req keygen.Request) (keygen.Response, error) {
 		t.tssMetrics.UpdateKeyGen(keygenTime, true)
 	}
 
-	newPubKey, addr, err := conversion.GetTssPubKey(k)
+	newPubKey, addr, err := conversion.GetTssPubKeyECDSA(k)
 	if err != nil {
 		t.logger.Error().Err(err).Msg("fail to generate the new Tss key")
 		status = common.Fail

@@ -15,4 +15,12 @@ const (
 	KEYSIGN7         = "SignRound7Message"
 	TSSKEYGENROUNDS  = 4
 	TSSKEYSIGNROUNDS = 8
+
+	EDDSAKEYGEN1    = "EDDSAKGRound1Message"
+	EDDSAKEYGEN2a   = "EDDSAKGRound2Message1"
+	EDDSAKEYGEN2b   = "EDDSAKGRound2Message2"
+	EDDSAKEYSIGN1    = "EDDSASignRound1Message"
+	EDDSAKEYSIGN2    = "EDDSASignRound2Message"
+	EDDSAKEYSIGN3    = "EDDSASignRound3Message"
+
 )

@@ -1,8 +1,10 @@
-package keysign
+package ecdsa
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/binance-chain/tss-lib/ecdsa/keygen"
 	"math/big"
 	"sort"
 	"strconv"
@@ -115,7 +117,12 @@ func (tKeySign *TssKeySign) SignMessage(msgsToSign [][]byte, localStateItem stor
 		eachLocalPartyID.Moniker = moniker
 		tKeySign.localParties = nil
 		params := btss.NewParameters(ctx, eachLocalPartyID, len(partiesID), threshold)
-		keySignParty := signing.NewLocalParty(m, params, localStateItem.LocalData, outCh, endCh)
+		var localData keygen.LocalPartySaveData
+		err=json.Unmarshal(localStateItem.LocalData,&localData)
+		if err!=nil{
+			return nil,fmt.Errorf("fail to unmarshal the local saved data")
+		}
+		keySignParty := signing.NewLocalParty(m, params, localData, outCh, endCh)
 		keySignPartyMap.Store(moniker, keySignParty)
 	}
 

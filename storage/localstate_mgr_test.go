@@ -6,7 +6,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/binance-chain/tss-lib/ecdsa/keygen"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-peerstore/addr"
 	tnet "github.com/libp2p/go-libp2p-testing/net"
@@ -48,7 +47,7 @@ func (s *FileStateMgrTestSuite) TestNewFileStateMgr(c *C) {
 func (s *FileStateMgrTestSuite) TestSaveLocalState(c *C) {
 	stateItem := KeygenLocalState{
 		PubKey:    "wasdfasdfasdfasdfasdfasdf",
-		LocalData: keygen.NewLocalPartySaveData(5),
+		LocalData: []byte("a"),
 		ParticipantKeys: []string{
 			"A", "B", "C",
 		},

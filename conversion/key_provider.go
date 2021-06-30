@@ -5,13 +5,14 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-
 	"github.com/btcsuite/btcd/btcec"
 	coskey "github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/decred/dcrd/dcrec/edwards/v2"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	tcrypto "github.com/tendermint/tendermint/crypto"
+	"github.com/tendermint/tendermint/crypto/ed25519"
 	"github.com/tendermint/tendermint/crypto/secp256k1"
 )
 
@@ -116,9 +117,22 @@ func CheckKeyOnCurve(pk string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("fail to parse pub key(%s): %w", pk, err)
 	}
-	bPk, err := btcec.ParsePubKey(pubKey.Bytes(), btcec.S256())
-	if err != nil {
-		return false, err
+
+	switch pubKey.Type() {
+	case secp256k1.KeyType:
+		bPk, err := btcec.ParsePubKey(pubKey.Bytes(), btcec.S256())
+		if err != nil {
+			return false, err
+		}
+		return isOnCurve(bPk.X, bPk.Y), nil
+	case ed25519.KeyType:
+		bPk, err := edwards.ParsePubKey(pubKey.Bytes())
+		if err != nil {
+			return false, err
+		}
+		return isOnCurve(bPk.X, bPk.Y), nil
+	default:
+		return false, fmt.Errorf("fail to parse pub key(%s): %w", pk, err)
 	}
-	return isOnCurve(bPk.X, bPk.Y), nil
+
 }

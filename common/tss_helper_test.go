@@ -3,6 +3,7 @@ package common
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"math/big"
 	"path"
@@ -107,16 +108,16 @@ func (t *tssHelpSuite) TestGetMsgRound(c *C) {
 	dataKeySign, err := ioutil.ReadFile(filePathKeySign)
 	sharesRawKeyGen := bytes.Split(dataKeyGen, []byte("\n"))
 	sharesRawKeySign := bytes.Split(dataKeySign, []byte("\n"))
-	var sharesKeyGen []*messages.WireMessage
-	var sharesKeySign []*messages.WireMessage
+	var sharesKeyGen []*BulkWireMsg
+	var sharesKeySign []*BulkWireMsg
 	for _, el := range sharesRawKeyGen {
-		var msg messages.WireMessage
+		var msg BulkWireMsg
 		json.Unmarshal(el, &msg)
 		sharesKeyGen = append(sharesKeyGen, &msg)
 	}
 
 	for _, el := range sharesRawKeySign {
-		var msg messages.WireMessage
+		var msg BulkWireMsg
 		json.Unmarshal(el, &msg)
 		sharesKeySign = append(sharesKeySign, &msg)
 	}
@@ -137,15 +138,17 @@ func (t *tssHelpSuite) TestGetMsgRound(c *C) {
 		messages.KEYSIGN6,
 		messages.KEYSIGN7,
 	}
+	_=messagesKeysign
 	mockParty := btss.NewPartyID("12", "22", big.NewInt(2))
 	j := 0
 	for i := 0; i < len(messagesKeygen); i++ {
-		ret, err := GetMsgRound(sharesKeyGen[j].Message, mockParty, sharesKeyGen[j].Routing.IsBroadcast)
+		ret, err := GetMsgRound(sharesKeyGen[j].WiredBulkMsgs, mockParty, sharesKeyGen[j].Routing.IsBroadcast)
 		c.Assert(err, IsNil)
 		expectedRound := blame.RoundInfo{
 			Index:    i,
 			RoundMsg: messagesKeygen[i],
 		}
+		fmt.Printf(">%v\n", ret.RoundMsg)
 		c.Assert(ret, Equals, expectedRound)
 		// we skip the unicast
 		if j == 1 {
@@ -156,7 +159,7 @@ func (t *tssHelpSuite) TestGetMsgRound(c *C) {
 	}
 	j = 0
 	for i := 0; i < len(messagesKeysign); i++ {
-		ret, err := GetMsgRound(sharesKeySign[j].Message, mockParty, sharesKeySign[1].Routing.IsBroadcast)
+		ret, err := GetMsgRound(sharesKeySign[j].WiredBulkMsgs, mockParty, sharesKeySign[j].Routing.IsBroadcast)
 		c.Assert(err, IsNil)
 		expectedRound := blame.RoundInfo{
 			Index:    i,
@@ -171,7 +174,7 @@ func (t *tssHelpSuite) TestGetMsgRound(c *C) {
 		}
 	}
 
-	ret, err := GetMsgRound(sharesKeyGen[1].Message, mockParty, sharesKeyGen[1].Routing.IsBroadcast)
+	ret, err := GetMsgRound(sharesKeyGen[1].WiredBulkMsgs, mockParty, sharesKeyGen[1].Routing.IsBroadcast)
 	c.Assert(ret, Equals, blame.RoundInfo{Index: 1, RoundMsg: messages.KEYGEN2aUnicast})
 	c.Assert(err, IsNil)
 }
