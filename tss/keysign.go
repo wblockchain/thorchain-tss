@@ -4,8 +4,12 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	btss "github.com/binance-chain/tss-lib/tss"
+	s256k1 "github.com/btcsuite/btcd/btcec"
+	"github.com/decred/dcrd/dcrec/edwards/v2"
 	"gitlab.com/thorchain/tss/go-tss/keysign"
 	"gitlab.com/thorchain/tss/go-tss/keysign/ecdsa"
+	"gitlab.com/thorchain/tss/go-tss/keysign/eddsa"
 	"sort"
 	"strings"
 	"sync"
@@ -32,11 +36,10 @@ func (t *TssServer) waitForSignatures(msgID, poolPubKey string, msgsToSign [][]b
 	if len(data) == 0 {
 		return keysign.Response{}, errors.New("keysign failed")
 	}
-
 	return t.batchSignatures(data, msgsToSign), nil
 }
 
-func (t *TssServer) generateSignature(msgID string, msgsToSign [][]byte, req keysign.Request, threshold int, allParticipants []string, localStateItem storage.KeygenLocalState, blameMgr *blame.Manager, keysignInstance *ecdsa.TssKeySign, sigChan chan string) (keysign.Response, error) {
+func (t *TssServer) generateSignature(msgID string, msgsToSign [][]byte, req keysign.Request, threshold int, allParticipants []string, localStateItem storage.KeygenLocalState, blameMgr *blame.Manager, keysignInstance keysign.TssKeySign, sigChan chan string) (keysign.Response, error) {
 	allPeersID, err := conversion.GetPeerIDsFromPubKeys(allParticipants)
 	if err != nil {
 		t.logger.Error().Msg("invalid block height or public key")
@@ -194,17 +197,42 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 		return emptyResp, err
 	}
 
-	keysignInstance := ecdsa.NewTssKeySign(
-		t.p2pCommunication.GetLocalPeerID(),
-		t.conf,
-		t.p2pCommunication.BroadcastMsgChan,
-		t.stopChan,
-		msgID,
-		t.privateKey,
-		t.p2pCommunication,
-		t.stateManager,
-		len(req.Messages),
-	)
+	var keysignInstance keysign.TssKeySign
+
+	switch req.Algo {
+	case "ecdsa":
+		if t.curveChose != "true" {
+			btss.SetCurve(s256k1.S256())
+		}
+		keysignInstance = ecdsa.NewTssKeySign(
+			t.p2pCommunication.GetLocalPeerID(),
+			t.conf,
+			t.p2pCommunication.BroadcastMsgChan,
+			t.stopChan,
+			msgID,
+			t.privateKey,
+			t.p2pCommunication,
+			t.stateManager,
+			len(req.Messages),
+		)
+	case "eddsa":
+		if t.curveChose != "true" {
+			btss.SetCurve(edwards.Edwards())
+		}
+		keysignInstance = eddsa.NewTssKeySign(
+			t.p2pCommunication.GetLocalPeerID(),
+			t.conf,
+			t.p2pCommunication.BroadcastMsgChan,
+			t.stopChan,
+			msgID,
+			t.privateKey,
+			t.p2pCommunication,
+			t.stateManager,
+			len(req.Messages),
+		)
+	default:
+		return keysign.Response{}, errors.New("invalid keysign algo")
+	}
 
 	keySignChannels := keysignInstance.GetTssKeySignChannels()
 	t.p2pCommunication.SetSubscribe(messages.TSSKeySignMsg, msgID, keySignChannels)

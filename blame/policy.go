@@ -44,7 +44,7 @@ func (m *Manager) tssTimeoutBlame(lastMessageType string, partyIDMap map[string]
 	return blamePubKeys, nil
 }
 
-// this blame blames the node who cause the timeout in node sync
+// NodeSyncBlame this blame blames the node who cause the timeout in node sync
 func (m *Manager) NodeSyncBlame(keys []string, onlinePeers []peer.ID) (Blame, error) {
 	blame := NewBlame(TssSyncFail, nil)
 	for _, item := range keys {
@@ -66,7 +66,7 @@ func (m *Manager) NodeSyncBlame(keys []string, onlinePeers []peer.ID) (Blame, er
 	return blame, nil
 }
 
-// this blame blames the node who cause the timeout in unicast message
+// GetUnicastBlame this blame blames the node who cause the timeout in unicast message
 func (m *Manager) GetUnicastBlame(lastMsgType string) ([]Node, error) {
 	m.lastMsgLocker.RLock()
 	if len(m.lastUnicastPeer) == 0 {
@@ -100,7 +100,7 @@ func (m *Manager) GetUnicastBlame(lastMsgType string) ([]Node, error) {
 	return blameNodes, nil
 }
 
-// this blame blames the node who cause the timeout in broadcast message
+// GetBroadcastBlame this blame blames the node who cause the timeout in broadcast message
 func (m *Manager) GetBroadcastBlame(lastMessageType string) ([]Node, error) {
 	blamePeers, err := m.tssTimeoutBlame(lastMessageType, m.partyInfo.PartyIDMap)
 	if err != nil {
@@ -114,7 +114,7 @@ func (m *Manager) GetBroadcastBlame(lastMessageType string) ([]Node, error) {
 	return blameNodes, nil
 }
 
-// this blame blames the node who provide the wrong share
+// TssWrongShareBlame this blame blames the node who provide the wrong share
 func (m *Manager) TssWrongShareBlame(wiredMsg *messages.WireMessage) (string, error) {
 	shareOwner := wiredMsg.Routing.From
 	owner, ok := m.partyInfo.PartyIDMap[shareOwner.Id]
@@ -129,10 +129,10 @@ func (m *Manager) TssWrongShareBlame(wiredMsg *messages.WireMessage) (string, er
 	return pk, nil
 }
 
-// this blame blames the node fail to send the shares to the node
+// TssMissingShareBlame this blame blames the node fail to send the shares to the node
 // with batch signing, we need to put the accepted shares into different message group
 // then search the missing share for each keysign message
-func (m *Manager) TssMissingShareBlame(rounds int) ([]Node, bool, error) {
+func (m *Manager) TssMissingShareBlame(rounds int, algo messages.Algo) ([]Node, bool, error) {
 	acceptedShareForMsg := make(map[string][][]string)
 	var blameNodes []Node
 	var peers []string
@@ -156,25 +156,38 @@ func (m *Manager) TssMissingShareBlame(rounds int) ([]Node, bool, error) {
 			if len(el)+1 == len(m.PartyIDtoP2PID) {
 				continue
 			}
+
+			switch algo {
 			// we find whether the missing share is in unicast
-			if rounds == messages.TSSKEYGENROUNDS {
+			case messages.ECDSAKEYGEN:
 				// we are processing the keygen and if the missing shares is in second round(index=1)
 				// we mark it as the unicast.
 				if index == 1 {
 					isUnicast = true
 				}
-			}
-			if rounds == messages.TSSKEYSIGNROUNDS {
+			case messages.ECDSAKEYSIGN:
 				// we are processing the keysign and if the missing shares is in the 5 round(index<1)
 				// we all mark it as the unicast, because in some cases, the error will be detected
 				// in the following round, so we cannot "trust" the node stops at the current round.
 				if index < 5 {
 					isUnicast = true
 				}
+
+			case messages.EDDSAKEYGEN:
+				if index == 2 {
+					isUnicast = true
+				}
+			case messages.EDDSAKEYSIGN:
+				// currently, EDDSA do not have proof, so all the communication is broadcast.
+				isUnicast = false
+
+			default:
+				m.logger.Error().Msgf("fail to find the algorithm for this keygen/keysign, set unicast as false by default")
+				isUnicast = false
 			}
+
 			// we add our own id to avoid blame ourselves
 			// since all the local parties have the same id, so we just need to take one of them to get the peer
-
 			el = append(el, m.localPartyID)
 			for _, pid := range el {
 				peers = append(peers, m.PartyIDtoP2PID[pid].String())

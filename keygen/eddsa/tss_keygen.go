@@ -10,7 +10,6 @@ import (
 	bcrypto "github.com/binance-chain/tss-lib/crypto"
 	eddsakg "github.com/binance-chain/tss-lib/eddsa/keygen"
 	btss "github.com/binance-chain/tss-lib/tss"
-	"github.com/decred/dcrd/dcrec/edwards/v2"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	tcrypto "github.com/tendermint/tendermint/crypto"
@@ -67,7 +66,6 @@ func (tKeyGen *EDDSAKeyGen) GetTssCommonStruct() *common.TssCommon {
 }
 
 func (tKeyGen *EDDSAKeyGen) GenerateNewKey(keygenReq keygen.Request) (*bcrypto.ECPoint, error) {
-	btss.SetCurve(edwards.Edwards())
 	keyGenPartyMap := new(sync.Map)
 	partiesID, localPartyID, err := conversion.GetParties(keygenReq.Keys, tKeyGen.localNodePubKey)
 	if err != nil {
@@ -107,7 +105,9 @@ func (tKeyGen *EDDSAKeyGen) GenerateNewKey(keygenReq keygen.Request) (*bcrypto.E
 
 	tKeyGen.tssCommonStruct.SetPartyInfo(partyInfo)
 	blameMgr.SetPartyInfo(keyGenPartyMap, partyIDMap)
+	tKeyGen.tssCommonStruct.P2PPeersLock.Lock()
 	tKeyGen.tssCommonStruct.P2PPeers = conversion.GetPeersID(tKeyGen.tssCommonStruct.PartyIDtoP2PID, tKeyGen.tssCommonStruct.GetLocalPeerID())
+	tKeyGen.tssCommonStruct.P2PPeersLock.Unlock()
 	var keyGenWg sync.WaitGroup
 	keyGenWg.Add(2)
 	// start keygen
@@ -187,9 +187,7 @@ func (tKeyGen *EDDSAKeyGen) processKeyGen(errChan chan struct{},
 
 			// if we cannot find the blame node, we check whether everyone send me the share
 			if len(blameMgr.GetBlame().BlameNodes) == 0 {
-				//blameNodesMisingShare, isUnicast, err := blameMgr.TssMissingShareBlame(messages.ECDSATSSKEYGENROUNDS, messages.EDDSAKEYGEN)
-
-				blameNodesMisingShare, isUnicast, err := blameMgr.TssMissingShareBlame(messages.TSSKEYGENROUNDS)
+				blameNodesMisingShare, isUnicast, err := blameMgr.TssMissingShareBlame(messages.EDDSATSSKEYGENROUNDS, messages.EDDSAKEYGEN)
 				if err != nil {
 					tKeyGen.logger.Error().Err(err).Msg("fail to get the node of missing share ")
 				}

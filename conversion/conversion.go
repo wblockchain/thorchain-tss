@@ -1,6 +1,7 @@
 package conversion
 
 import (
+	"crypto/elliptic"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -10,6 +11,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	s256k1 "github.com/btcsuite/btcd/btcec"
 
 	"github.com/binance-chain/tss-lib/crypto"
 	btss "github.com/binance-chain/tss-lib/tss"
@@ -143,14 +146,13 @@ func GetPreviousKeySignUicast(current string) string {
 	return messages.KEYSIGN2Unicast
 }
 
-func isOnCurve(x, y *big.Int) bool {
-	curve := btss.EC()
+func isOnCurve(x, y *big.Int, curve elliptic.Curve) bool {
 	return curve.IsOnCurve(x, y)
 }
 
 func GetTssPubKeyEDDSA(pubKeyPoint *crypto.ECPoint) (string, types.AccAddress, error) {
 	// we check whether the point is on curve according to Kudelski report
-	if pubKeyPoint == nil || !isOnCurve(pubKeyPoint.X(), pubKeyPoint.Y()) {
+	if pubKeyPoint == nil || !isOnCurve(pubKeyPoint.X(), pubKeyPoint.Y(), edwards.Edwards()) {
 		return "", types.AccAddress{}, errors.New("invalid points")
 	}
 	tssPubKey := edwards.PublicKey{
@@ -166,10 +168,9 @@ func GetTssPubKeyEDDSA(pubKeyPoint *crypto.ECPoint) (string, types.AccAddress, e
 	return pubKey, addr, err
 }
 
-
 func GetTssPubKeyECDSA(pubKeyPoint *crypto.ECPoint) (string, types.AccAddress, error) {
 	// we check whether the point is on curve according to Kudelski report
-	if pubKeyPoint == nil || !isOnCurve(pubKeyPoint.X(), pubKeyPoint.Y()) {
+	if pubKeyPoint == nil || !isOnCurve(pubKeyPoint.X(), pubKeyPoint.Y(), s256k1.S256()) {
 		return "", types.AccAddress{}, errors.New("invalid points")
 	}
 	tssPubKey := btcec.PublicKey{

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/btcsuite/btcd/btcec"
+	s256k1 "github.com/btcsuite/btcd/btcec"
 	coskey "github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/decred/dcrd/dcrec/edwards/v2"
@@ -124,13 +125,13 @@ func CheckKeyOnCurve(pk string) (bool, error) {
 		if err != nil {
 			return false, err
 		}
-		return isOnCurve(bPk.X, bPk.Y), nil
+		return isOnCurve(bPk.X, bPk.Y, s256k1.S256()), nil
 	case ed25519.KeyType:
 		bPk, err := edwards.ParsePubKey(pubKey.Bytes())
 		if err != nil {
 			return false, err
 		}
-		return isOnCurve(bPk.X, bPk.Y), nil
+		return isOnCurve(bPk.X, bPk.Y, edwards.Edwards()), nil
 	default:
 		return false, fmt.Errorf("fail to parse pub key(%s): %w", pk, err)
 	}

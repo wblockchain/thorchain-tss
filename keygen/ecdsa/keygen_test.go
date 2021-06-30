@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	btss "github.com/binance-chain/tss-lib/tss"
+	s256k1 "github.com/btcsuite/btcd/btcec"
 	"gitlab.com/thorchain/tss/go-tss/keygen"
 	"io/ioutil"
 	"os"
@@ -76,6 +77,7 @@ var _ = Suite(&TssECDSAKeygenTestSuite{})
 
 func (s *TssECDSAKeygenTestSuite) SetUpSuite(c *C) {
 	common.InitLog("info", true, "keygen_test")
+	btss.SetCurve(s256k1.S256())
 	conversion.SetupBech32Prefix()
 	for _, el := range testNodePrivkey {
 		priHexBytes, err := base64.StdEncoding.DecodeString(el)
@@ -95,9 +97,9 @@ func (s *TssECDSAKeygenTestSuite) SetUpSuite(c *C) {
 }
 
 func (s *TssECDSAKeygenTestSuite) TearDownSuite(c *C) {
-		tempFilePath := path.Join(os.TempDir(),"ecdsa")
-		err := os.RemoveAll(tempFilePath)
-		c.Assert(err, IsNil)
+	tempFilePath := path.Join(os.TempDir(), "ecdsa")
+	err := os.RemoveAll(tempFilePath)
+	c.Assert(err, IsNil)
 }
 
 // SetUpTest set up environment for test key gen
@@ -129,7 +131,7 @@ func (s *TssECDSAKeygenTestSuite) SetUpTest(c *C) {
 	}
 
 	for i := 0; i < s.partyNum; i++ {
-		baseHome := path.Join(os.TempDir(),"ecdsa", strconv.Itoa(i))
+		baseHome := path.Join(os.TempDir(), "ecdsa", strconv.Itoa(i))
 		fMgr, err := storage.NewFileStateMgr(baseHome)
 		c.Assert(err, IsNil)
 		s.stateMgrs[i] = fMgr
@@ -165,7 +167,7 @@ func getPreparams(c *C) []*btsskeygen.LocalPreParams {
 func (s *TssECDSAKeygenTestSuite) TestGenerateNewKey(c *C) {
 	log.SetLogLevel("tss-lib", "info")
 	sort.Strings(testPubKeys)
-	req := keygen.NewRequest(testPubKeys, 10, "","ecdsa")
+	req := keygen.NewRequest(testPubKeys, 10, "", "ecdsa")
 	messageID, err := common.MsgToHashString([]byte(strings.Join(req.Keys, "")))
 	c.Assert(err, IsNil)
 	conf := common.TssConfig{
@@ -231,7 +233,7 @@ func (s *TssECDSAKeygenTestSuite) TestGenerateNewKeyWithStop(c *C) {
 			var localpubKey []string
 			localpubKey = append(localpubKey, testPubKeys...)
 			sort.Strings(testPubKeys)
-			req := keygen.NewRequest(localpubKey, 10, "","ecdsa")
+			req := keygen.NewRequest(localpubKey, 10, "", "ecdsa")
 			messageID, err := common.MsgToHashString([]byte(strings.Join(req.Keys, "")))
 			c.Assert(err, IsNil)
 			comm := s.comms[idx]

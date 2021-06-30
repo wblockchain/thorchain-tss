@@ -1,9 +1,15 @@
 package tss
 
 import (
+	"errors"
+	btss "github.com/binance-chain/tss-lib/tss"
+	s256k1 "github.com/btcsuite/btcd/btcec"
+	"github.com/decred/dcrd/dcrec/edwards/v2"
 	"gitlab.com/thorchain/tss/go-tss/keygen/ecdsa"
+	"gitlab.com/thorchain/tss/go-tss/keygen/eddsa"
 	"time"
 
+	"gitlab.com/thorchain/binance-sdk/common/types"
 	"gitlab.com/thorchain/tss/go-tss/blame"
 	"gitlab.com/thorchain/tss/go-tss/common"
 	"gitlab.com/thorchain/tss/go-tss/conversion"
@@ -20,17 +26,40 @@ func (t *TssServer) Keygen(req keygen.Request) (keygen.Response, error) {
 		return keygen.Response{}, err
 	}
 
-	keygenInstance := ecdsa.NewTssKeyGen(
-		t.p2pCommunication.GetLocalPeerID(),
-		t.conf,
-		t.localNodePubKey,
-		t.p2pCommunication.BroadcastMsgChan,
-		t.stopChan,
-		t.preParams,
-		msgID,
-		t.stateManager,
-		t.privateKey,
-		t.p2pCommunication)
+	var keygenInstance keygen.TssKeyGen
+	switch req.Algo {
+	case "ecdsa":
+		if t.curveChose != "true" {
+			btss.SetCurve(s256k1.S256())
+		}
+		keygenInstance = ecdsa.NewTssKeyGen(
+			t.p2pCommunication.GetLocalPeerID(),
+			t.conf,
+			t.localNodePubKey,
+			t.p2pCommunication.BroadcastMsgChan,
+			t.stopChan,
+			t.preParams,
+			msgID,
+			t.stateManager,
+			t.privateKey,
+			t.p2pCommunication)
+	case "eddsa":
+		if t.curveChose != "true" {
+			btss.SetCurve(edwards.Edwards())
+		}
+		keygenInstance = eddsa.NewTssKeyGen(
+			t.p2pCommunication.GetLocalPeerID(),
+			t.conf,
+			t.localNodePubKey,
+			t.p2pCommunication.BroadcastMsgChan,
+			t.stopChan,
+			msgID,
+			t.stateManager,
+			t.privateKey,
+			t.p2pCommunication)
+	default:
+		return keygen.Response{}, errors.New("invalid keygen algo")
+	}
 
 	keygenMsgChannel := keygenInstance.GetTssKeyGenChannels()
 	t.p2pCommunication.SetSubscribe(messages.TSSKeyGenMsg, msgID, keygenMsgChannel)
@@ -121,13 +150,21 @@ func (t *TssServer) Keygen(req keygen.Request) (keygen.Response, error) {
 		t.tssMetrics.UpdateKeyGen(keygenTime, true)
 	}
 
-	newPubKey, addr, err := conversion.GetTssPubKeyECDSA(k)
+	blameNodes := *blameMgr.GetBlame()
+	var newPubKey string
+	var addr types.AccAddress
+	switch req.Algo {
+	case "ecdsa":
+		newPubKey, addr, err = conversion.GetTssPubKeyECDSA(k)
+	case "eddsa":
+		newPubKey, addr, err = conversion.GetTssPubKeyEDDSA(k)
+	default:
+		newPubKey, addr, err = conversion.GetTssPubKeyECDSA(k)
+	}
 	if err != nil {
 		t.logger.Error().Err(err).Msg("fail to generate the new Tss key")
 		status = common.Fail
 	}
-
-	blameNodes := *blameMgr.GetBlame()
 	return keygen.NewResponse(
 		newPubKey,
 		addr.String(),

@@ -40,6 +40,7 @@ type TssServer struct {
 	signatureNotifier *keysign.SignatureNotifier
 	privateKey        tcrypto.PrivKey
 	tssMetrics        *monitor.Metric
+	curveChose        string
 }
 
 // NewTss create a new instance of Tss
@@ -52,6 +53,7 @@ func NewTss(
 	conf common.TssConfig,
 	preParams *bkeygen.LocalPreParams,
 	externalIP string,
+	opt ...string,
 ) (*TssServer, error) {
 	pk := coskey.PubKey{
 		Key: priKey.PubKey().Bytes()[:],
@@ -121,7 +123,9 @@ func NewTss(
 		privateKey:        priKey,
 		tssMetrics:        metrics,
 	}
-
+	if len(opt) > 0 {
+		tssServer.curveChose = opt[0]
+	}
 	return &tssServer, nil
 }
 
@@ -148,10 +152,12 @@ func (t *TssServer) requestToMsgId(request interface{}) (string, error) {
 	var keys []string
 	switch value := request.(type) {
 	case keygen.Request:
+		dat = []byte(value.Algo)
 		keys = value.Keys
 	case keysign.Request:
+		dat = []byte(value.Algo)
 		sort.Strings(value.Messages)
-		dat = []byte(strings.Join(value.Messages, ","))
+		dat = append(dat, []byte(strings.Join(value.Messages, ","))...)
 		keys = value.SignerPubKeys
 	default:
 		t.logger.Error().Msg("unknown request type")

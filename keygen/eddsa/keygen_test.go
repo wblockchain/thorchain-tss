@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/decred/dcrd/dcrec/edwards/v2"
 	"os"
 	"path"
 	"sort"
@@ -71,6 +72,7 @@ var _ = Suite(&EddsaKeygenTestSuite{})
 
 func (s *EddsaKeygenTestSuite) SetUpSuite(c *C) {
 	common.InitLog("info", true, "keygen_test")
+	btss.SetCurve(edwards.Edwards())
 	conversion.SetupBech32Prefix()
 	for _, el := range testNodePrivkey {
 		priHexBytes, err := base64.StdEncoding.DecodeString(el)
@@ -219,7 +221,7 @@ func (s *EddsaKeygenTestSuite) TestCloseKeyGennotifyChannel(c *C) {
 	partyIdMap["1"] = nil
 	partyIdMap["2"] = nil
 	fakePartyInfo := &common.PartyInfo{
-		PartyMap:      nil,
+		PartyMap:   nil,
 		PartyIDMap: partyIdMap,
 	}
 	keyGenInstance.tssCommonStruct.SetPartyInfo(fakePartyInfo)
