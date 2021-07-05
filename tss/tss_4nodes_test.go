@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	btss "github.com/binance-chain/tss-lib/tss"
 	s256k1 "github.com/btcsuite/btcd/btcec"
-	"github.com/decred/dcrd/dcrec/edwards/v2"
 	golog "github.com/ipfs/go-log"
 	"github.com/rs/zerolog/log"
 	"gitlab.com/thorchain/tss/go-tss/keysign"
@@ -149,25 +148,30 @@ func (s *FourNodeTestSuite) Test4NodesECDSATss(c *C) {
 	s.doTestBlame(c, true)
 }
 
-func (s *FourNodeTestSuite) Test4NodesEddsaAndEcdsaTss(c *C) {
-	s.algo = "eddsa"
-	btss.SetCurve(edwards.Edwards())
-	s.doTestKeygenAndKeySign(c, true)
-	time.Sleep(time.Second * 2)
-	s.algo = "ecdsa"
-	btss.SetCurve(s256k1.S256())
-	s.doTestKeygenAndKeySign(c, true)
-}
+//func (s *FourNodeTestSuite) Test4NodesEddsaAndEcdsaTss(c *C) {
+//	s.algo = "eddsa"
+//	btss.SetCurve(edwards.Edwards())
+//	s.doTestKeygenAndKeySign(c, true)
+//	time.Sleep(time.Second * 2)
+//	s.algo = "ecdsa"
+//	btss.SetCurve(s256k1.S256())
+//	s.doTestKeygenAndKeySign(c, true)
+//}
 
-func (s *FourNodeTestSuite) Test4NodesEDDSATss(c *C) {
-	s.algo = "eddsa"
-	btss.SetCurve(edwards.Edwards())
-	s.doTestKeygenAndKeySign(c, true)
-	time.Sleep(time.Second * 2)
-	s.doTestFailJoinParty(c, true)
-	time.Sleep(time.Second * 2)
-	s.doTestBlame(c, true)
-}
+//func (s *FourNodeTestSuite) Test4NodesEDDSATss(c *C) {
+//	s.algo = "eddsa"
+//	btss.SetCurve(edwards.Edwards())
+//	s.doTestKeygenAndKeySign(c, true)
+//	time.Sleep(time.Second * 2)
+//	s.doTestFailJoinParty(c, true)
+//	time.Sleep(time.Second * 2)
+//	s.doTestBlame(c, true)
+//}
+
+//func (s *FourNodeTestSuite) Test4NodesGenAllKeys(c *C) {
+//	s.algo = "allKeys"
+//	s.doTestKeygenAll(c, true)
+//}
 
 func checkSignResult(c *C, keysignResult map[int]keysign.Response) {
 	for i := 0; i < len(keysignResult)-1; i++ {
@@ -183,6 +187,33 @@ func checkSignResult(c *C, keysignResult map[int]keysign.Response) {
 		ret := bytes.Equal(currentData, nextData)
 		c.Assert(ret, Equals, true)
 	}
+}
+
+// generate a new key
+func (s *FourNodeTestSuite) doTestKeygenAll(c *C, newJoinParty bool) {
+	wg := sync.WaitGroup{}
+	lock := &sync.Mutex{}
+	keygenResult := make(map[int][]keygen.Response)
+	for i := 0; i < partyNum; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			var req keygen.Request
+			localPubKeys := append([]string{}, testPubKeys...)
+			if newJoinParty {
+				req = keygen.NewRequest(localPubKeys, 10, "0.14.0", "")
+			} else {
+				req = keygen.NewRequest(localPubKeys, 10, "0.13.0", "")
+			}
+			res, err := s.servers[idx].KeygenAllAlgo(req)
+			c.Assert(err, IsNil)
+			lock.Lock()
+			defer lock.Unlock()
+			keygenResult[idx] = res
+		}(i)
+	}
+	wg.Wait()
+
 }
 
 // generate a new key

@@ -36,6 +36,13 @@ func (mts *MockTssServer) Keygen(req keygen.Request) (keygen.Response, error) {
 	return keygen.NewResponse(conversion.GetRandomPubKey(), "whatever", common.Success, blame.Blame{}), nil
 }
 
+func (mts *MockTssServer) KeygenAllAlgo(req keygen.Request) ([]keygen.Response, error) {
+	if mts.failToKeyGen {
+		return []keygen.Response{{}}, errors.New("you ask for it")
+	}
+	return []keygen.Response{keygen.NewResponse(conversion.GetRandomPubKey(), "whatever", common.Success, blame.Blame{})}, nil
+}
+
 func (mts *MockTssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 	if mts.failToKeySign {
 		return keysign.Response{}, errors.New("you ask for it")
