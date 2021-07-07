@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/decred/dcrd/dcrec/edwards/v2"
 	"io/ioutil"
 	"os"
 	"sort"
@@ -102,7 +101,6 @@ type EddsaKeysignTestSuite struct {
 var _ = Suite(&EddsaKeysignTestSuite{})
 
 func (s *EddsaKeysignTestSuite) SetUpSuite(c *C) {
-	btss.SetCurve(edwards.Edwards())
 	conversion.SetupBech32Prefix()
 	common.InitLog("info", true, "keysign_test")
 
@@ -169,7 +167,7 @@ func (s *EddsaKeysignTestSuite) TestSignMessage(c *C) {
 		return
 	}
 	sort.Strings(testPubKeys)
-	req := keysign.NewRequest("thorpub1addwnpepq0shpn7n4hpn0xrqkaeg3upjnulxupkxzqk7x8udkp8heyu7mtymsa0lyz9", []string{"helloworld-test111", "test2"}, 10, testPubKeys, "0.16.0", "eddsa")
+	req := keysign.NewRequest("thorpub1zcjduepqth045zqe704mq8qr60rtnnhtxnnffd09v7plg3c0vk0evg0zeapsr27hxm", []string{"helloworld-test111", "test2"}, 10, testPubKeys, "0.16.0", "eddsa")
 	sort.Strings(req.Messages)
 	dat := []byte(strings.Join(req.Messages, ","))
 	messageID, err := common.MsgToHashString(dat)

@@ -6,8 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	btss "github.com/binance-chain/tss-lib/tss"
-	s256k1 "github.com/btcsuite/btcd/btcec"
 	golog "github.com/ipfs/go-log"
 	"github.com/rs/zerolog/log"
 	"gitlab.com/thorchain/tss/go-tss/keysign"
@@ -78,6 +76,7 @@ func createFolder(c *C, algo string) {
 }
 
 func (s *FourNodeTestSuite) SetUpSuite(c *C) {
+	conversion.SetupBech32Prefix()
 	createFolder(c, "ecdsa")
 	createFolder(c, "eddsa")
 	time.Sleep(3)
@@ -138,9 +137,9 @@ func hash(payload []byte) []byte {
 // 4 instance, it needs to avoid setting the curve in race condition
 // in production, user needs to avoid running more than one tss server
 // in the same process.
+//
 func (s *FourNodeTestSuite) Test4NodesECDSATss(c *C) {
 	s.algo = "ecdsa"
-	btss.SetCurve(s256k1.S256())
 	s.doTestKeygenAndKeySign(c, true)
 	time.Sleep(time.Second * 2)
 	s.doTestFailJoinParty(c, true)
@@ -148,30 +147,18 @@ func (s *FourNodeTestSuite) Test4NodesECDSATss(c *C) {
 	s.doTestBlame(c, true)
 }
 
-//func (s *FourNodeTestSuite) Test4NodesEddsaAndEcdsaTss(c *C) {
-//	s.algo = "eddsa"
-//	btss.SetCurve(edwards.Edwards())
-//	s.doTestKeygenAndKeySign(c, true)
-//	time.Sleep(time.Second * 2)
-//	s.algo = "ecdsa"
-//	btss.SetCurve(s256k1.S256())
-//	s.doTestKeygenAndKeySign(c, true)
-//}
+func (s *FourNodeTestSuite) Test4NodesEddsaAndEcdsaTss(c *C) {
+	s.algo = "eddsa"
+	s.doTestKeygenAndKeySign(c, true)
+	time.Sleep(time.Second * 2)
+	s.algo = "ecdsa"
+	s.doTestKeygenAndKeySign(c, true)
+}
 
-//func (s *FourNodeTestSuite) Test4NodesEDDSATss(c *C) {
-//	s.algo = "eddsa"
-//	btss.SetCurve(edwards.Edwards())
-//	s.doTestKeygenAndKeySign(c, true)
-//	time.Sleep(time.Second * 2)
-//	s.doTestFailJoinParty(c, true)
-//	time.Sleep(time.Second * 2)
-//	s.doTestBlame(c, true)
-//}
-
-//func (s *FourNodeTestSuite) Test4NodesGenAllKeys(c *C) {
-//	s.algo = "allKeys"
-//	s.doTestKeygenAll(c, true)
-//}
+func (s *FourNodeTestSuite) Test4NodesGenAllKeys(c *C) {
+	s.algo = "allKeys"
+	s.doTestKeygenAll(c, true)
+}
 
 func checkSignResult(c *C, keysignResult map[int]keysign.Response) {
 	for i := 0; i < len(keysignResult)-1; i++ {
@@ -213,7 +200,7 @@ func (s *FourNodeTestSuite) doTestKeygenAll(c *C, newJoinParty bool) {
 		}(i)
 	}
 	wg.Wait()
-
+	c.Assert(keygenResult[0], HasLen, 2)
 }
 
 // generate a new key
@@ -345,15 +332,8 @@ func (s *FourNodeTestSuite) doTestFailJoinParty(c *C, newJoinParty bool) {
 		c.Assert(item.PubKey, Equals, "")
 		c.Assert(item.Status, Equals, common.Fail)
 		var expectedFailNode string
-		if newJoinParty {
-			c.Assert(item.Blame.BlameNodes, HasLen, 2)
-			expectedFailNode := []string{"thorpub1addwnpepqtdklw8tf3anjz7nn5fly3uvq2e67w2apn560s4smmrt9e3x52nt2svmmu3", "thorpub1addwnpepq2ryyje5zr09lq7gqptjwnxqsy2vcdngvwd6z7yt5yjcnyj8c8cn559xe69"}
-			c.Assert(item.Blame.BlameNodes[0].Pubkey, Equals, expectedFailNode[0])
-			c.Assert(item.Blame.BlameNodes[1].Pubkey, Equals, expectedFailNode[1])
-		} else {
-			expectedFailNode = "thorpub1addwnpepqtdklw8tf3anjz7nn5fly3uvq2e67w2apn560s4smmrt9e3x52nt2svmmu3"
-			c.Assert(item.Blame.BlameNodes[0].Pubkey, Equals, expectedFailNode)
-		}
+		expectedFailNode = "thorpub1addwnpepqtdklw8tf3anjz7nn5fly3uvq2e67w2apn560s4smmrt9e3x52nt2svmmu3"
+		c.Assert(item.Blame.BlameNodes[0].Pubkey, Equals, expectedFailNode)
 	}
 }
 
@@ -438,7 +418,7 @@ func (s *FourNodeTestSuite) getTssServer(c *C, index int, conf common.TssConfig,
 	} else {
 		peerIDs = nil
 	}
-	instance, err := NewTss(peerIDs, s.ports[index], priKey, "Asgard", baseHome, conf, s.preParams[index], "", "true")
+	instance, err := NewTss(peerIDs, s.ports[index], priKey, "Asgard", baseHome, conf, s.preParams[index], "")
 	c.Assert(err, IsNil)
 	return instance
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/decred/dcrd/dcrec/secp256k1"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -171,7 +172,7 @@ outer:
 				// BEGIN ECDSA verify
 				pkX, pkY := keys[0].ECDSAPub.X(), keys[0].ECDSAPub.Y()
 				pk := ecdsa.PublicKey{
-					Curve: tss.EC(),
+					Curve: secp256k1.S256(),
 					X:     pkX,
 					Y:     pkY,
 				}

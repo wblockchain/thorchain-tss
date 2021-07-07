@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	s256k1 "github.com/btcsuite/btcd/btcec"
 	"math"
 	"os"
 	"runtime"
@@ -185,7 +186,7 @@ outer:
 				// build ecdsa key pair
 				pkX, pkY := save.ECDSAPub.X(), save.ECDSAPub.Y()
 				pk := ecdsa.PublicKey{
-					Curve: tss.EC(),
+					Curve: s256k1.S256(),
 					X:     pkX,
 					Y:     pkY,
 				}

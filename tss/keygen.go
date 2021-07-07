@@ -2,9 +2,6 @@ package tss
 
 import (
 	"errors"
-	btss "github.com/binance-chain/tss-lib/tss"
-	s256k1 "github.com/btcsuite/btcd/btcec"
-	"github.com/decred/dcrd/dcrec/edwards/v2"
 	"gitlab.com/thorchain/tss/go-tss/keygen/ecdsa"
 	"gitlab.com/thorchain/tss/go-tss/keygen/eddsa"
 	"time"
@@ -29,9 +26,6 @@ func (t *TssServer) Keygen(req keygen.Request) (keygen.Response, error) {
 	var keygenInstance keygen.TssKeyGen
 	switch req.Algo {
 	case "ecdsa":
-		if t.curveChose != "true" {
-			btss.SetCurve(s256k1.S256())
-		}
 		keygenInstance = ecdsa.NewTssKeyGen(
 			t.p2pCommunication.GetLocalPeerID(),
 			t.conf,
@@ -44,9 +38,6 @@ func (t *TssServer) Keygen(req keygen.Request) (keygen.Response, error) {
 			t.privateKey,
 			t.p2pCommunication)
 	case "eddsa":
-		if t.curveChose != "true" {
-			btss.SetCurve(edwards.Edwards())
-		}
 		keygenInstance = eddsa.NewTssKeyGen(
 			t.p2pCommunication.GetLocalPeerID(),
 			t.conf,
@@ -304,20 +295,6 @@ func (t *TssServer) KeygenAllAlgo(req keygen.Request) ([]keygen.Response, error)
 	var keygenErr error
 	for _, algo := range algos {
 		instance := keygenInstances[algo]
-		switch algo {
-		case "ecdsa":
-			//if t.curveChose != "true" {
-			btss.SetCurve(s256k1.S256())
-			//}
-		case "eddsa":
-			//if t.curveChose != "true" {
-			btss.SetCurve(edwards.Edwards())
-			//}
-		default:
-			//if t.curveChose != "true" {
-			btss.SetCurve(s256k1.S256())
-			//}
-		}
 		k, keygenErr := instance.GenerateNewKey(req)
 		keygenTime := time.Since(beforeKeygen)
 		if keygenErr != nil {

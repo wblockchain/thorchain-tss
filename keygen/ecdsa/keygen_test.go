@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	btss "github.com/binance-chain/tss-lib/tss"
-	s256k1 "github.com/btcsuite/btcd/btcec"
 	"gitlab.com/thorchain/tss/go-tss/keygen"
 	"io/ioutil"
 	"os"
@@ -77,7 +76,6 @@ var _ = Suite(&TssECDSAKeygenTestSuite{})
 
 func (s *TssECDSAKeygenTestSuite) SetUpSuite(c *C) {
 	common.InitLog("info", true, "keygen_test")
-	btss.SetCurve(s256k1.S256())
 	conversion.SetupBech32Prefix()
 	for _, el := range testNodePrivkey {
 		priHexBytes, err := base64.StdEncoding.DecodeString(el)

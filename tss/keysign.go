@@ -4,9 +4,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	btss "github.com/binance-chain/tss-lib/tss"
-	s256k1 "github.com/btcsuite/btcd/btcec"
-	"github.com/decred/dcrd/dcrec/edwards/v2"
 	"gitlab.com/thorchain/tss/go-tss/keysign"
 	"gitlab.com/thorchain/tss/go-tss/keysign/ecdsa"
 	"gitlab.com/thorchain/tss/go-tss/keysign/eddsa"
@@ -201,9 +198,6 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 
 	switch req.Algo {
 	case "ecdsa":
-		if t.curveChose != "true" {
-			btss.SetCurve(s256k1.S256())
-		}
 		keysignInstance = ecdsa.NewTssKeySign(
 			t.p2pCommunication.GetLocalPeerID(),
 			t.conf,
@@ -216,9 +210,6 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 			len(req.Messages),
 		)
 	case "eddsa":
-		if t.curveChose != "true" {
-			btss.SetCurve(edwards.Edwards())
-		}
 		keysignInstance = eddsa.NewTssKeySign(
 			t.p2pCommunication.GetLocalPeerID(),
 			t.conf,

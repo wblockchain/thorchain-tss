@@ -169,7 +169,7 @@ func (s *TssECDSAKeysignTestSuite) TestSignMessage(c *C) {
 	}
 	log.SetLogLevel("tss-lib", "info")
 	sort.Strings(testPubKeys)
-	req := keysign.NewRequest("thorpub1addwnpepqv6xp3fmm47dfuzglywqvpv8fdjv55zxte4a26tslcezns5czv586u2fw33", []string{"helloworld-test", "t"}, 10, testPubKeys, "", "ecdsa")
+	req := keysign.NewRequest("thorpub1zcjduepqth045zqe704mq8qr60rtnnhtxnnffd09v7plg3c0vk0evg0zeapsr27hxm", []string{"helloworld-test", "t"}, 10, testPubKeys, "", "ecdsa")
 	sort.Strings(req.Messages)
 	dat := []byte(strings.Join(req.Messages, ","))
 	messageID, err := common.MsgToHashString(dat)

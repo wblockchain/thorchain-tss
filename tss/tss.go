@@ -40,7 +40,6 @@ type TssServer struct {
 	signatureNotifier *keysign.SignatureNotifier
 	privateKey        tcrypto.PrivKey
 	tssMetrics        *monitor.Metric
-	curveChose        string
 }
 
 // NewTss create a new instance of Tss
@@ -53,7 +52,6 @@ func NewTss(
 	conf common.TssConfig,
 	preParams *bkeygen.LocalPreParams,
 	externalIP string,
-	opt ...string,
 ) (*TssServer, error) {
 	pk := coskey.PubKey{
 		Key: priKey.PubKey().Bytes()[:],
@@ -122,9 +120,6 @@ func NewTss(
 		signatureNotifier: sn,
 		privateKey:        priKey,
 		tssMetrics:        metrics,
-	}
-	if len(opt) > 0 {
-		tssServer.curveChose = opt[0]
 	}
 	return &tssServer, nil
 }
