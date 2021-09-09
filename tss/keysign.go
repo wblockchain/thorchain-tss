@@ -192,7 +192,11 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 	if err != nil {
 		return emptyResp, err
 	}
-
+	// we use the test message to check whether it is a keysign test which need all nodes to participant.
+	needAllSigners := false
+	if len(req.Messages) == 1 && req.Messages[0] == base64.StdEncoding.EncodeToString([]byte(TESTMSG)) {
+		needAllSigners = true
+	}
 	keysignInstance := keysign.NewTssKeySign(
 		t.p2pCommunication.GetLocalPeerID(),
 		t.conf,
@@ -297,6 +301,9 @@ func (t *TssServer) KeySign(req keysign.Request) (keysign.Response, error) {
 	// we generate the signature ourselves
 	go func() {
 		defer wg.Done()
+		if needAllSigners {
+			threshold = len(req.SignerPubKeys) - 1
+		}
 		generatedSig, errGen = t.generateSignature(msgID, msgsToSign, req, threshold, localStateItem.ParticipantKeys, localStateItem, blameMgr, keysignInstance, sigChan)
 	}()
 	wg.Wait()

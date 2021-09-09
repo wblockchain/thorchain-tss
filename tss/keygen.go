@@ -1,14 +1,22 @@
 package tss
 
 import (
+	"crypto/ecdsa"
+	"encoding/base64"
+	"math/big"
 	"time"
 
+	"github.com/btcsuite/btcd/btcec"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"gitlab.com/thorchain/tss/go-tss/blame"
 	"gitlab.com/thorchain/tss/go-tss/common"
 	"gitlab.com/thorchain/tss/go-tss/conversion"
 	"gitlab.com/thorchain/tss/go-tss/keygen"
+	"gitlab.com/thorchain/tss/go-tss/keysign"
 	"gitlab.com/thorchain/tss/go-tss/messages"
 )
+
+const TESTMSG = "tsskeysigntest"
 
 func (t *TssServer) Keygen(req keygen.Request) (keygen.Response, error) {
 	t.tssKeyGenLocker.Lock()
@@ -127,10 +135,55 @@ func (t *TssServer) Keygen(req keygen.Request) (keygen.Response, error) {
 	}
 
 	blameNodes := *blameMgr.GetBlame()
+
+	// before we return the generated key, we run a keysign test
+	keySignTestReq := keysign.Request{
+		PoolPubKey:    newPubKey,
+		Version:       req.Version,
+		SignerPubKeys: req.Keys,
+		BlockHeight:   req.BlockHeight,
+		Messages:      []string{base64.StdEncoding.EncodeToString([]byte(TESTMSG))},
+	}
+	keySignResp, err := t.KeySign(keySignTestReq)
+	if err != nil {
+		t.logger.Error().Err(err).Msg("fail to sign test message")
+		return keygen.Response{
+			Status: common.Fail,
+		}, nil
+	}
+
+	ret := verifySignature(keySignResp.Signatures[0], newPubKey, []byte(TESTMSG))
+	if !ret {
+		return keygen.Response{
+			Status: common.Fail,
+		}, nil
+	}
+
 	return keygen.NewResponse(
 		newPubKey,
 		addr.String(),
 		status,
 		blameNodes,
 	), nil
+}
+
+func verifySignature(sig keysign.Signature, poolPubKey string, msg []byte) bool {
+	// we should be able to use any of the pubkeys to verify the signature
+	pubKey, err := sdk.GetPubKeyFromBech32(sdk.Bech32PubKeyTypeAccPub, poolPubKey)
+	if err != nil {
+		return false
+	}
+	pub, err := btcec.ParsePubKey(pubKey.Bytes(), btcec.S256())
+	if err != nil {
+		return false
+	}
+	r, err := base64.StdEncoding.DecodeString(sig.R)
+	if err != nil {
+		return false
+	}
+	s, err := base64.StdEncoding.DecodeString(sig.S)
+	if err != nil {
+		return false
+	}
+	return ecdsa.Verify(pub.ToECDSA(), msg, new(big.Int).SetBytes(r), new(big.Int).SetBytes(s))
 }
