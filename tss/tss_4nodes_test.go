@@ -20,12 +20,12 @@ import (
 	maddr "github.com/multiformats/go-multiaddr"
 	. "gopkg.in/check.v1"
 
-	"gitlab.com/thorchain/tss/go-tss/common"
-	"gitlab.com/thorchain/tss/go-tss/conversion"
-	"gitlab.com/thorchain/tss/go-tss/keygen"
-	"gitlab.com/thorchain/tss/go-tss/keysign"
-	"gitlab.com/thorchain/tss/go-tss/p2p"
-	"gitlab.com/thorchain/tss/go-tss/storage"
+	"github.com/akildemir/go-tss/common"
+	"github.com/akildemir/go-tss/conversion"
+	"github.com/akildemir/go-tss/keygen"
+	"github.com/akildemir/go-tss/keysign"
+	"github.com/akildemir/go-tss/p2p"
+	"github.com/akildemir/go-tss/storage"
 )
 
 const (

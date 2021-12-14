@@ -1,8 +1,8 @@
 package tss
 
 import (
-	"gitlab.com/thorchain/tss/go-tss/keygen"
-	"gitlab.com/thorchain/tss/go-tss/keysign"
+	"github.com/akildemir/go-tss/keygen"
+	"github.com/akildemir/go-tss/keysign"
 )
 
 // Server define the necessary functionality should be provide by a TSS Server implementation

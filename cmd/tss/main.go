@@ -15,11 +15,11 @@ import (
 	"github.com/libp2p/go-libp2p-peerstore/addr"
 	"gitlab.com/thorchain/binance-sdk/common/types"
 
-	"gitlab.com/thorchain/tss/go-tss/common"
-	"gitlab.com/thorchain/tss/go-tss/conversion"
-	"gitlab.com/thorchain/tss/go-tss/p2p"
-	"gitlab.com/thorchain/tss/go-tss/storage"
-	"gitlab.com/thorchain/tss/go-tss/tss"
+	"github.com/akildemir/go-tss/common"
+	"github.com/akildemir/go-tss/conversion"
+	"github.com/akildemir/go-tss/p2p"
+	"github.com/akildemir/go-tss/storage"
+	"github.com/akildemir/go-tss/tss"
 )
 
 var (
