@@ -78,13 +78,6 @@ func NewTss(
 		return nil, errors.New("invalid preparams")
 	}
 
-	priKeyRawBytes, err := conversion.GetPriKeyRawBytes(priKey)
-	if err != nil {
-		return nil, fmt.Errorf("fail to get private key")
-	}
-	if err := comm.Start(priKeyRawBytes); nil != err {
-		return nil, fmt.Errorf("fail to start p2p network: %w", err)
-	}
 	pc := p2p.NewPartyCoordinator(comm.GetHost(), conf.PartyTimeout)
 	sn := keysign.NewSignatureNotifier(comm.GetHost())
 	metrics := monitor.NewMetric()
