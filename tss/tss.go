@@ -53,7 +53,7 @@ func NewTss(
 		Key: priKey.PubKey().Bytes()[:],
 	}
 
-	pubKey, err := sdk.Bech32ifyPubKey(sdk.Bech32PubKeyTypeAccPub, &pk)
+	pubKey, err := sdk.MarshalPubKey(sdk.AccPK, &pk)
 	if err != nil {
 		return nil, fmt.Errorf("fail to genearte the key: %w", err)
 	}
