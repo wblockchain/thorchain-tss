@@ -22,12 +22,12 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
-	"gitlab.com/thorchain/tss/go-tss/messages"
+	"github.com/akildemir/go-tss/messages"
 )
 
 var (
-	joinPartyProtocol           protocol.ID = "/p2p/join-party"
-	joinPartyProtocolWithLeader protocol.ID = "/p2p/join-party-leader"
+	joinPartyProtocol           protocol.ID = "/p2p/go-tss/join-party"
+	joinPartyProtocolWithLeader protocol.ID = "/p2p/go-tss/join-party-leader"
 )
 
 // TSSProtocolID protocol id used for tss

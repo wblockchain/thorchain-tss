@@ -15,10 +15,11 @@ import (
 	"github.com/libp2p/go-libp2p-peerstore/addr"
 	"gitlab.com/thorchain/binance-sdk/common/types"
 
-	"gitlab.com/thorchain/tss/go-tss/common"
-	"gitlab.com/thorchain/tss/go-tss/conversion"
-	"gitlab.com/thorchain/tss/go-tss/p2p"
-	"gitlab.com/thorchain/tss/go-tss/tss"
+	"github.com/akildemir/go-tss/common"
+	"github.com/akildemir/go-tss/conversion"
+	"github.com/akildemir/go-tss/p2p"
+	"github.com/akildemir/go-tss/storage"
+	"github.com/akildemir/go-tss/tss"
 )
 
 var (
@@ -58,16 +59,33 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// set up tss comms
+	stateManager, err := storage.NewFileStateMgr(baseFolder)
+	if err != nil {
+		log.Fatal(err)
+	}
+	var bootstrapPeers addr.AddrList
+	savedPeers, err := stateManager.RetrieveP2PAddresses()
+	if err != nil {
+		bootstrapPeers = addr.AddrList(p2pConf.BootstrapPeers)
+	} else {
+		bootstrapPeers = savedPeers
+		bootstrapPeers = append(bootstrapPeers, addr.AddrList(p2pConf.BootstrapPeers)...)
+	}
+	comm, err := p2p.NewCommunication(p2pConf.RendezvousString, bootstrapPeers, p2pConf.Port, p2pConf.ExternalIP)
+	if err != nil {
+		fmt.Errorf("fail to create communication layer: %w", err)
+		return
+	}
+
 	// init tss module
 	tss, err := tss.NewTss(
-		addr.AddrList(p2pConf.BootstrapPeers),
-		p2pConf.Port,
+		comm,
 		priKey,
-		p2pConf.RendezvousString,
 		baseFolder,
 		tssConf,
 		nil,
-		p2pConf.ExternalIP,
 	)
 	if nil != err {
 		log.Fatal(err)

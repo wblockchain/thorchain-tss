@@ -13,9 +13,9 @@ import (
 	"github.com/tendermint/tendermint/crypto/secp256k1"
 	. "gopkg.in/check.v1"
 
-	"gitlab.com/thorchain/tss/go-tss/blame"
-	"gitlab.com/thorchain/tss/go-tss/conversion"
-	"gitlab.com/thorchain/tss/go-tss/messages"
+	"github.com/akildemir/go-tss/blame"
+	"github.com/akildemir/go-tss/conversion"
+	"github.com/akildemir/go-tss/messages"
 )
 
 type tssHelpSuite struct{}

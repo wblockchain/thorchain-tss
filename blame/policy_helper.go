@@ -1,6 +1,6 @@
 package blame
 
-import "gitlab.com/thorchain/tss/go-tss/conversion"
+import "github.com/akildemir/go-tss/conversion"
 
 // GetBlamePubKeysInList returns the nodes public key who are in the peer list
 func (m *Manager) getBlamePubKeysInList(peers []string) ([]string, error) {

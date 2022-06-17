@@ -16,13 +16,16 @@ import (
 	"time"
 
 	btsskeygen "github.com/binance-chain/tss-lib/ecdsa/keygen"
+	"github.com/libp2p/go-libp2p-peerstore/addr"
 	maddr "github.com/multiformats/go-multiaddr"
 	. "gopkg.in/check.v1"
 
-	"gitlab.com/thorchain/tss/go-tss/common"
-	"gitlab.com/thorchain/tss/go-tss/conversion"
-	"gitlab.com/thorchain/tss/go-tss/keygen"
-	"gitlab.com/thorchain/tss/go-tss/keysign"
+	"github.com/akildemir/go-tss/common"
+	"github.com/akildemir/go-tss/conversion"
+	"github.com/akildemir/go-tss/keygen"
+	"github.com/akildemir/go-tss/keysign"
+	"github.com/akildemir/go-tss/p2p"
+	"github.com/akildemir/go-tss/storage"
 )
 
 const (
@@ -355,7 +358,21 @@ func (s *FourNodeTestSuite) getTssServer(c *C, index int, conf common.TssConfig,
 	} else {
 		peerIDs = nil
 	}
-	instance, err := NewTss(peerIDs, s.ports[index], priKey, "Asgard", baseHome, conf, s.preParams[index], "")
+
+	// set up tss comms
+	stateManager, err := storage.NewFileStateMgr(baseHome)
+	c.Assert(err, IsNil)
+	var bootstrapPeers addr.AddrList
+	savedPeers, err := stateManager.RetrieveP2PAddresses()
+	if err != nil {
+		bootstrapPeers = peerIDs
+	} else {
+		bootstrapPeers = savedPeers
+		bootstrapPeers = append(bootstrapPeers, peerIDs...)
+	}
+	comm, err := p2p.NewCommunication("Asgard", bootstrapPeers, s.ports[index], "")
+	c.Assert(err, IsNil)
+	instance, err := NewTss(comm, priKey, baseHome, conf, s.preParams[index])
 	c.Assert(err, IsNil)
 	return instance
 }
