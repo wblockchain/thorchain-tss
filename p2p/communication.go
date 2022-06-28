@@ -22,7 +22,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
-	"github.com/akildemir/go-tss/messages"
+	"gitlab.com/thorchain/tss/go-tss/messages"
 )
 
 var (
