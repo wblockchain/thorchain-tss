@@ -11,19 +11,18 @@ import (
 	coskey "github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	sdk "github.com/cosmos/cosmos-sdk/types/bech32/legacybech32"
 	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-peerstore/addr"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	tcrypto "github.com/tendermint/tendermint/crypto"
 
-	"gitlab.com/thorchain/tss/go-tss/common"
-	"gitlab.com/thorchain/tss/go-tss/conversion"
-	"gitlab.com/thorchain/tss/go-tss/keygen"
-	"gitlab.com/thorchain/tss/go-tss/keysign"
-	"gitlab.com/thorchain/tss/go-tss/messages"
-	"gitlab.com/thorchain/tss/go-tss/monitor"
-	"gitlab.com/thorchain/tss/go-tss/p2p"
-	"gitlab.com/thorchain/tss/go-tss/storage"
+	"github.com/akildemir/go-tss/common"
+	"github.com/akildemir/go-tss/conversion"
+	"github.com/akildemir/go-tss/keygen"
+	"github.com/akildemir/go-tss/keysign"
+	"github.com/akildemir/go-tss/messages"
+	"github.com/akildemir/go-tss/monitor"
+	"github.com/akildemir/go-tss/p2p"
+	"github.com/akildemir/go-tss/storage"
 )
 
 // TssServer is the structure that can provide all keysign and key gen features
@@ -44,14 +43,11 @@ type TssServer struct {
 
 // NewTss create a new instance of Tss
 func NewTss(
-	cmdBootstrapPeers addr.AddrList,
-	p2pPort int,
+	comm *p2p.Communication,
 	priKey tcrypto.PrivKey,
-	rendezvous,
 	baseFolder string,
 	conf common.TssConfig,
 	preParams *bkeygen.LocalPreParams,
-	externalIP string,
 ) (*TssServer, error) {
 	pk := coskey.PubKey{
 		Key: priKey.PubKey().Bytes()[:],
@@ -67,18 +63,6 @@ func NewTss(
 		return nil, fmt.Errorf("fail to create file state manager")
 	}
 
-	var bootstrapPeers addr.AddrList
-	savedPeers, err := stateManager.RetrieveP2PAddresses()
-	if err != nil {
-		bootstrapPeers = cmdBootstrapPeers
-	} else {
-		bootstrapPeers = savedPeers
-		bootstrapPeers = append(bootstrapPeers, cmdBootstrapPeers...)
-	}
-	comm, err := p2p.NewCommunication(rendezvous, bootstrapPeers, p2pPort, externalIP)
-	if err != nil {
-		return nil, fmt.Errorf("fail to create communication layer: %w", err)
-	}
 	// When using the keygen party it is recommended that you pre-compute the
 	// "safe primes" and Paillier secret beforehand because this can take some
 	// time.
@@ -94,13 +78,6 @@ func NewTss(
 		return nil, errors.New("invalid preparams")
 	}
 
-	priKeyRawBytes, err := conversion.GetPriKeyRawBytes(priKey)
-	if err != nil {
-		return nil, fmt.Errorf("fail to get private key")
-	}
-	if err := comm.Start(priKeyRawBytes); nil != err {
-		return nil, fmt.Errorf("fail to start p2p network: %w", err)
-	}
 	pc := p2p.NewPartyCoordinator(comm.GetHost(), conf.PartyTimeout)
 	sn := keysign.NewSignatureNotifier(comm.GetHost())
 	metrics := monitor.NewMetric()

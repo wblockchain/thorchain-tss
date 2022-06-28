@@ -20,7 +20,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"gitlab.com/thorchain/binance-sdk/common/types"
 
-	"gitlab.com/thorchain/tss/go-tss/messages"
+	"github.com/akildemir/go-tss/messages"
 )
 
 // GetPeerIDFromSecp256PubKey convert the given pubkey into a peer.ID

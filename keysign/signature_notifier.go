@@ -16,11 +16,11 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
-	"gitlab.com/thorchain/tss/go-tss/messages"
-	"gitlab.com/thorchain/tss/go-tss/p2p"
+	"github.com/akildemir/go-tss/messages"
+	"github.com/akildemir/go-tss/p2p"
 )
 
-var signatureNotifierProtocol protocol.ID = "/p2p/signatureNotifier"
+var signatureNotifierProtocol protocol.ID = "/p2p/go-tss/signatureNotifier"
 
 type signatureItem struct {
 	messageID     string
