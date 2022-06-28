@@ -9,8 +9,8 @@ import (
 	"github.com/binance-chain/tss-lib/ecdsa/signing"
 	. "gopkg.in/check.v1"
 
-	"github.com/akildemir/go-tss/common"
-	"github.com/akildemir/go-tss/conversion"
+	"gitlab.com/thorchain/tss/go-tss/common"
+	"gitlab.com/thorchain/tss/go-tss/conversion"
 )
 
 type NotifierTestSuite struct{}

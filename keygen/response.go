@@ -1,8 +1,8 @@
 package keygen
 
 import (
-	"github.com/akildemir/go-tss/blame"
-	"github.com/akildemir/go-tss/common"
+	"gitlab.com/thorchain/tss/go-tss/blame"
+	"gitlab.com/thorchain/tss/go-tss/common"
 )
 
 // Response keygen response

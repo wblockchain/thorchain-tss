@@ -1,4 +1,4 @@
-module github.com/akildemir/go-tss
+module gitlab.com/thorchain/tss/go-tss
 
 go 1.17
 
